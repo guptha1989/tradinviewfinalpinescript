@@ -187,18 +187,17 @@ final_type = is_option ? opt_type : (selected_opt_type == "CE" or selected_opt_t
 
 // Data Retrieval for Underlying Spot
 spot_sym = exchange + ":" + final_root
-[spot_open, spot_prev_close] = request.security(spot_sym, "1D", [open, close], lookahead=barmerge.lookahead_on)
+[spot_open, spot_prev_close, spot_close_today] = request.security(spot_sym, "1D", [open, close, close], lookahead=barmerge.lookahead_on)
 [pd_high_val, pd_low_val] = request.security(spot_sym, "1D", [high[1], low[1]], lookahead=barmerge.lookahead_on)
 spot_rt = request.security(spot_sym, timeframe.period, close)
 
 // To prevent exceeding TradingView's 40 unique request.security limit across historical bars,
 // base_center_strike is fixed across historical execution so loop symbols remain constant.
-int calc_strike = (atm_select_mode == "Manual") ? manual_strike_val : (is_option ? strike_val : int(math.round(nz(spot_rt, spot_open) / strike_step) * strike_step))
-if calc_strike <= 0
-    calc_strike := 24150
-
 var int base_center_strike = na
-if barstate.isfirst or na(base_center_strike) or barstate.islast
+if barstate.isfirst or na(base_center_strike)
+    int calc_strike = (atm_select_mode == "Manual") ? manual_strike_val : (is_option ? strike_val : int(math.round(nz(spot_close_today, spot_open) / strike_step) * strike_step))
+    if calc_strike <= 0
+        calc_strike := 24150
     base_center_strike := calc_strike
 
 final_strike = base_center_strike

@@ -220,11 +220,15 @@ final_root = is_option ? root : underlying_ticker
 final_expiry = is_option ? expiry : expiry_input
 final_type = is_option ? opt_type : (selected_opt_type == "CE" or selected_opt_type == "C" ? "C" : "P")
 
+// Data Retrieval for Underlying Ticker (to establish constant ATM strike on barstate.isfirst)
+spot_sym_ext = exchange + ":" + final_root
+spot_close_today_ext = request.security(spot_sym_ext, "1D", close, lookahead=barmerge.lookahead_on)
+
 // To prevent exceeding TradingView's 40 unique request.security limit across historical bars,
 // base_center_strike is fixed across historical execution so loop symbols remain constant.
 var int base_center_strike = na
 if barstate.isfirst or na(base_center_strike)
-    int calc_strike = (atm_select_mode == "Manual") ? manual_strike_val : (is_option ? strike_val : manual_strike_val)
+    int calc_strike = (atm_select_mode == "Manual") ? manual_strike_val : (is_option ? strike_val : int(math.round(nz(spot_close_today_ext, 24150.0) / strike_step) * strike_step))
     if calc_strike <= 0
         calc_strike := 24150
     base_center_strike := calc_strike
