@@ -193,11 +193,12 @@ spot_rt = request.security(spot_sym, timeframe.period, close)
 
 // To prevent exceeding TradingView's 40 unique request.security limit across historical bars,
 // base_center_strike is fixed across historical execution so loop symbols remain constant.
+int calc_strike = (atm_select_mode == "Manual") ? manual_strike_val : (is_option ? strike_val : int(math.round(nz(spot_rt, spot_open) / strike_step) * strike_step))
+if calc_strike <= 0
+    calc_strike := 24150
+
 var int base_center_strike = na
-if barstate.isfirst or na(base_center_strike)
-    int calc_strike = (atm_select_mode == "Manual") ? manual_strike_val : (is_option ? strike_val : int(math.round(nz(spot_open, spot_rt) / strike_step) * strike_step))
-    if calc_strike <= 0
-        calc_strike := 24150
+if barstate.isfirst or na(base_center_strike) or barstate.islast
     base_center_strike := calc_strike
 
 final_strike = base_center_strike
@@ -231,6 +232,15 @@ var float[] pe_vwaps = array.new_float(11, na)
 
 var int[] strikes = array.new_int(11)
 
+// Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
+f_get_contract_tuple() =>
+    var float day_open = na
+    var float prev_close = na
+    if ta.change(time("D")) != 0
+        prev_close := close[1]
+        day_open := open
+    [nz(day_open, open), nz(prev_close, close[1]), close]
+
 // Populating arrays. Security calls in loop are resolved using constant iteration boundaries
 for i = 0 to 10
     int strike = base_center_strike + (i - 5) * strike_step
@@ -239,9 +249,10 @@ for i = 0 to 10
     string ce_contract = exchange + ":" + final_root + final_expiry + "C" + str.tostring(strike)
     string pe_contract = exchange + ":" + final_root + final_expiry + "P" + str.tostring(strike)
     
-    // Optimizing with tuple queries to stay under the 40 request.security limit
-    [ce_o, ce_p, ce_c] = request.security(ce_contract, "1D", [open, close, close], lookahead=barmerge.lookahead_on)
-    [pe_o, pe_p, pe_c] = request.security(pe_contract, "1D", [open, close, close], lookahead=barmerge.lookahead_on)
+    // Real-time tick-by-tick query on chart timeframe (timeframe.period)
+    // Returns [Day Open, Previous Day Close, Real-time LTP] on every tick
+    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, f_get_contract_tuple())
+    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, f_get_contract_tuple())
     
     array.set(ce_opens, i, ce_o)
     array.set(ce_prevs, i, ce_p)
@@ -1000,7 +1011,7 @@ if show_table and barstate.islast
     int start_idx = math.max(0, math.min(10 - 2 * N, atm_table_idx - N))
     int end_idx = start_idx + 2 * N
     
-    string status_text = "Spot: " + str.tostring(spot_rt, "#.##") + " | " + final_root + " | Expiry: " + final_expiry
+    string status_text = "Spot: " + str.tostring(spot_rt, "#.##") + " | " + final_root + " | Expiry: " + final_expiry + " | Basis: " + calc_basis
     table.cell(chain_table, 0, 0, status_text, bgcolor=#1E222D, text_color=color.yellow, text_size=t_size, text_halign=text.align_center)
     table.merge_cells(chain_table, 0, 0, 3, 0)
     
@@ -1022,8 +1033,8 @@ if show_table and barstate.islast
         float bep = (ce_base_val + pe_base_val) / 2.0
         
         color base_row_bg = (idx % 2 == 0) ? #131722 : #1C2030
-        color ce_bg = (strike < spot_rt) ? color.new(#FFEB3B, 92) : base_row_bg
-        color pe_bg = (strike > spot_rt) ? color.new(#FFEB3B, 92) : base_row_bg
+        color ce_bg = (strike < atm_strike_rt) ? color.new(#FFEB3B, 92) : base_row_bg
+        color pe_bg = (strike > atm_strike_rt) ? color.new(#FFEB3B, 92) : base_row_bg
         color strike_bg = base_row_bg
         color strike_txt_color = color.white
         
@@ -1039,8 +1050,8 @@ if show_table and barstate.islast
                 strike_bg := #2962FF
                 strike_txt_color := color.white
             
-        float ce_chg = na(ce_o) or ce_o == 0 ? 0.0 : ((t_ce_c - ce_o) / ce_o) * 100.0
-        float pe_chg = na(pe_o) or pe_o == 0 ? 0.0 : ((t_pe_c - pe_o) / pe_o) * 100.0
+        float ce_chg = na(ce_base_val) or ce_base_val == 0 ? 0.0 : ((t_ce_c - ce_base_val) / ce_base_val) * 100.0
+        float pe_chg = na(pe_base_val) or pe_base_val == 0 ? 0.0 : ((t_pe_c - pe_base_val) / pe_base_val) * 100.0
         
         string ce_chg_str = ce_chg >= 0 ? "+" + str.tostring(ce_chg, "#.##") + "%" : str.tostring(ce_chg, "#.##") + "%"
         string pe_chg_str = pe_chg >= 0 ? "+" + str.tostring(pe_chg, "#.##") + "%" : str.tostring(pe_chg, "#.##") + "%"
