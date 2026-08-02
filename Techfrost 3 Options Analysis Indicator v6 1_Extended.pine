@@ -1163,63 +1163,76 @@ else if table_pos_calc_str == "Top Left"
 else if table_pos_calc_str == "Bottom Right"
     t_pos_calc := position.bottom_right
 
-var table calc_box = table.new(t_pos_calc, 3, 13, bgcolor=color.new(color.black, 30), border_color=color.gray, border_width=1)
+var table calc_box = table.new(t_pos_calc, 4, 13, bgcolor=color.new(color.black, 30), border_color=color.gray, border_width=1)
 if barstate.islast and show_calc_box
-    table.clear(calc_box, 0, 0, 2, 12)
+    table.clear(calc_box, 0, 0, 3, 12)
     
     if show_calc_details
         table.cell(calc_box, 0, 0, "Metric / Level", text_color=color.yellow, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 1, 0, "Chosen Strike", text_color=color.yellow, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 0, "Option Base (" + calc_basis + ")", text_color=color.yellow, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 0, "Nifty Target Level", text_color=color.yellow, text_size=t_size, text_halign=text.align_center)
         
         table.cell(calc_box, 0, 1, "ATM Strike (Basis Locked)", text_color=color.white, text_size=t_size)
         table.cell(calc_box, 1, 1, str.tostring(atm_strike_base), text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 1, "CE:" + str.tostring(ce_atm_base, "#.##") + " | PE:" + str.tostring(pe_atm_base, "#.##"), text_color=color.white, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 1, str.tostring(atm_strike_base), text_color=color.white, text_size=t_size, text_halign=text.align_center)
         
         string synth_diff_str = (ce_atm_base >= pe_atm_base) ? ("+ (" + str.tostring(ce_atm_base - pe_atm_base, "#.##") + ")") : ("- (" + str.tostring(pe_atm_base - ce_atm_base, "#.##") + ")")
         table.cell(calc_box, 0, 2, "Synthetic Future (Pivot)", text_color=color.white, text_size=t_size)
         table.cell(calc_box, 1, 2, str.tostring(atm_strike_base) + " (ATM)", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 2, "CE-PE Diff: " + synth_diff_str, text_color=color.white, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 2, str.tostring(Spot_Pivot, "#.##"), text_color=color.white, text_size=t_size, text_halign=text.align_center)
         
         table.cell(calc_box, 0, 3, "Resistance 1 (R1)", text_color=#EF5350, text_size=t_size)
         table.cell(calc_box, 1, 3, str.tostring(atm_strike_base) + " CE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 3, str.tostring(ce_atm_base, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 3, str.tostring(Spot_R1, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
         
         table.cell(calc_box, 0, 4, "Resistance 2 (R2)", text_color=#EF5350, text_size=t_size)
         table.cell(calc_box, 1, 4, str.tostring(atm_strike_base + 1 * strike_step) + " CE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 4, str.tostring(r1_ce_base, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 4, str.tostring(Spot_R2, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
         
         table.cell(calc_box, 0, 5, "Resistance 3 (R3)", text_color=#EF5350, text_size=t_size)
         table.cell(calc_box, 1, 5, str.tostring(atm_strike_base + 2 * strike_step) + " CE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 5, str.tostring(r2_ce_base, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 5, str.tostring(Spot_R3, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
         
         table.cell(calc_box, 0, 6, "Resistance 4 (R4)", text_color=#EF5350, text_size=t_size)
         table.cell(calc_box, 1, 6, str.tostring(atm_strike_base + 3 * strike_step) + " CE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 6, str.tostring(r3_ce_base, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 6, str.tostring(Spot_R4, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
         
         table.cell(calc_box, 0, 7, "Resistance 5 (R5)", text_color=#EF5350, text_size=t_size)
         table.cell(calc_box, 1, 7, str.tostring(atm_strike_base + 4 * strike_step) + " CE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 7, str.tostring(r4_ce_base, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 7, str.tostring(Spot_R5, "#.##"), text_color=#EF5350, text_size=t_size, text_halign=text.align_center)
 
         table.cell(calc_box, 0, 8, "Support 1 (S1)", text_color=#26A69A, text_size=t_size)
         table.cell(calc_box, 1, 8, str.tostring(atm_strike_base) + " PE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 8, str.tostring(pe_atm_base, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 8, str.tostring(Spot_S1, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
         
         table.cell(calc_box, 0, 9, "Support 2 (S2)", text_color=#26A69A, text_size=t_size)
         table.cell(calc_box, 1, 9, str.tostring(atm_strike_base - 1 * strike_step) + " PE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 9, str.tostring(s1_pe_base, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 9, str.tostring(Spot_S2, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
         
         table.cell(calc_box, 0, 10, "Support 3 (S3)", text_color=#26A69A, text_size=t_size)
         table.cell(calc_box, 1, 10, str.tostring(atm_strike_base - 2 * strike_step) + " PE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 10, str.tostring(s2_pe_base, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 10, str.tostring(Spot_S3, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
         
         table.cell(calc_box, 0, 11, "Support 4 (S4)", text_color=#26A69A, text_size=t_size)
         table.cell(calc_box, 1, 11, str.tostring(atm_strike_base - 3 * strike_step) + " PE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 11, str.tostring(s3_pe_base, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 11, str.tostring(Spot_S4, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
 
         table.cell(calc_box, 0, 12, "Support 5 (S5)", text_color=#26A69A, text_size=t_size)
         table.cell(calc_box, 1, 12, str.tostring(atm_strike_base - 4 * strike_step) + " PE", text_color=color.white, text_size=t_size, text_halign=text.align_center)
         table.cell(calc_box, 2, 12, str.tostring(s4_pe_base, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
+        table.cell(calc_box, 3, 12, str.tostring(Spot_S5, "#.##"), text_color=#26A69A, text_size=t_size, text_halign=text.align_center)
 
 // Selected Strikes Summary Table (ORB & PDH/PDL)
 var string t_pos_sel = position.bottom_right
