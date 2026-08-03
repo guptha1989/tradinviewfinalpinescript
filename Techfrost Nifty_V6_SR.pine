@@ -898,11 +898,7 @@ var line ln_orb_h = na, var line ln_orb_l = na
 var line ln_pdh = na, var line ln_pdl = na
 var label lbl_line_pdh = na, var label lbl_line_pdl = na, var label lbl_line_orb_h = na, var label lbl_line_orb_l = na
 
-// PROJECTED HORIZONTAL LINES ENGINE (ANCHORED AT 9:15 AM & EXTENDED FULL DAY)
 // =========================================================================
-    style_str == "Dashed" ? line.style_dashed :
-     style_str == "Dotted" ? line.style_dotted :
-     line.style_solid
 
 
 if sr_draw_mode == "Horizontal Lines (Projected to Right)"
