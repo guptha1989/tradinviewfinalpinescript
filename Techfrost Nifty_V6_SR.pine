@@ -33,7 +33,7 @@ calc_basis = input.string("Day Open Price", "Calculation Basis",
   tooltip="Select the base price reference for support/resistance levels and table open statistics.")
 
 // 3. Display & Plots
-show_intrinsic_plots = input.bool(true, "Show Intrinsic/Extrinsic Plots", group=G_PLOTS,
+show_intrinsic_plots = input.bool(false, "Show Intrinsic/Extrinsic Plots", group=G_PLOTS,
   tooltip="Draw the CE and PE Intrinsic and Extrinsic (Time) value plots on the chart.")
 show_sr_plots = input.bool(true, "Show Support/Resistance (S/R) Plots", group=G_PLOTS,
   tooltip="Draw Pivot (BEP), R1-R4, and S1-S4 levels on the chart.")
@@ -105,7 +105,7 @@ orb_timeframe = input.string("5", "ORB Timeframe (Mins)", options=["1", "3", "5"
 orb_strike_mode = input.string("ATM", "ORB Strike Mode", options=["ATM", "ITM", "OTM"], group=G_ORB, tooltip="Select strike price relative to ATM.")
 orb_strike_offset = input.int(100, "ORB Strike Offset", minval=50, maxval=500, step=50, group=G_ORB, tooltip="Offset distance from ATM strike price.")
 orb_opt_type = input.string("CE", "ORB Option Type", options=["CE", "PE"], group=G_ORB, tooltip="Option type for the ORB range contract.")
-show_running_bep = input.bool(true, "Show Running BEP Line", group=G_ORB, tooltip="Toggle the real-time running BEP line for the selected strike on the chart.")
+show_running_bep = input.bool(false, "Show Running BEP Line", group=G_ORB, tooltip="Toggle the real-time running BEP line for the selected strike on the chart.")
 
 // 4c. CVD & Volume Settings
 G_SIG = "CVD & Volume Settings"
