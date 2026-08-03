@@ -258,8 +258,8 @@ for i = 0 to 10
     
     // Real-time tick-by-tick query on chart timeframe (timeframe.period)
     // Returns [Day Open, Previous Day Close, Real-time LTP] on every tick
-    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, f_get_contract_tuple())
-    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, f_get_contract_tuple())
+    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, [ta.valuewhen(ta.change(time("D")) != 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0, close[1], 0), close])
+    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, [ta.valuewhen(ta.change(time("D")) != 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0, close[1], 0), close])
     
     array.set(ce_opens, i, ce_o)
     array.set(ce_prevs, i, ce_p)
@@ -897,7 +897,7 @@ var line ln_r1 = na, var line ln_r2 = na, var line ln_r3 = na, var line ln_r4 = 
 var line ln_s1 = na, var line ln_s2 = na, var line ln_s3 = na, var line ln_s4 = na, var line ln_s5 = na
 var line ln_orb_h = na, var line ln_orb_l = na
 var line ln_pdh = na, var line ln_pdl = na
-var label lbl_pdh = na, var label lbl_pdl = na, var label lbl_orb_h = na, var label lbl_orb_l = na
+var label lbl_line_pdh = na, var label lbl_line_pdl = na, var label lbl_line_orb_h = na, var label lbl_line_orb_l = na
 
 // PROJECTED HORIZONTAL LINES ENGINE (ANCHORED AT 9:15 AM & EXTENDED FULL DAY)
 // =========================================================================
@@ -906,12 +906,6 @@ f_get_line_style(string style_str) =>
      style_str == "Dotted" ? line.style_dotted :
      line.style_solid
 
-var line ln_p = na
-var line ln_r1 = na, var line ln_r2 = na, var line ln_r3 = na, var line ln_r4 = na, var line ln_r5 = na
-var line ln_s1 = na, var line ln_s2 = na, var line ln_s3 = na, var line ln_s4 = na, var line ln_s5 = na
-var line ln_orb_h = na, var line ln_orb_l = na
-var line ln_pdh = na, var line ln_pdl = na
-var label lbl_pdh = na, var label lbl_pdl = na, var label lbl_orb_h = na, var label lbl_orb_l = na
 
 if sr_draw_mode == "Horizontal Lines (Projected to Right)"
     int target_x2 = math.max(bar_index + 10, session_end_bar)
@@ -951,13 +945,13 @@ if sr_draw_mode == "Horizontal Lines (Projected to Right)"
         if show_orb_lines and not na(orb_high_plot)
             ln_orb_h := line.new(start_x1, orb_high_plot, target_x2, orb_high_plot, color=c_orb_in, width=width_orb_in, style=f_get_line_style(style_orb_in))
             ln_orb_l := line.new(start_x1, orb_low_plot, target_x2, orb_low_plot, color=c_orb_in, width=width_orb_in, style=f_get_line_style(style_orb_in))
-            lbl_orb_h := label.new(target_x2, orb_high_plot, "ORB High: " + str.tostring(orb_high_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
-            lbl_orb_l := label.new(target_x2, orb_low_plot, "ORB Low: " + str.tostring(orb_low_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_orb_h := label.new(target_x2, orb_high_plot, "ORB High: " + str.tostring(orb_high_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_orb_l := label.new(target_x2, orb_low_plot, "ORB Low: " + str.tostring(orb_low_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
         if show_pdhl and not na(pd_high_val)
             ln_pdh := line.new(start_x1, pd_high_val, target_x2, pd_high_val, color=c_pdh_in, width=width_pdh_in, style=f_get_line_style(style_pdh_in))
             ln_pdl := line.new(start_x1, pd_low_val, target_x2, pd_low_val, color=c_pdl_in, width=width_pdl_in, style=f_get_line_style(style_pdl_in))
-            lbl_pdh := label.new(target_x2, pd_high_val, "PDH: " + str.tostring(pd_high_val, "#.##"), color=c_pdh_in, textcolor=color.white, style=label.style_label_left, size=size.small)
-            lbl_pdl := label.new(target_x2, pd_low_val, "PDL: " + str.tostring(pd_low_val, "#.##"), color=c_pdl_in, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_pdh := label.new(target_x2, pd_high_val, "PDH: " + str.tostring(pd_high_val, "#.##"), color=c_pdh_in, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_pdl := label.new(target_x2, pd_low_val, "PDL: " + str.tostring(pd_low_val, "#.##"), color=c_pdl_in, textcolor=color.white, style=label.style_label_left, size=size.small)
             
     if show_sr_plots and not na(p_plot)
         if na(ln_p)
@@ -988,28 +982,28 @@ if sr_draw_mode == "Horizontal Lines (Projected to Right)"
         if na(ln_orb_h)
             ln_orb_h := line.new(start_x1, orb_high_plot, target_x2, orb_high_plot, color=c_orb_in, width=width_orb_in, style=f_get_line_style(style_orb_in))
             ln_orb_l := line.new(start_x1, orb_low_plot, target_x2, orb_low_plot, color=c_orb_in, width=width_orb_in, style=f_get_line_style(style_orb_in))
-            lbl_orb_h := label.new(target_x2, orb_high_plot, "ORB High: " + str.tostring(orb_high_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
-            lbl_orb_l := label.new(target_x2, orb_low_plot, "ORB Low: " + str.tostring(orb_low_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_orb_h := label.new(target_x2, orb_high_plot, "ORB High: " + str.tostring(orb_high_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_orb_l := label.new(target_x2, orb_low_plot, "ORB Low: " + str.tostring(orb_low_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
         else
             line.set_y1(ln_orb_h, orb_high_plot), line.set_y2(ln_orb_h, orb_high_plot), line.set_x2(ln_orb_h, target_x2)
             line.set_y1(ln_orb_l, orb_low_plot), line.set_y2(ln_orb_l, orb_low_plot), line.set_x2(ln_orb_l, target_x2)
-            if not na(lbl_orb_h)
-                label.set_xy(lbl_orb_h, target_x2, orb_high_plot)
-            if not na(lbl_orb_l)
-                label.set_xy(lbl_orb_l, target_x2, orb_low_plot)
+            if not na(lbl_line_orb_h)
+                label.set_xy(lbl_line_orb_h, target_x2, orb_high_plot)
+            if not na(lbl_line_orb_l)
+                label.set_xy(lbl_line_orb_l, target_x2, orb_low_plot)
     if show_pdhl and not na(pd_high_val)
         if na(ln_pdh)
             ln_pdh := line.new(start_x1, pd_high_val, target_x2, pd_high_val, color=c_pdh_in, width=width_pdh_in, style=f_get_line_style(style_pdh_in))
             ln_pdl := line.new(start_x1, pd_low_val, target_x2, pd_low_val, color=c_pdl_in, width=width_pdl_in, style=f_get_line_style(style_pdl_in))
-            lbl_pdh := label.new(target_x2, pd_high_val, "PDH: " + str.tostring(pd_high_val, "#.##"), color=c_pdh_in, textcolor=color.white, style=label.style_label_left, size=size.small)
-            lbl_pdl := label.new(target_x2, pd_low_val, "PDL: " + str.tostring(pd_low_val, "#.##"), color=c_pdl_in, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_pdh := label.new(target_x2, pd_high_val, "PDH: " + str.tostring(pd_high_val, "#.##"), color=c_pdh_in, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_pdl := label.new(target_x2, pd_low_val, "PDL: " + str.tostring(pd_low_val, "#.##"), color=c_pdl_in, textcolor=color.white, style=label.style_label_left, size=size.small)
         else
             line.set_y1(ln_pdh, pd_high_val), line.set_y2(ln_pdh, pd_high_val), line.set_x2(ln_pdh, target_x2)
             line.set_y1(ln_pdl, pd_low_val), line.set_y2(ln_pdl, pd_low_val), line.set_x2(ln_pdl, target_x2)
-            if not na(lbl_pdh)
-                label.set_xy(lbl_pdh, target_x2, pd_high_val)
-            if not na(lbl_pdl)
-                label.set_xy(lbl_pdl, target_x2, pd_low_val)
+            if not na(lbl_line_pdh)
+                label.set_xy(lbl_line_pdh, target_x2, pd_high_val)
+            if not na(lbl_line_pdl)
+                label.set_xy(lbl_line_pdl, target_x2, pd_low_val)
 
 // =========================================================================
 
@@ -1244,9 +1238,9 @@ if barstate.islast
         
         int label_x_orb = bar_index + 19
         if not na(orb_high_plot)
-            lbl_orb_h := label.new(label_x_orb, orb_high_plot, "ORB High: " + str.tostring(orb_high_plot, "#.##"), color=color.blue, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_orb_h := label.new(label_x_orb, orb_high_plot, "ORB High: " + str.tostring(orb_high_plot, "#.##"), color=color.blue, textcolor=color.white, style=label.style_label_left, size=size.small)
         if not na(orb_low_plot)
-            lbl_orb_l := label.new(label_x_orb, orb_low_plot, "ORB Low: " + str.tostring(orb_low_plot, "#.##"), color=color.blue, textcolor=color.white, style=label.style_label_left, size=size.small)
+            lbl_line_orb_l := label.new(label_x_orb, orb_low_plot, "ORB Low: " + str.tostring(orb_low_plot, "#.##"), color=color.blue, textcolor=color.white, style=label.style_label_left, size=size.small)
 
     if show_running_bep
         label.delete(lbl_running_bep)
