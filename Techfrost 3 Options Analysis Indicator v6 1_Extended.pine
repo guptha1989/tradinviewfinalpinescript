@@ -277,7 +277,9 @@ var int[] strikes = array.new_int(11)
 
 // Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
 // Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
-// Clean security tuple fetching
+// Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP in 1 security call
+f_get_contract_tuple() =>
+    [ta.valuewhen(ta.change(time("D")) != 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0, close[1], 0), close]
 
 // Populating arrays. Security calls in loop are resolved using constant iteration boundaries
 for i = 0 to 10
@@ -289,10 +291,8 @@ for i = 0 to 10
     
     // Real-time tick-by-tick query on chart timeframe (timeframe.period)
     // Returns [Day Open, Previous Day Close, Real-time LTP] on every tick
-    [ce_o, ce_p] = request.security(ce_contract, "1D", [open, close[1]], lookahead=barmerge.lookahead_on)
-    ce_c = request.security(ce_contract, timeframe.period, close)
-    [pe_o, pe_p] = request.security(pe_contract, "1D", [open, close[1]], lookahead=barmerge.lookahead_on)
-    pe_c = request.security(pe_contract, timeframe.period, close)
+    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, f_get_contract_tuple())
+    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, f_get_contract_tuple())
     
     array.set(ce_opens, i, ce_o)
     array.set(ce_prevs, i, ce_p)
