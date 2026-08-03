@@ -185,6 +185,16 @@ final_root = is_option ? root : underlying_ticker
 final_expiry = is_option ? expiry : expiry_input
 final_type = is_option ? opt_type : (selected_opt_type == "CE" or selected_opt_type == "C" ? "C" : "P")
 
+// Capture starting bar of current trading day (9:15 AM bar index) and 3:40 PM IST session end
+is_new_day = ta.change(time("D")) != 0
+var int day_start_bar = na
+if is_new_day
+    day_start_bar := bar_index
+
+// Calculate 9:15 AM to 3:40 PM IST market session bar count (375 mins intraday session)
+int session_bars = timeframe.isintraday ? int(math.ceil(375.0 / math.max(1.0, timeframe.multiplier))) : 1
+int session_end_bar = (na(day_start_bar) ? bar_index : day_start_bar) + session_bars - 1
+
 // Data Retrieval for Underlying Spot
 spot_sym = exchange + ":" + final_root
 [spot_open, spot_prev_close, spot_close_today] = request.security(spot_sym, "1D", [open, close, close], lookahead=barmerge.lookahead_on)
@@ -918,7 +928,7 @@ if sr_draw_mode == "Horizontal Lines (Projected to Right)"
         line.set_x2(ln_pdh, bar_index - 1)
         line.set_x2(ln_pdl, bar_index - 1)
         
-        int init_x2 = barstate.islast ? bar_index + 150 : bar_index
+        int init_x2 = math.max(bar_index, session_end_bar)
         if show_sr_plots and not na(p_plot)
             ln_p  := line.new(bar_index, p_plot, init_x2, p_plot, color=col_p, width=2, extend=extend.right)
             ln_r1 := line.new(bar_index, r1_plot, init_x2, r1_plot, color=col_r1, width=2, extend=extend.right)

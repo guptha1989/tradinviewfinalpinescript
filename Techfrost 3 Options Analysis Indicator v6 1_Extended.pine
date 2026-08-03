@@ -505,10 +505,16 @@ s4_plot := s4_val
 s5_plot := s5_val
 
 // Capture starting bar of current trading day (9:15 AM bar index)
+// Capture starting bar of current trading day (9:15 AM bar index) and 3:40 PM IST session end
 is_new_day = ta.change(time("D")) != 0
 var int day_start_bar = na
 if is_new_day
     day_start_bar := bar_index
+
+// Calculate 9:15 AM to 3:40 PM IST market session bar count (375 mins intraday session)
+int session_bars = timeframe.isintraday ? int(math.ceil(375.0 / math.max(1.0, timeframe.multiplier))) : 1
+int session_end_bar = (na(day_start_bar) ? bar_index : day_start_bar) + session_bars - 1
+
     p_plot  := na
     r1_plot := na, r2_plot := na, r3_plot := na, r4_plot := na, r5_plot := na
     s1_plot := na, s2_plot := na, s3_plot := na, s4_plot := na, s5_plot := na
@@ -871,7 +877,7 @@ var line ln_orb_h = na, var line ln_orb_l = na
 var line ln_pdh = na, var line ln_pdl = na
 
 if sr_draw_mode == "Horizontal Lines (Projected to Right)"
-    int target_x2 = barstate.islast ? bar_index + 100 : bar_index
+    int target_x2 = math.max(bar_index, session_end_bar)
     int start_x1 = na(day_start_bar) ? bar_index : day_start_bar
 
     if is_new_day
