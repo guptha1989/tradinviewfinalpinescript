@@ -928,6 +928,12 @@ if sr_draw_mode == "Horizontal Lines (Projected to Right)"
         line.set_x2(ln_pdh, bar_index - 1), line.set_extend(ln_pdh, extend.none)
         line.set_x2(ln_pdl, bar_index - 1), line.set_extend(ln_pdl, extend.none)
         
+        // Reset line handles so new day lines are created at 9:15 AM extending to day end
+        ln_p := na, ln_r1 := na, ln_r2 := na, ln_r3 := na, ln_r4 := na, ln_r5 := na
+        ln_s1 := na, ln_s2 := na, ln_s3 := na, ln_s4 := na, ln_s5 := na
+        ln_orb_h := na, ln_orb_l := na, ln_pdh := na, ln_pdl := na
+        lbl_line_pdh := na, lbl_line_pdl := na, lbl_line_orb_h := na, lbl_line_orb_l := na
+        
         // Draw new day's lines starting at 9:15 AM (day_start_bar)
         if show_sr_plots and not na(p_plot)
             ln_p  := line.new(start_x1, p_plot, target_x2, p_plot, color=col_p, width=width_p_in, style=f_get_line_style(style_p_in))
