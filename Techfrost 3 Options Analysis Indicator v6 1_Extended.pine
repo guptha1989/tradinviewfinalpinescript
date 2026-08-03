@@ -43,7 +43,7 @@ show_opp_candles = input.bool(true, "Show Opposite Option Candles", group=G_PLOT
 show_vwap_plots = input.bool(true, "Show Option VWAP Plots", group=G_PLOTS,
   tooltip="Toggle plotting of CE and PE selected strike VWAPs on the chart.")
 
-sr_draw_mode = input.string("Horizontal Lines (Projected to Right)", "S/R Level Rendering Mode",
+sr_draw_mode = input.string("Standard Plots (Style Tab Customizable)", "S/R Level Rendering Mode",
   options=["Standard Plots (Style Tab Customizable)", "Horizontal Lines (Projected to Right)"], group=G_PLOTS,
   tooltip="Choose whether S/R levels are plotted standard (customizable via TradingView Style tab) or drawn as projected lines.")
 

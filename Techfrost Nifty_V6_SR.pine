@@ -50,7 +50,7 @@ plot_sr_on_spot = input.string("Options-Chain Level Projections (Spot Formula)",
   options=["Symmetric Channels (Strike +/- Premium)", "Absolute Values", "Options-Chain Level Projections (Spot Formula)", "Do Not Plot"], group=G_PLOTS,
   tooltip="Adjusts how S/R levels are plotted on a spot chart to prevent scale distortion.")
 
-sr_draw_mode = input.string("Horizontal Lines (Projected to Right)", "S/R Level Rendering Mode",
+sr_draw_mode = input.string("Standard Plots (Style Tab Customizable)", "S/R Level Rendering Mode",
   options=["Standard Plots (Style Tab Customizable)", "Horizontal Lines (Projected to Right)"], group=G_PLOTS,
   tooltip="Choose whether S/R levels are plotted standard or drawn as projected lines extending to day end.")
 
