@@ -194,6 +194,7 @@ if is_new_day
 // Calculate 9:15 AM to 3:40 PM IST market session bar count (375 mins intraday session)
 int session_bars = timeframe.isintraday ? int(math.ceil(375.0 / math.max(1.0, timeframe.multiplier))) : 1
 int session_end_bar = (na(day_start_bar) ? bar_index : day_start_bar) + session_bars - 1
+int target_x2 = math.max(bar_index + 10, session_end_bar)
 
 // Data Retrieval for Underlying Spot
 spot_sym = exchange + ":" + final_root
@@ -243,10 +244,7 @@ var int[] strikes = array.new_int(11)
 
 // Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
 // Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
-f_get_contract_tuple() =>
-    float d_open = ta.valuewhen(ta.change(time("D")) != 0, open, 0)
-    float d_prev = ta.valuewhen(ta.change(time("D")) != 0, close[1], 0)
-    [nz(d_open, open), nz(d_prev, close[1]), close]
+// Clean security tuple fetching
 
 // Populating arrays. Security calls in loop are resolved using constant iteration boundaries
 for i = 0 to 10
@@ -258,8 +256,10 @@ for i = 0 to 10
     
     // Real-time tick-by-tick query on chart timeframe (timeframe.period)
     // Returns [Day Open, Previous Day Close, Real-time LTP] on every tick
-    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, [ta.valuewhen(ta.change(time("D")) != 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0, close[1], 0), close])
-    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, [ta.valuewhen(ta.change(time("D")) != 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0, close[1], 0), close])
+    [ce_o, ce_p] = request.security(ce_contract, "1D", [open, close[1]], lookahead=barmerge.lookahead_on)
+    ce_c = request.security(ce_contract, timeframe.period, close)
+    [pe_o, pe_p] = request.security(pe_contract, "1D", [open, close[1]], lookahead=barmerge.lookahead_on)
+    pe_c = request.security(pe_contract, timeframe.period, close)
     
     array.set(ce_opens, i, ce_o)
     array.set(ce_prevs, i, ce_p)
@@ -908,7 +908,6 @@ f_get_line_style(string style_str) =>
 
 
 if sr_draw_mode == "Horizontal Lines (Projected to Right)"
-    int target_x2 = math.max(bar_index + 10, session_end_bar)
     int start_x1 = na(day_start_bar) ? bar_index : day_start_bar
 
     if is_new_day
