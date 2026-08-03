@@ -72,47 +72,47 @@ c_running_bep = input.color(color.white, "Running BEP Line Color", group=G_PLOTS
 // S/R Level Colors & Styling
 c_p_in  = input.color(color.yellow, "Pivot Line Color", group=G_COLORS)
 width_p_in = input.int(2, "Pivot Line Width", minval=1, maxval=4, group=G_COLORS)
-style_p_in = input.string("Dotted", "Pivot Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_p_in = input.string("Dotted", "Pivot Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r1_in = input.color(#EF5350, "R1 Line Color", group=G_COLORS)
 width_r1_in = input.int(1, "R1 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r1_in = input.string("Dotted", "R1 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_r1_in = input.string("Dotted", "R1 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r2_in = input.color(#EF5350, "R2 Line Color", group=G_COLORS)
 width_r2_in = input.int(1, "R2 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r2_in = input.string("Dotted", "R2 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_r2_in = input.string("Dotted", "R2 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r3_in = input.color(#EF5350, "R3 Line Color", group=G_COLORS)
 width_r3_in = input.int(1, "R3 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r3_in = input.string("Dotted", "R3 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_r3_in = input.string("Dotted", "R3 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r4_in = input.color(#EF5350, "R4 Line Color", group=G_COLORS)
 width_r4_in = input.int(1, "R4 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r4_in = input.string("Dotted", "R4 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_r4_in = input.string("Dotted", "R4 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r5_in = input.color(#EF5350, "R5 Line Color", group=G_COLORS)
 width_r5_in = input.int(1, "R5 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r5_in = input.string("Dotted", "R5 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_r5_in = input.string("Dotted", "R5 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s1_in = input.color(#26A69A, "S1 Line Color", group=G_COLORS)
 width_s1_in = input.int(1, "S1 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s1_in = input.string("Dotted", "S1 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_s1_in = input.string("Dotted", "S1 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s2_in = input.color(#26A69A, "S2 Line Color", group=G_COLORS)
 width_s2_in = input.int(1, "S2 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s2_in = input.string("Dotted", "S2 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_s2_in = input.string("Dotted", "S2 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s3_in = input.color(#26A69A, "S3 Line Color", group=G_COLORS)
 width_s3_in = input.int(1, "S3 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s3_in = input.string("Dotted", "S3 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_s3_in = input.string("Dotted", "S3 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s4_in = input.color(#26A69A, "S4 Line Color", group=G_COLORS)
 width_s4_in = input.int(1, "S4 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s4_in = input.string("Dotted", "S4 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_s4_in = input.string("Dotted", "S4 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s5_in = input.color(#26A69A, "S5 Line Color", group=G_COLORS)
 width_s5_in = input.int(1, "S5 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s5_in = input.string("Dotted", "S5 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
+style_s5_in = input.string("Dotted", "S5 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
 
 c_orb_in = input.color(color.blue, "ORB Line Color", group=G_COLORS)
 width_orb_in = input.int(1, "ORB Line Width", minval=1, maxval=4, group=G_COLORS)
