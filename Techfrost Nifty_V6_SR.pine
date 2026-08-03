@@ -242,17 +242,11 @@ var float[] pe_vwaps = array.new_float(11, na)
 var int[] strikes = array.new_int(11)
 
 // Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
+// Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
 f_get_contract_tuple() =>
-    var float day_open = na
-    var float prev_close = na
-    if ta.change(time("D")) != 0
-        prev_close := close[1]
-        day_open := open
-    if na(day_open)
-        day_open := open
-    if na(prev_close)
-        prev_close := close[1]
-    [day_open, prev_close, close]
+    float d_open = ta.valuewhen(ta.change(time("D")) != 0, open, 0)
+    float d_prev = ta.valuewhen(ta.change(time("D")) != 0, close[1], 0)
+    [nz(d_open, open), nz(d_prev, close[1]), close]
 
 // Populating arrays. Security calls in loop are resolved using constant iteration boundaries
 for i = 0 to 10

@@ -276,17 +276,11 @@ var float[] pe_vwaps = array.new_float(11, na)
 var int[] strikes = array.new_int(11)
 
 // Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
+// Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
 f_get_contract_tuple() =>
-    var float day_open = na
-    var float prev_close = na
-    if ta.change(time("D")) != 0
-        prev_close := close[1]
-        day_open := open
-    if na(day_open)
-        day_open := open
-    if na(prev_close)
-        prev_close := close[1]
-    [day_open, prev_close, close]
+    float d_open = ta.valuewhen(ta.change(time("D")) != 0, open, 0)
+    float d_prev = ta.valuewhen(ta.change(time("D")) != 0, close[1], 0)
+    [nz(d_open, open), nz(d_prev, close[1]), close]
 
 // Populating arrays. Security calls in loop are resolved using constant iteration boundaries
 for i = 0 to 10
@@ -510,14 +504,13 @@ is_new_day = ta.change(time("D")) != 0
 var int day_start_bar = na
 if is_new_day
     day_start_bar := bar_index
+    p_plot  := na
+    r1_plot := na, r2_plot := na, r3_plot := na, r4_plot := na, r5_plot := na
+    s1_plot := na, s2_plot := na, s3_plot := na, s4_plot := na, s5_plot := na
 
 // Calculate 9:15 AM to 3:40 PM IST market session bar count (375 mins intraday session)
 int session_bars = timeframe.isintraday ? int(math.ceil(375.0 / math.max(1.0, timeframe.multiplier))) : 1
 int session_end_bar = (na(day_start_bar) ? bar_index : day_start_bar) + session_bars - 1
-
-    p_plot  := na
-    r1_plot := na, r2_plot := na, r3_plot := na, r4_plot := na, r5_plot := na
-    s1_plot := na, s2_plot := na, s3_plot := na, s4_plot := na, s5_plot := na
 
 // Resolve ORB Strike Price relative to selected strike or manual input
 int orb_strike = final_strike
