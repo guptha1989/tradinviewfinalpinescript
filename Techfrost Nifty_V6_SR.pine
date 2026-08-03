@@ -523,7 +523,6 @@ else
         s5_plot := Spot_S5
 
 // Prevent continuation lines connecting to next day by inserting 'na' on the first bar of each new day
-is_new_day = ta.change(time("D")) != 0
 if is_new_day
     p_plot  := na
     r1_plot := na, r2_plot := na, r3_plot := na, r4_plot := na
@@ -901,7 +900,6 @@ var label lbl_line_pdh = na, var label lbl_line_pdl = na, var label lbl_line_orb
 
 // PROJECTED HORIZONTAL LINES ENGINE (ANCHORED AT 9:15 AM & EXTENDED FULL DAY)
 // =========================================================================
-f_get_line_style(string style_str) =>
     style_str == "Dashed" ? line.style_dashed :
      style_str == "Dotted" ? line.style_dotted :
      line.style_solid
