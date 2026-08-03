@@ -117,7 +117,7 @@ style_s5_in = input.string("Dotted", "S5 Line Style", options=["Solid", "Dashed"
 c_orb_in = input.color(color.blue, "ORB Line Color", group=G_COLORS)
 width_orb_in = input.int(1, "ORB Line Width", minval=1, maxval=4, group=G_COLORS)
 style_orb_in = input.string("Dashed", "ORB Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
-show_pdhl = input.bool(false, "Show Previous Day High/Low (PDH/PDL)", group=G_COLORS, tooltip="Plots Previous Day High and Low lines.")
+show_pdhl = input.bool(true, "Show Previous Day High/Low (PDH/PDL)", group=G_COLORS, tooltip="Plots Previous Day High and Low lines.")
 pdhl_strike_mode = input.string("Current Chart Option", "PDH/PDL Strike Selection Mode", options=["Current Chart Option", "ATM Strike", "Manual Strike"], group=G_COLORS, tooltip="Select which option contract's PDH/PDL to plot.")
 pdhl_manual_strike = input.int(24150, "PDH/PDL Manual Strike Price", group=G_COLORS, tooltip="Manual strike price used when PDH/PDL Strike Mode is set to Manual Strike.")
 pdhl_opt_type = input.string("CE", "PDH/PDL Option Type", options=["CE", "PE"], group=G_COLORS, tooltip="Option type (CE or PE) for PDH/PDL when using ATM Strike or Manual Strike.")
@@ -130,7 +130,7 @@ style_pdl_in = input.string("Dotted", "PDL Line Style", options=["Solid", "Dashe
 
 // 4. ORB & Running BEP Settings
 G_ORB = "ORB & Running BEP Settings"
-show_orb_lines = input.bool(false, "Show ORB Lines", group=G_ORB, tooltip="Toggle ORB range lines on the chart.")
+show_orb_lines = input.bool(true, "Show ORB Lines", group=G_ORB, tooltip="Toggle ORB range lines on the chart.")
 show_orb_labels = input.bool(true, "Show ORB Labels", group=G_ORB, tooltip="Toggle ORB range text labels on the chart.")
 orb_timeframe = input.string("5", "ORB Timeframe (Mins)", options=["1", "3", "5", "15", "30"], group=G_ORB, tooltip="Specify the ORB breakout duration in minutes.")
 orb_strike_mode = input.string("ATM", "ORB Strike Selection Mode", options=["ATM", "ITM", "OTM", "Manual Strike"], group=G_ORB, tooltip="Select strike price relative to ATM or set manually.")
@@ -898,16 +898,7 @@ if sr_draw_mode == "Horizontal Lines (Projected to Right)"
             ln_s3 := line.new(start_x1, s3_plot, target_x2, s3_plot, color=col_s3, width=width_s3_in, style=f_get_line_style(style_s3_in))
             ln_s4 := line.new(start_x1, s4_plot, target_x2, s4_plot, color=col_s4, width=width_s4_in, style=f_get_line_style(style_s4_in))
             ln_s5 := line.new(start_x1, s5_plot, target_x2, s5_plot, color=col_s5, width=width_s5_in, style=f_get_line_style(style_s5_in))
-        if show_orb_lines and not na(orb_high_plot)
-            ln_orb_h := line.new(start_x1, orb_high_plot, target_x2, orb_high_plot, color=c_orb_in, width=width_orb_in, style=f_get_line_style(style_orb_in))
-            ln_orb_l := line.new(start_x1, orb_low_plot, target_x2, orb_low_plot, color=c_orb_in, width=width_orb_in, style=f_get_line_style(style_orb_in))
-            lbl_line_orb_h := label.new(target_x2, orb_high_plot, "ORB High: " + str.tostring(orb_high_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
-            lbl_line_orb_l := label.new(target_x2, orb_low_plot, "ORB Low: " + str.tostring(orb_low_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
-        if show_pdhl and not na(pd_high_val)
-            ln_pdh := line.new(start_x1, pd_high_val, target_x2, pd_high_val, color=c_pdh_in, width=width_pdh_in, style=f_get_line_style(style_pdh_in))
-            ln_pdl := line.new(start_x1, pd_low_val, target_x2, pd_low_val, color=c_pdl_in, width=width_pdl_in, style=f_get_line_style(style_pdl_in))
-            lbl_line_pdh := label.new(target_x2, pd_high_val, "PDH: " + str.tostring(pd_high_val, "#.##"), color=c_pdh_in, textcolor=color.white, style=label.style_label_left, size=size.small)
-            lbl_line_pdl := label.new(target_x2, pd_low_val, "PDL: " + str.tostring(pd_low_val, "#.##"), color=c_pdl_in, textcolor=color.white, style=label.style_label_left, size=size.small)
+// ORB and PDHL created dynamically as soon as valid
             
     if show_sr_plots and not na(p_plot)
         if na(ln_p)
@@ -941,12 +932,15 @@ if sr_draw_mode == "Horizontal Lines (Projected to Right)"
             lbl_line_orb_h := label.new(target_x2, orb_high_plot, "ORB High: " + str.tostring(orb_high_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
             lbl_line_orb_l := label.new(target_x2, orb_low_plot, "ORB Low: " + str.tostring(orb_low_plot, "#.##"), color=c_orb_in, textcolor=color.white, style=label.style_label_left, size=size.small)
         else
-            line.set_y1(ln_orb_h, orb_high_plot), line.set_y2(ln_orb_h, orb_high_plot), line.set_x2(ln_orb_h, target_x2)
-            line.set_y1(ln_orb_l, orb_low_plot), line.set_y2(ln_orb_l, orb_low_plot), line.set_x2(ln_orb_l, target_x2)
+            line.set_y1(ln_orb_h, orb_high_plot), line.set_y2(ln_orb_h, orb_high_plot), line.set_x2(ln_orb_h, target_x2), line.set_width(ln_orb_h, width_orb_in), line.set_style(ln_orb_h, f_get_line_style(style_orb_in))
+            line.set_y1(ln_orb_l, orb_low_plot), line.set_y2(ln_orb_l, orb_low_plot), line.set_x2(ln_orb_l, target_x2), line.set_width(ln_orb_l, width_orb_in), line.set_style(ln_orb_l, f_get_line_style(style_orb_in))
             if not na(lbl_line_orb_h)
                 label.set_xy(lbl_line_orb_h, target_x2, orb_high_plot)
+                label.set_text(lbl_line_orb_h, "ORB High: " + str.tostring(orb_high_plot, "#.##"))
             if not na(lbl_line_orb_l)
                 label.set_xy(lbl_line_orb_l, target_x2, orb_low_plot)
+                label.set_text(lbl_line_orb_l, "ORB Low: " + str.tostring(orb_low_plot, "#.##"))
+
     if show_pdhl and not na(pd_high_val)
         if na(ln_pdh)
             ln_pdh := line.new(start_x1, pd_high_val, target_x2, pd_high_val, color=c_pdh_in, width=width_pdh_in, style=f_get_line_style(style_pdh_in))
@@ -954,12 +948,14 @@ if sr_draw_mode == "Horizontal Lines (Projected to Right)"
             lbl_line_pdh := label.new(target_x2, pd_high_val, "PDH: " + str.tostring(pd_high_val, "#.##"), color=c_pdh_in, textcolor=color.white, style=label.style_label_left, size=size.small)
             lbl_line_pdl := label.new(target_x2, pd_low_val, "PDL: " + str.tostring(pd_low_val, "#.##"), color=c_pdl_in, textcolor=color.white, style=label.style_label_left, size=size.small)
         else
-            line.set_y1(ln_pdh, pd_high_val), line.set_y2(ln_pdh, pd_high_val), line.set_x2(ln_pdh, target_x2)
-            line.set_y1(ln_pdl, pd_low_val), line.set_y2(ln_pdl, pd_low_val), line.set_x2(ln_pdl, target_x2)
+            line.set_y1(ln_pdh, pd_high_val), line.set_y2(ln_pdh, pd_high_val), line.set_x2(ln_pdh, target_x2), line.set_width(ln_pdh, width_pdh_in), line.set_style(ln_pdh, f_get_line_style(style_pdh_in))
+            line.set_y1(ln_pdl, pd_low_val), line.set_y2(ln_pdl, pd_low_val), line.set_x2(ln_pdl, target_x2), line.set_width(ln_pdl, width_pdl_in), line.set_style(ln_pdl, f_get_line_style(style_pdl_in))
             if not na(lbl_line_pdh)
                 label.set_xy(lbl_line_pdh, target_x2, pd_high_val)
+                label.set_text(lbl_line_pdh, "PDH: " + str.tostring(pd_high_val, "#.##"))
             if not na(lbl_line_pdl)
                 label.set_xy(lbl_line_pdl, target_x2, pd_low_val)
+                label.set_text(lbl_line_pdl, "PDL: " + str.tostring(pd_low_val, "#.##"))
 
 // =========================================================================
 // TABLE UI RENDERING (DASHBOARD)
