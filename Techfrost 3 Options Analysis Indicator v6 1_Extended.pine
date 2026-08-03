@@ -72,47 +72,47 @@ c_running_bep = input.color(color.white, "Running BEP Line Color", group=G_PLOTS
 // S/R Level Colors & Styling
 c_p_in  = input.color(color.yellow, "Pivot Line Color", group=G_COLORS)
 width_p_in = input.int(2, "Pivot Line Width", minval=1, maxval=4, group=G_COLORS)
-style_p_in = input.string("Solid", "Pivot Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_p_in = input.string("Dotted", "Pivot Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r1_in = input.color(#EF5350, "R1 Line Color", group=G_COLORS)
 width_r1_in = input.int(1, "R1 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r1_in = input.string("Solid", "R1 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_r1_in = input.string("Dotted", "R1 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r2_in = input.color(#EF5350, "R2 Line Color", group=G_COLORS)
 width_r2_in = input.int(1, "R2 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r2_in = input.string("Solid", "R2 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_r2_in = input.string("Dotted", "R2 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r3_in = input.color(#EF5350, "R3 Line Color", group=G_COLORS)
 width_r3_in = input.int(1, "R3 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r3_in = input.string("Solid", "R3 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_r3_in = input.string("Dotted", "R3 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r4_in = input.color(#EF5350, "R4 Line Color", group=G_COLORS)
 width_r4_in = input.int(1, "R4 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r4_in = input.string("Solid", "R4 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_r4_in = input.string("Dotted", "R4 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_r5_in = input.color(#EF5350, "R5 Line Color", group=G_COLORS)
 width_r5_in = input.int(1, "R5 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_r5_in = input.string("Solid", "R5 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_r5_in = input.string("Dotted", "R5 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s1_in = input.color(#26A69A, "S1 Line Color", group=G_COLORS)
 width_s1_in = input.int(1, "S1 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s1_in = input.string("Solid", "S1 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_s1_in = input.string("Dotted", "S1 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s2_in = input.color(#26A69A, "S2 Line Color", group=G_COLORS)
 width_s2_in = input.int(1, "S2 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s2_in = input.string("Solid", "S2 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_s2_in = input.string("Dotted", "S2 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s3_in = input.color(#26A69A, "S3 Line Color", group=G_COLORS)
 width_s3_in = input.int(1, "S3 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s3_in = input.string("Solid", "S3 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_s3_in = input.string("Dotted", "S3 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s4_in = input.color(#26A69A, "S4 Line Color", group=G_COLORS)
 width_s4_in = input.int(1, "S4 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s4_in = input.string("Solid", "S4 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_s4_in = input.string("Dotted", "S4 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_s5_in = input.color(#26A69A, "S5 Line Color", group=G_COLORS)
 width_s5_in = input.int(1, "S5 Line Width", minval=1, maxval=4, group=G_COLORS)
-style_s5_in = input.string("Solid", "S5 Line Style", options=["Solid", "Dashed", "Dotted"], group=G_COLORS)
+style_s5_in = input.string("Dotted", "S5 Line Style", options=["Dotted", "Dashed", "Dotted"], group=G_COLORS)
 
 c_orb_in = input.color(color.blue, "ORB Line Color", group=G_COLORS)
 width_orb_in = input.int(1, "ORB Line Width", minval=1, maxval=4, group=G_COLORS)
@@ -826,25 +826,25 @@ col_s3 = use_dynamic_colors ? f_get_level_color(7, 3) : c_s3_in
 col_s4 = use_dynamic_colors ? f_get_level_color(8, 2) : c_s4_in
 col_s5 = use_dynamic_colors ? f_get_level_color(9, 1) : c_s5_in
 
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? p_plot : na, title="Pivot (Selected Strike BEP)", color=col_p)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? r1_plot : na, title="R1 (ATM CE)", color=col_r1)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? r2_plot : na, title="R2 (ITM Avg 1)", color=col_r2)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? r3_plot : na, title="R3 (ITM Avg 2)", color=col_r3)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? r4_plot : na, title="R4 (ITM Avg 3)", color=col_r4)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? r5_plot : na, title="R5 (ITM Avg 4)", color=col_r5)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? s1_plot : na, title="S1 (ATM PE)", color=col_s1)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? s2_plot : na, title="S2 (OTM Avg 1)", color=col_s2)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? s3_plot : na, title="S3 (OTM Avg 2)", color=col_s3)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? s4_plot : na, title="S4 (OTM Avg 3)", color=col_s4)
-plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? s5_plot : na, title="S5 (OTM Avg 4)", color=col_s5)
+plot(show_sr_plots ? p_plot : na, title="Pivot (Selected Strike BEP)", color=col_p)
+plot(show_sr_plots ? r1_plot : na, title="R1 (ATM CE)", color=col_r1)
+plot(show_sr_plots ? r2_plot : na, title="R2 (ITM Avg 1)", color=col_r2)
+plot(show_sr_plots ? r3_plot : na, title="R3 (ITM Avg 2)", color=col_r3)
+plot(show_sr_plots ? r4_plot : na, title="R4 (ITM Avg 3)", color=col_r4)
+plot(show_sr_plots ? r5_plot : na, title="R5 (ITM Avg 4)", color=col_r5)
+plot(show_sr_plots ? s1_plot : na, title="S1 (ATM PE)", color=col_s1)
+plot(show_sr_plots ? s2_plot : na, title="S2 (OTM Avg 1)", color=col_s2)
+plot(show_sr_plots ? s3_plot : na, title="S3 (OTM Avg 2)", color=col_s3)
+plot(show_sr_plots ? s4_plot : na, title="S4 (OTM Avg 3)", color=col_s4)
+plot(show_sr_plots ? s5_plot : na, title="S5 (OTM Avg 4)", color=col_s5)
 
-plot(show_orb_lines and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? orb_high_plot : na, title="ORB Range High", color=c_orb_in)
-plot(show_orb_lines and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? orb_low_plot : na, title="ORB Range Low", color=c_orb_in)
+plot(show_orb_lines ? orb_high_plot : na, title="ORB Range High", color=c_orb_in)
+plot(show_orb_lines ? orb_low_plot : na, title="ORB Range Low", color=c_orb_in)
 
 // Running BEP plot removed
 
-plot(show_pdhl and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? pd_high_val : na, title="PD High (PDH)", color=c_pdh_in)
-plot(show_pdhl and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? pd_low_val : na, title="PD Low (PDL)", color=c_pdl_in)
+plot(show_pdhl ? pd_high_val : na, title="PD High (PDH)", color=c_pdh_in)
+plot(show_pdhl ? pd_low_val : na, title="PD Low (PDL)", color=c_pdl_in)
 
 plot(show_vwap_plots ? ce_vwap_plot_final : na, title="CE VWAP", color=c_ce_vwap)
 plot(show_vwap_plots ? pe_vwap_plot_final : na, title="PE VWAP", color=c_pe_vwap)
