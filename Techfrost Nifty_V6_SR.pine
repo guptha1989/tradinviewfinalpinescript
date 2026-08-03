@@ -50,7 +50,7 @@ plot_sr_on_spot = input.string("Options-Chain Level Projections (Spot Formula)",
   options=["Symmetric Channels (Strike +/- Premium)", "Absolute Values", "Options-Chain Level Projections (Spot Formula)", "Do Not Plot"], group=G_PLOTS,
   tooltip="Adjusts how S/R levels are plotted on a spot chart to prevent scale distortion.")
 
-sr_draw_mode = input.string("Standard Plots (Style Tab Customizable)", "S/R Level Rendering Mode",
+sr_draw_mode = input.string("Horizontal Lines (Projected to Right)", "S/R Level Rendering Mode",
   options=["Standard Plots (Style Tab Customizable)", "Horizontal Lines (Projected to Right)"], group=G_PLOTS,
   tooltip="Choose whether S/R levels are plotted standard or drawn as projected lines extending to day end.")
 
@@ -1201,7 +1201,7 @@ if barstate.islast
         label.delete(lbl_r1), label.delete(lbl_r2), label.delete(lbl_r3), label.delete(lbl_r4), label.delete(lbl_r5)
         label.delete(lbl_s1), label.delete(lbl_s2), label.delete(lbl_s3), label.delete(lbl_s4), label.delete(lbl_s5)
         
-        int label_x = bar_index + 5
+        int label_x = target_x2
         lbl_p  := label.new(label_x, p_plot,  "Pivot: " + str.tostring(p_plot, "#.##") + f_get_vol_suffix(5, 5) + f_get_pivot_probability(),  color=color.yellow, textcolor=color.black, style=label.style_label_left, size=size.small)
         lbl_r1 := label.new(label_x, r1_plot, "R1: " + str.tostring(r1_plot, "#.##") + f_get_vol_suffix(5, 5) + f_get_sr_probability(5, 5, true), color=color.new(color.red, 30), textcolor=color.white, style=label.style_label_left, size=size.small)
         lbl_r2 := label.new(label_x, r2_plot, "R2: " + str.tostring(r2_plot, "#.##") + f_get_vol_suffix(4, 6) + f_get_sr_probability(4, 6, true), color=color.new(color.red, 40), textcolor=color.white, style=label.style_label_left, size=size.small)
