@@ -238,7 +238,11 @@ f_get_contract_tuple() =>
     if ta.change(time("D")) != 0
         prev_close := close[1]
         day_open := open
-    [nz(day_open, open), nz(prev_close, close[1]), close]
+    if na(day_open)
+        day_open := open
+    if na(prev_close)
+        prev_close := close[1]
+    [day_open, prev_close, close]
 
 // Populating arrays. Security calls in loop are resolved using constant iteration boundaries
 for i = 0 to 10
