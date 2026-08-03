@@ -43,7 +43,7 @@ show_opp_candles = input.bool(true, "Show Opposite Option Candles", group=G_PLOT
 show_vwap_plots = input.bool(true, "Show Option VWAP Plots", group=G_PLOTS,
   tooltip="Toggle plotting of CE and PE selected strike VWAPs on the chart.")
 
-sr_draw_mode = input.string("Horizontal Lines (Projected to Right)", "S/R Level Rendering Mode",
+sr_draw_mode = input.string("Standard Plots (Style Tab Customizable)", "S/R Level Rendering Mode",
   options=["Standard Plots (Style Tab Customizable)", "Horizontal Lines (Projected to Right)"], group=G_PLOTS,
   tooltip="Choose whether S/R levels are plotted standard (customizable via TradingView Style tab) or drawn as projected lines.")
 
@@ -784,13 +784,7 @@ plotcandle(candle_o, candle_h, candle_l, candle_c, title="Opposite Option Candle
   wickcolor=opp_wick_col, 
   bordercolor=opp_wick_col)
 
-plot(show_intrinsic_plots ? ce_int_plot : na, title="CE Intrinsic Value", color=c_ce_int, linewidth=2)
-plot(show_intrinsic_plots ? pe_int_plot : na, title="PE Intrinsic Value", color=c_pe_int, linewidth=2)
-plot(show_intrinsic_plots ? avg_int_plot : na, title="Average Intrinsic Value", color=c_avg_int, linewidth=1)
-
-plot(show_intrinsic_plots ? ce_ext_plot : na, title="CE Extrinsic Value", color=c_ce_ext, linewidth=2)
-plot(show_intrinsic_plots ? pe_ext_plot : na, title="PE Extrinsic Value", color=c_pe_ext, linewidth=2)
-plot(show_intrinsic_plots ? avg_ext_plot : na, title="Average Extrinsic Value", color=c_avg_ext, linewidth=1)
+// Intrinsic/Extrinsic plots removed per user request
 
 f_get_level_color(int c_idx, int p_idx) =>
     float cb = na, float cs = na, float pb = na, float ps = na
@@ -847,7 +841,7 @@ plot(show_sr_plots and sr_draw_mode == "Standard Plots (Style Tab Customizable)"
 plot(show_orb_lines and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? orb_high_plot : na, title="ORB Range High", color=c_orb_in)
 plot(show_orb_lines and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? orb_low_plot : na, title="ORB Range Low", color=c_orb_in)
 
-plot(show_running_bep ? running_bep_plot : na, title="Running BEP", color=c_running_bep)
+// Running BEP plot removed
 
 plot(show_pdhl and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? pd_high_val : na, title="PD High (PDH)", color=c_pdh_in)
 plot(show_pdhl and sr_draw_mode == "Standard Plots (Style Tab Customizable)" ? pd_low_val : na, title="PD Low (PDL)", color=c_pdl_in)
