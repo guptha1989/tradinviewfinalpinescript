@@ -1,0 +1,302 @@
+//@version=6
+indicator("Techfrost Multi-Strike ATM & Basket Average Lines", overlay=false, precision=2)
+
+// ==========================================
+// ENUMS & INPUTS
+// ==========================================
+
+enum UnderlyingAsset
+    auto      = "Auto-Detect"
+    nifty     = "NIFTY"
+    banknifty = "BANKNIFTY"
+    crudeoil  = "CRUDEOIL"
+    gold      = "GOLD"
+    stock     = "Stock (Equity)"
+
+enum OptionType
+    auto = "Auto-Detect"
+    ce   = "Call (CE)"
+    pe   = "Put (PE)"
+
+enum StepOverrideChoice
+    auto    = "Auto"
+    step25  = "25"
+    step50  = "50"
+    step100 = "100"
+    step200 = "200"
+    step500 = "500"
+
+// --- Instrument Settings ---
+underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
+optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
+spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
+strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
+strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
+  tooltip="Set to Auto for auto-detection based on underlying (50 for Nifty/Crude, 100 for BankNifty/Gold).")
+
+// --- Display Controls ---
+showPlotsInput     = input.bool(true, "Show 9-Strike Average Lines", group="Display Controls")
+showHistogramsInput= input.bool(true, "Show Average Change Histograms", group="Display Controls")
+
+// --- Styling & Colors ---
+colorCEAvgOpen     = input.color(color.new(#00C853, 50), "CE Day Open 9-Strike Avg Line Color", group="Styling & Colors")
+colorCEAvgCur      = input.color(#00E676, "CE Current 9-Strike Avg Line Color", group="Styling & Colors")
+
+colorPEAvgOpen     = input.color(color.new(#D50000, 50), "PE Day Open 9-Strike Avg Line Color", group="Styling & Colors")
+colorPEAvgCur      = input.color(#FF1744, "PE Current 9-Strike Avg Line Color", group="Styling & Colors")
+
+// ==========================================
+// TICKER PARSING & AUTO-DETECTION
+// ==========================================
+
+string cleanTicker = syminfo.ticker
+int colonPos = str.pos(cleanTicker, ":")
+if colonPos != -1
+    cleanTicker := str.substring(cleanTicker, colonPos + 1)
+cleanTicker := str.replace_all(cleanTicker, " ", "")
+
+// ----- Detect underlying -----
+UnderlyingAsset actualUnderlying = na
+if underlyingInput == UnderlyingAsset.auto
+    if str.contains(cleanTicker, "BANKNIFTY")
+        actualUnderlying := UnderlyingAsset.banknifty
+    else if str.contains(cleanTicker, "NIFTY")
+        actualUnderlying := UnderlyingAsset.nifty
+    else if str.contains(cleanTicker, "CRUDEOIL")
+        actualUnderlying := UnderlyingAsset.crudeoil
+    else if str.contains(cleanTicker, "GOLD") and not str.contains(cleanTicker, "GOLDM") and not str.contains(cleanTicker, "GOLDPETAL")
+        actualUnderlying := UnderlyingAsset.gold
+    else if str.contains(cleanTicker, "GOLDM")
+        actualUnderlying := UnderlyingAsset.gold
+    else
+        actualUnderlying := UnderlyingAsset.stock
+else
+    actualUnderlying := underlyingInput
+
+// ----- Detect option type -----
+bool isCall = false
+bool isPut  = false
+
+if optionTypeInput == OptionType.ce
+    isCall := true
+else if optionTypeInput == OptionType.pe
+    isPut := true
+else
+    if str.contains(cleanTicker, "CE")
+        isCall := true
+    else if str.contains(cleanTicker, "PE")
+        isPut := true
+    else if str.match(cleanTicker, "C\\d+$") != ""
+        isCall := true
+    else if str.match(cleanTicker, "P\\d+$") != ""
+        isPut := true
+
+// ----- Strike extraction from chart symbol -----
+float detectedStrike = na
+string tickerWithoutCEPE = ""
+
+int tickerLen = str.length(cleanTicker)
+if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+    tickerWithoutCEPE := str.substring(cleanTicker, 0, tickerLen - 2)
+
+string matchC = str.match(cleanTicker, "C\\d+$")
+string matchP = str.match(cleanTicker, "P\\d+$")
+
+if matchC != ""
+    detectedStrike := str.tonumber(str.substring(matchC, 1))
+else if matchP != ""
+    detectedStrike := str.tonumber(str.substring(matchP, 1))
+else if tickerWithoutCEPE != ""
+    string strikeDigits = str.match(tickerWithoutCEPE, "\\d+$")
+    detectedStrike := str.tonumber(strikeDigits)
+
+float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : detectedStrike
+
+// ----- Determine Step Size -----
+int stepVal = 50
+switch strikeStepInput
+    StepOverrideChoice.step25  => stepVal := 25
+    StepOverrideChoice.step50  => stepVal := 50
+    StepOverrideChoice.step100 => stepVal := 100
+    StepOverrideChoice.step200 => stepVal := 200
+    StepOverrideChoice.step500 => stepVal := 500
+    =>
+        switch actualUnderlying
+            UnderlyingAsset.banknifty => stepVal := 100
+            UnderlyingAsset.nifty     => stepVal := 50
+            UnderlyingAsset.crudeoil  => stepVal := 50
+            UnderlyingAsset.gold      => stepVal := 100
+            UnderlyingAsset.stock     => stepVal := 50
+
+// ==========================================
+// SPOT TICKER RESOLUTION & STRICT DAY OPEN ATM CENTER ANCHORING
+// ==========================================
+
+string spotTicker = ""
+if str.length(spotTickerOverride) > 0
+    spotTicker := spotTickerOverride
+else
+    switch actualUnderlying
+        UnderlyingAsset.banknifty => spotTicker := "NSE:BANKNIFTY"
+        UnderlyingAsset.nifty     => spotTicker := "NSE:NIFTY"
+        UnderlyingAsset.crudeoil  => spotTicker := "MCX:CRUDEOIL1!"
+        UnderlyingAsset.gold      => spotTicker := "MCX:GOLD1!"
+        UnderlyingAsset.stock     =>
+            string rootGuess = str.match(cleanTicker, "^[A-Z&]+")
+            if rootGuess != ""
+                spotTicker := syminfo.prefix + ":" + rootGuess
+            else
+                spotTicker := syminfo.prefix + ":" + cleanTicker
+
+// Fetch Day Open Spot Price for the underlying
+float spotDayOpen = request.security(spotTicker, "D", open, lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+// Base Center Strike is fixed statically on barstate.isfirst to keep security requests 100% constant across all bars
+// This strictly prevents TradingView RE10137 limit-40 runtime error across multi-day historical charts
+var int baseCenterStrike = na
+if barstate.isfirst or na(baseCenterStrike)
+    float refPrice = strikeOverride > 0.0 ? strikeOverride : (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
+    baseCenterStrike := int(math.round(refPrice / stepVal) * stepVal)
+
+int baseStrike = baseCenterStrike
+
+// ==========================================
+// FAIL-SAFE CE & PE TICKER PREFIX CONSTRUCTION
+// ==========================================
+
+string strikeDigitsStr = str.tostring(int(chartStrikePrice))
+int digitsLen = str.length(strikeDigitsStr)
+
+string ce_prefix = ""
+string pe_prefix = ""
+
+if isCall
+    ce_prefix := str.substring(cleanTicker, 0, str.length(cleanTicker) - digitsLen)
+    int cPos = str.length(ce_prefix) - 1
+    pe_prefix := str.substring(ce_prefix, 0, cPos) + "P"
+else
+    pe_prefix := str.substring(cleanTicker, 0, str.length(cleanTicker) - digitsLen)
+    int pPos = str.length(pe_prefix) - 1
+    ce_prefix := str.substring(pe_prefix, 0, pPos) + "C"
+
+f_build_ce_ticker(int target_strike) =>
+    ce_prefix + str.tostring(target_strike)
+
+f_build_pe_ticker(int target_strike) =>
+    pe_prefix + str.tostring(target_strike)
+
+// 9 Strikes centered strictly around Day Open ATM (baseStrike is always middle row)
+int k_0  = baseStrike
+int k_p1 = baseStrike + 1 * stepVal
+int k_p2 = baseStrike + 2 * stepVal
+int k_p3 = baseStrike + 3 * stepVal
+int k_p4 = baseStrike + 4 * stepVal
+
+int k_m1 = baseStrike - 1 * stepVal
+int k_m2 = baseStrike - 2 * stepVal
+int k_m3 = baseStrike - 3 * stepVal
+int k_m4 = baseStrike - 4 * stepVal
+
+// ==========================================
+// DATA FETCHING FOR ALL 9 STRIKES (STATIC 18 CALLS TOTAL)
+// ==========================================
+
+f_get_strike_open_and_close() =>
+    float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    [d_op, close]
+
+[ce_o_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+// ==========================================
+// DAY OPEN ATM CALCULATION (MIN |CE OPEN - PE OPEN| AMONG THE 9 STRIKES)
+// ==========================================
+
+float diff_open_p4 = math.abs(ce_o_p4 - pe_o_p4)
+float diff_open_p3 = math.abs(ce_o_p3 - pe_o_p3)
+float diff_open_p2 = math.abs(ce_o_p2 - pe_o_p2)
+float diff_open_p1 = math.abs(ce_o_p1 - pe_o_p1)
+float diff_open_0  = math.abs(ce_o_0  - pe_o_0)
+float diff_open_m1 = math.abs(ce_o_m1 - pe_o_m1)
+float diff_open_m2 = math.abs(ce_o_m2 - pe_o_m2)
+float diff_open_m3 = math.abs(ce_o_m3 - pe_o_m3)
+float diff_open_m4 = math.abs(ce_o_m4 - pe_o_m4)
+
+float minDiffOpen = math.min(diff_open_p4, math.min(diff_open_p3, math.min(diff_open_p2, math.min(diff_open_p1, math.min(diff_open_0, math.min(diff_open_m1, math.min(diff_open_m2, math.min(diff_open_m3, diff_open_m4))))))))
+
+int dayOpenATMStrike = k_0
+if minDiffOpen == diff_open_p4
+    dayOpenATMStrike := k_p4
+else if minDiffOpen == diff_open_p3
+    dayOpenATMStrike := k_p3
+else if minDiffOpen == diff_open_p2
+    dayOpenATMStrike := k_p2
+else if minDiffOpen == diff_open_p1
+    dayOpenATMStrike := k_p1
+else if minDiffOpen == diff_open_0
+    dayOpenATMStrike := k_0
+else if minDiffOpen == diff_open_m1
+    dayOpenATMStrike := k_m1
+else if minDiffOpen == diff_open_m2
+    dayOpenATMStrike := k_m2
+else if minDiffOpen == diff_open_m3
+    dayOpenATMStrike := k_m3
+else if minDiffOpen == diff_open_m4
+    dayOpenATMStrike := k_m4
+
+// ==========================================
+// 9-STRIKE BASKET AVERAGE CALCULATIONS (PLOTTED ON CHART)
+// ==========================================
+
+// 9-Strike CE Day Open Average (Average of all 9 CE Day Open Prices)
+float ceAvgOpen = (ce_o_p4 + ce_o_p3 + ce_o_p2 + ce_o_p1 + ce_o_0 + ce_o_m1 + ce_o_m2 + ce_o_m3 + ce_o_m4) / 9.0
+
+// 9-Strike PE Day Open Average (Average of all 9 PE Day Open Prices)
+float peAvgOpen = (pe_o_p4 + pe_o_p3 + pe_o_p2 + pe_o_p1 + pe_o_0 + pe_o_m1 + pe_o_m2 + pe_o_m3 + pe_o_m4) / 9.0
+
+// 9-Strike CE Current Running Average (Average of all 9 CE Realtime Prices)
+float ceAvgCur  = (ce_c_p4 + ce_c_p3 + ce_c_p2 + ce_c_p1 + ce_c_0 + ce_c_m1 + ce_c_m2 + ce_c_m3 + ce_c_m4) / 9.0
+
+// 9-Strike PE Current Running Average (Average of all 9 PE Realtime Prices)
+float peAvgCur  = (pe_c_p4 + pe_c_p3 + pe_c_p2 + pe_c_p1 + pe_c_0 + pe_c_m1 + pe_c_m2 + pe_c_m3 + pe_c_m4) / 9.0
+
+// 9-Strike Average Changes from Day Open
+float ceAvgChg = ceAvgCur - ceAvgOpen
+float peAvgChg = peAvgCur - peAvgOpen
+
+// ==========================================
+// SUB-WINDOW PLOTS (STRICTLY SEPARATE BOTTOM INDICATOR)
+// ==========================================
+
+plot(showPlotsInput ? ceAvgOpen : na, title="CE 9-Strike Day Open Avg", color=colorCEAvgOpen, linewidth=1, style=plot.style_stepline)
+plot(showPlotsInput ? ceAvgCur  : na, title="CE 9-Strike Current Avg",  color=colorCEAvgCur,  linewidth=2)
+
+plot(showPlotsInput ? peAvgOpen : na, title="PE 9-Strike Day Open Avg", color=colorPEAvgOpen, linewidth=1, style=plot.style_stepline)
+plot(showPlotsInput ? peAvgCur  : na, title="PE 9-Strike Current Avg",  color=colorPEAvgCur,  linewidth=2)
+
+plot(showHistogramsInput ? ceAvgChg : na, title="CE 9-Strike Avg Change from Open", color=ceAvgChg >= 0 ? color.new(#00E676, 30) : color.new(#FF5252, 30), linewidth=2, style=plot.style_histogram)
+plot(showHistogramsInput ? peAvgChg : na, title="PE 9-Strike Avg Change from Open", color=peAvgChg >= 0 ? color.new(#00E676, 50) : color.new(#FF5252, 50), linewidth=1, style=plot.style_histogram)
