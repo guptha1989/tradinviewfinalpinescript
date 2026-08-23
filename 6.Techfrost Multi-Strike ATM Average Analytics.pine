@@ -29,6 +29,8 @@ enum StepOverrideChoice
 // --- Instrument Settings ---
 underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
+numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side", minval=1, maxval=4, group="Instrument Settings",
+  tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
 spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
 strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
 strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
@@ -36,22 +38,22 @@ strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override",
 
 // --- Display Controls ---
 showTableInput     = input.bool(true, "Show Summary & Strike Table", group="Display Controls",
-  tooltip="Enable or disable the summary & 9-strike analytics table.")
+  tooltip="Enable or disable the summary & strike analytics table.")
 tablePosInput      = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
 tableTextSizeInput = input.string("Small", "Table Text Size / Resizing", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls",
   tooltip="Adjust the table font and cell size (Auto, Tiny, Small, Normal, Large).")
 
-showPlotsInput     = input.bool(true, "Show 9-Strike Average Lines", group="Display Controls",
-  tooltip="Enable or disable the 9-strike CE and PE average line charts.")
+showPlotsInput     = input.bool(true, "Show Basket Average Lines", group="Display Controls",
+  tooltip="Enable or disable the CE and PE average line charts.")
 showHistogramsInput= input.bool(true, "Show Average Change Histograms", group="Display Controls",
-  tooltip="Enable or disable the 9-strike change from Day Open histograms.")
+  tooltip="Enable or disable the average change from Day Open histograms.")
 
 // --- Styling & Colors ---
-colorCEAvgOpen     = input.color(color.new(#00C853, 50), "CE Day Open 9-Strike Avg Line Color", group="Styling & Colors")
-colorCEAvgCur      = input.color(#00E676, "CE Current 9-Strike Avg Line Color", group="Styling & Colors")
+colorCEAvgOpen     = input.color(color.new(#00C853, 50), "CE Day Open Basket Avg Line Color", group="Styling & Colors")
+colorCEAvgCur      = input.color(#00E676, "CE Current Basket Avg Line Color", group="Styling & Colors")
 
-colorPEAvgOpen     = input.color(color.new(#D50000, 50), "PE Day Open 9-Strike Avg Line Color", group="Styling & Colors")
-colorPEAvgCur      = input.color(#FF1744, "PE Current 9-Strike Avg Line Color", group="Styling & Colors")
+colorPEAvgOpen     = input.color(color.new(#D50000, 50), "PE Day Open Basket Avg Line Color", group="Styling & Colors")
+colorPEAvgCur      = input.color(#FF1744, "PE Current Basket Avg Line Color", group="Styling & Colors")
 
 colorCurATMHighlight = input.color(#FFEE58, "Current ATM Cell Highlight (Yellow)", group="Styling & Colors")
 colorDayATMHighlight = input.color(#00E5FF, "Day Open ATM Cell Highlight (Cyan)", group="Styling & Colors")
@@ -163,7 +165,6 @@ else
 float spotDayOpen = request.security(spotTicker, "D", open, lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // Base Center Strike is fixed statically on barstate.isfirst to keep security requests 100% constant across all bars
-// This strictly prevents TradingView RE10137 limit-40 runtime error across multi-day historical charts
 var int baseCenterStrike = na
 if barstate.isfirst or na(baseCenterStrike)
     float refPrice = strikeOverride > 0.0 ? strikeOverride : (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
@@ -209,7 +210,7 @@ int k_m3 = baseStrike - 3 * stepVal
 int k_m4 = baseStrike - 4 * stepVal
 
 // ==========================================
-// DATA FETCHING FOR ALL 9 STRIKES (STATIC 18 CALLS TOTAL)
+// DATA FETCHING FOR STRIKES (STATIC 18 CALLS TOTAL)
 // ==========================================
 
 f_get_strike_open_and_close() =>
@@ -244,7 +245,7 @@ f_get_strike_open_and_close() =>
 [pe_o_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // ==========================================
-// DAY OPEN ATM CALCULATION (MIN |CE OPEN - PE OPEN| AMONG THE 9 STRIKES)
+// DAY OPEN ATM CALCULATION (MIN |CE OPEN - PE OPEN|)
 // ==========================================
 
 float diff_open_p4 = math.abs(ce_o_p4 - pe_o_p4)
@@ -280,7 +281,7 @@ else if minDiffOpen == diff_open_m4
     dayOpenATMStrike := k_m4
 
 // ==========================================
-// CURRENT REALTIME ATM CALCULATION (MIN |CE LTP - PE LTP| AMONG THE 9 STRIKES)
+// CURRENT REALTIME ATM CALCULATION (MIN |CE LTP - PE LTP|)
 // ==========================================
 
 float diff_cur_p4 = math.abs(ce_c_p4 - pe_c_p4)
@@ -316,22 +317,45 @@ else if minDiffCur == diff_cur_m4
     curATMStrike := k_m4
 
 // ==========================================
-// 9-STRIKE BASKET AVERAGE CALCULATIONS (PLOTTED ON CHART)
+// BASKET AVERAGE CALCULATIONS (BASED ON numStrikesInput)
 // ==========================================
 
-// 9-Strike CE Day Open Average (Average of all 9 CE Day Open Prices)
-float ceAvgOpen = (ce_o_p4 + ce_o_p3 + ce_o_p2 + ce_o_p1 + ce_o_0 + ce_o_m1 + ce_o_m2 + ce_o_m3 + ce_o_m4) / 9.0
+float sum_ce_open = ce_o_0
+float sum_pe_open = pe_o_0
+float sum_ce_cur  = ce_c_0
+float sum_pe_cur  = pe_c_0
+int total_count   = 1 + 2 * numStrikesInput
 
-// 9-Strike PE Day Open Average (Average of all 9 PE Day Open Prices)
-float peAvgOpen = (pe_o_p4 + pe_o_p3 + pe_o_p2 + pe_o_p1 + pe_o_0 + pe_o_m1 + pe_o_m2 + pe_o_m3 + pe_o_m4) / 9.0
+if numStrikesInput >= 1
+    sum_ce_open += ce_o_p1 + ce_o_m1
+    sum_pe_open += pe_o_p1 + pe_o_m1
+    sum_ce_cur  += ce_c_p1 + ce_c_m1
+    sum_pe_cur  += pe_c_p1 + pe_c_m1
 
-// 9-Strike CE Current Running Average (Average of all 9 CE Realtime Prices)
-float ceAvgCur  = (ce_c_p4 + ce_c_p3 + ce_c_p2 + ce_c_p1 + ce_c_0 + ce_c_m1 + ce_c_m2 + ce_c_m3 + ce_c_m4) / 9.0
+if numStrikesInput >= 2
+    sum_ce_open += ce_o_p2 + ce_o_m2
+    sum_pe_open += pe_o_p2 + pe_o_m2
+    sum_ce_cur  += ce_c_p2 + ce_c_m2
+    sum_pe_cur  += pe_c_p2 + pe_c_m2
 
-// 9-Strike PE Current Running Average (Average of all 9 PE Realtime Prices)
-float peAvgCur  = (pe_c_p4 + pe_c_p3 + pe_c_p2 + pe_c_p1 + pe_c_0 + pe_c_m1 + pe_c_m2 + pe_c_m3 + pe_c_m4) / 9.0
+if numStrikesInput >= 3
+    sum_ce_open += ce_o_p3 + ce_o_m3
+    sum_pe_open += pe_o_p3 + pe_o_m3
+    sum_ce_cur  += ce_c_p3 + ce_c_m3
+    sum_pe_cur  += pe_c_p3 + pe_c_m3
 
-// 9-Strike Average Changes from Day Open
+if numStrikesInput >= 4
+    sum_ce_open += ce_o_p4 + ce_o_m4
+    sum_pe_open += pe_o_p4 + pe_o_m4
+    sum_ce_cur  += ce_c_p4 + ce_c_m4
+    sum_pe_cur  += pe_c_p4 + pe_c_m4
+
+float ceAvgOpen = sum_ce_open / float(total_count)
+float peAvgOpen = sum_pe_open / float(total_count)
+float ceAvgCur  = sum_ce_cur  / float(total_count)
+float peAvgCur  = sum_pe_cur  / float(total_count)
+
+// Average Changes from Day Open
 float ceAvgChg = ceAvgCur - ceAvgOpen
 float peAvgChg = peAvgCur - peAvgOpen
 
@@ -341,17 +365,17 @@ float basketAvgCur  = (ceAvgCur + peAvgCur) / 2.0
 float basketAvgChg  = basketAvgCur - basketAvgOpen
 
 // ==========================================
-// 9-STRIKE AVERAGE PLOTS (SUB-WINDOW BOTTOM INDICATOR)
+// AVERAGE PLOTS (SUB-WINDOW BOTTOM INDICATOR)
 // ==========================================
 
-plot(showPlotsInput ? ceAvgOpen : na, title="CE 9-Strike Day Open Avg", color=colorCEAvgOpen, linewidth=1, style=plot.style_stepline)
-plot(showPlotsInput ? ceAvgCur  : na, title="CE 9-Strike Current Avg",  color=colorCEAvgCur,  linewidth=2)
+plot(showPlotsInput ? ceAvgOpen : na, title="CE Basket Day Open Avg", color=colorCEAvgOpen, linewidth=1, style=plot.style_stepline)
+plot(showPlotsInput ? ceAvgCur  : na, title="CE Basket Current Avg",  color=colorCEAvgCur,  linewidth=2)
 
-plot(showPlotsInput ? peAvgOpen : na, title="PE 9-Strike Day Open Avg", color=colorPEAvgOpen, linewidth=1, style=plot.style_stepline)
-plot(showPlotsInput ? peAvgCur  : na, title="PE 9-Strike Current Avg",  color=colorPEAvgCur,  linewidth=2)
+plot(showPlotsInput ? peAvgOpen : na, title="PE Basket Day Open Avg", color=colorPEAvgOpen, linewidth=1, style=plot.style_stepline)
+plot(showPlotsInput ? peAvgCur  : na, title="PE Basket Current Avg",  color=colorPEAvgCur,  linewidth=2)
 
-plot(showHistogramsInput ? ceAvgChg : na, title="CE 9-Strike Avg Change from Open", color=ceAvgChg >= 0 ? color.new(#00E676, 30) : color.new(#FF5252, 30), linewidth=2, style=plot.style_histogram)
-plot(showHistogramsInput ? peAvgChg : na, title="PE 9-Strike Avg Change from Open", color=peAvgChg >= 0 ? color.new(#00E676, 50) : color.new(#FF5252, 50), linewidth=1, style=plot.style_histogram)
+plot(showHistogramsInput ? ceAvgChg : na, title="CE Basket Avg Change from Open", color=ceAvgChg >= 0 ? color.new(#00E676, 30) : color.new(#FF5252, 30), linewidth=2, style=plot.style_histogram)
+plot(showHistogramsInput ? peAvgChg : na, title="PE Basket Avg Change from Open", color=peAvgChg >= 0 ? color.new(#00E676, 50) : color.new(#FF5252, 50), linewidth=1, style=plot.style_histogram)
 
 // ==========================================
 // DASHBOARD & STRIKE TABLE
@@ -373,7 +397,6 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
-// Table dimensions: 8 columns x 15 rows
 var table summaryTable = table.new(f_get_table_pos(tablePosInput), 8, 15, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 
 string underlyingName = switch actualUnderlying
@@ -418,10 +441,12 @@ if barstate.islast
     if not showTableInput
         table.delete(summaryTable)
     else
+        string strikeTag = str.tostring(total_count) + "-Strike Basket (" + str.tostring(numStrikesInput) + " ITM + ATM + " + str.tostring(numStrikesInput) + " OTM)"
+
         // Row 0: Top Header Banner
         table.cell(summaryTable, 0, 0, "Asset: " + underlyingName, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 1, 0, "Step: " + str.tostring(stepVal), bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 2, 0, "Selected: " + str.tostring(int(chartStrikePrice)), bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 2, 0, strikeTag, bgcolor=color.new(#1565C0, 0), text_color=color.yellow, text_size=curTextSize)
         table.cell(summaryTable, 3, 0, "Day Open ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
         table.cell(summaryTable, 4, 0, str.tostring(dayOpenATMStrike), bgcolor=colorDayATMHighlight, text_color=color.black, text_size=curTextSize)
         table.cell(summaryTable, 5, 0, "Current ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
@@ -429,7 +454,7 @@ if barstate.islast
         table.cell(summaryTable, 7, 0, "", bgcolor=color.new(#1565C0, 0))
 
         // Row 1: Day Open Averages (CE & PE)
-        table.cell(summaryTable, 0, 1, "Day Open 9-Strike Avg", bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 0, 1, "Day Open Basket Avg", bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 1, 1, "CE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
         table.cell(summaryTable, 2, 1, str.tostring(ceAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#00E676, text_size=curTextSize)
         table.cell(summaryTable, 3, 1, "PE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
@@ -467,13 +492,40 @@ if barstate.islast
         table.cell(summaryTable, 6, 3, "PE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 7, 3, "|CE-PE| Diff", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
 
-        // Rows 4 - 12: 9 Strikes Grid (+4 to -4 centered strictly on Day Open ATM)
-        f_fill_grid_row(summaryTable, 4,  k_p4, k_p4 == curATMStrike, k_p4 == dayOpenATMStrike, ce_o_p4, ce_c_p4, pe_o_p4, pe_c_p4, curTextSize)
-        f_fill_grid_row(summaryTable, 5,  k_p3, k_p3 == curATMStrike, k_p3 == dayOpenATMStrike, ce_o_p3, ce_c_p3, pe_o_p3, pe_c_p3, curTextSize)
-        f_fill_grid_row(summaryTable, 6,  k_p2, k_p2 == curATMStrike, k_p2 == dayOpenATMStrike, ce_o_p2, ce_c_p2, pe_o_p2, pe_c_p2, curTextSize)
-        f_fill_grid_row(summaryTable, 7,  k_p1, k_p1 == curATMStrike, k_p1 == dayOpenATMStrike, ce_o_p1, ce_c_p1, pe_o_p1, pe_c_p1, curTextSize)
-        f_fill_grid_row(summaryTable, 8,  k_0,  k_0  == curATMStrike, k_0  == dayOpenATMStrike, ce_o_0,  ce_c_0,  pe_o_0,  pe_c_0,  curTextSize)
-        f_fill_grid_row(summaryTable, 9,  k_m1, k_m1 == curATMStrike, k_m1 == dayOpenATMStrike, ce_o_m1, ce_c_m1, pe_o_m1, pe_c_m1, curTextSize)
-        f_fill_grid_row(summaryTable, 10, k_m2, k_m2 == curATMStrike, k_m2 == dayOpenATMStrike, ce_o_m2, ce_c_m2, pe_o_m2, pe_c_m2, curTextSize)
-        f_fill_grid_row(summaryTable, 11, k_m3, k_m3 == curATMStrike, k_m3 == dayOpenATMStrike, ce_o_m3, ce_c_m3, pe_o_m3, pe_c_m3, curTextSize)
-        f_fill_grid_row(summaryTable, 12, k_m4, k_m4 == curATMStrike, k_m4 == dayOpenATMStrike, ce_o_m4, ce_c_m4, pe_o_m4, pe_c_m4, curTextSize)
+        // Rows 4+: Populate active selected strikes grid
+        int rowIdx = 4
+        if numStrikesInput >= 4
+            f_fill_grid_row(summaryTable, rowIdx, k_p4, k_p4 == curATMStrike, k_p4 == dayOpenATMStrike, ce_o_p4, ce_c_p4, pe_o_p4, pe_c_p4, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 3
+            f_fill_grid_row(summaryTable, rowIdx, k_p3, k_p3 == curATMStrike, k_p3 == dayOpenATMStrike, ce_o_p3, ce_c_p3, pe_o_p3, pe_c_p3, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 2
+            f_fill_grid_row(summaryTable, rowIdx, k_p2, k_p2 == curATMStrike, k_p2 == dayOpenATMStrike, ce_o_p2, ce_c_p2, pe_o_p2, pe_c_p2, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 1
+            f_fill_grid_row(summaryTable, rowIdx, k_p1, k_p1 == curATMStrike, k_p1 == dayOpenATMStrike, ce_o_p1, ce_c_p1, pe_o_p1, pe_c_p1, curTextSize)
+            rowIdx += 1
+
+        // ATM Row (0)
+        f_fill_grid_row(summaryTable, rowIdx, k_0, k_0 == curATMStrike, k_0 == dayOpenATMStrike, ce_o_0, ce_c_0, pe_o_0, pe_c_0, curTextSize)
+        rowIdx += 1
+
+        if numStrikesInput >= 1
+            f_fill_grid_row(summaryTable, rowIdx, k_m1, k_m1 == curATMStrike, k_m1 == dayOpenATMStrike, ce_o_m1, ce_c_m1, pe_o_m1, pe_c_m1, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 2
+            f_fill_grid_row(summaryTable, rowIdx, k_m2, k_m2 == curATMStrike, k_m2 == dayOpenATMStrike, ce_o_m2, ce_c_m2, pe_o_m2, pe_c_m2, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 3
+            f_fill_grid_row(summaryTable, rowIdx, k_m3, k_m3 == curATMStrike, k_m3 == dayOpenATMStrike, ce_o_m3, ce_c_m3, pe_o_m3, pe_c_m3, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 4
+            f_fill_grid_row(summaryTable, rowIdx, k_m4, k_m4 == curATMStrike, k_m4 == dayOpenATMStrike, ce_o_m4, ce_c_m4, pe_o_m4, pe_c_m4, curTextSize)
+            rowIdx += 1
