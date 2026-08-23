@@ -90,64 +90,45 @@ tablePosInput          = input.string("Top Right", "Table Position", options=["T
 tableTextSizeInput     = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls")
 
 // ==========================================
-// VALUE FORMATTING & LINE STYLING CONTROLS
+// STATIC VALUES STYLE & FORMATTING CONTROLS
 // ==========================================
 
-// Realtime Plots Styling
-colorCE_IV        = input.color(#00E676, "CE Realtime Intrinsic Color", group="Realtime Plots Styling")
-widthCE_IV_RT     = input.int(2, "CE Realtime Intrinsic Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
-
-colorPE_IV        = input.color(#FF5252, "PE Realtime Intrinsic Color", group="Realtime Plots Styling")
-widthPE_IV_RT     = input.int(2, "PE Realtime Intrinsic Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
-
-colorAvg_IV       = input.color(#FF00FF, "Avg Realtime Intrinsic Color", group="Realtime Plots Styling")
-widthAvg_IV_RT    = input.int(2, "Avg Realtime Intrinsic Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
-
-colorCE_TV_RT     = input.color(#76FF03, "CE Realtime Time Value Color", group="Realtime Plots Styling")
-widthCE_TV_RT     = input.int(2, "CE Realtime Time Value Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
-
-colorPE_TV_RT     = input.color(#FF6E40, "PE Realtime Time Value Color", group="Realtime Plots Styling")
-widthPE_TV_RT     = input.int(2, "PE Realtime Time Value Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
-
-colorAvg_TV_RT    = input.color(#FFD700, "Avg Realtime Time Value Color", group="Realtime Plots Styling")
-widthAvg_TV_RT    = input.int(2, "Avg Realtime Time Value Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
-
-// Previous Day Close Formatting
-colorCE_PDC       = input.color(#00E676, "Prev Day CE Close Color", group="Previous Day Close Formatting")
-colorPE_PDC       = input.color(#FF5252, "Prev Day PE Close Color", group="Previous Day Close Formatting")
-stylePDC_Levels   = input.string("Dashed", "Prev Day Close Line Style", options=["Solid", "Dashed", "Dotted"], group="Previous Day Close Formatting")
-widthPDC_Levels   = input.int(1, "Prev Day Close Line Width", minval=1, maxval=4, group="Previous Day Close Formatting")
-
 // 5-Day Static Intrinsic Styling
-colorCE_IV_Static = input.color(#00E676, "CE Static Intrinsic Color", group="5-Day Static Intrinsic Formatting")
-styleCE_IV_Static = input.string("Dashed", "CE Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Intrinsic Formatting")
-widthCE_IV_Static = input.int(1, "CE Static Intrinsic Line Width", minval=1, maxval=4, group="5-Day Static Intrinsic Formatting")
+colorCE_IV_Static = input.color(#00E676, "CE Static Intrinsic Color", group="Static Intrinsic Style")
+styleCE_IV_Static = input.string("Dashed", "CE Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="Static Intrinsic Style")
+widthCE_IV_Static = input.int(1, "CE Static Intrinsic Line Width", minval=1, maxval=4, group="Static Intrinsic Style")
 
-colorPE_IV_Static = input.color(#FF5252, "PE Static Intrinsic Color", group="5-Day Static Intrinsic Formatting")
-stylePE_IV_Static = input.string("Dashed", "PE Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Intrinsic Formatting")
-widthPE_IV_Static = input.int(1, "PE Static Intrinsic Line Width", minval=1, maxval=4, group="5-Day Static Intrinsic Formatting")
+colorPE_IV_Static = input.color(#FF5252, "PE Static Intrinsic Color", group="Static Intrinsic Style")
+stylePE_IV_Static = input.string("Dashed", "PE Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="Static Intrinsic Style")
+widthPE_IV_Static = input.int(1, "PE Static Intrinsic Line Width", minval=1, maxval=4, group="Static Intrinsic Style")
 
-colorAvg_IV_Static= input.color(#FF00FF, "Avg Static Intrinsic Color", group="5-Day Static Intrinsic Formatting")
-styleAvg_IV_Static= input.string("Dashed", "Avg Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Intrinsic Formatting")
-widthAvg_IV_Static= input.int(1, "Avg Static Intrinsic Line Width", minval=1, maxval=4, group="5-Day Static Intrinsic Formatting")
+colorAvg_IV_Static= input.color(#FF00FF, "Avg Static Intrinsic Color", group="Static Intrinsic Style")
+styleAvg_IV_Static= input.string("Dashed", "Avg Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="Static Intrinsic Style")
+widthAvg_IV_Static= input.int(1, "Avg Static Intrinsic Line Width", minval=1, maxval=4, group="Static Intrinsic Style")
 
 // 5-Day Static Time Value Styling
-colorCE_TV_Static = input.color(#76FF03, "CE Static Time Value Color", group="5-Day Static Time Value Formatting")
-styleCE_TV_Static = input.string("Dashed", "CE Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Time Value Formatting")
-widthCE_TV_Static = input.int(1, "CE Static Time Value Line Width", minval=1, maxval=4, group="5-Day Static Time Value Formatting")
+colorCE_TV_Static = input.color(#76FF03, "CE Static Time Value Color", group="Static Time Value Style")
+styleCE_TV_Static = input.string("Dashed", "CE Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="Static Time Value Style")
+widthCE_TV_Static = input.int(1, "CE Static Time Value Line Width", minval=1, maxval=4, group="Static Time Value Style")
 
-colorPE_TV_Static = input.color(#FF6E40, "PE Static Time Value Color", group="5-Day Static Time Value Formatting")
-stylePE_TV_Static = input.string("Dashed", "PE Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Time Value Formatting")
-widthPE_TV_Static = input.int(1, "PE Static Time Value Line Width", minval=1, maxval=4, group="5-Day Static Time Value Formatting")
+colorPE_TV_Static = input.color(#FF6E40, "PE Static Time Value Color", group="Static Time Value Style")
+stylePE_TV_Static = input.string("Dashed", "PE Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="Static Time Value Style")
+widthPE_TV_Static = input.int(1, "PE Static Time Value Line Width", minval=1, maxval=4, group="Static Time Value Style")
 
-colorAvg_TV_Static= input.color(#FFD700, "Avg Static Time Value Color", group="5-Day Static Time Value Formatting")
-styleAvg_TV_Static= input.string("Dashed", "Avg Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Time Value Formatting")
-widthAvg_TV_Static= input.int(1, "Avg Static Time Value Line Width", minval=1, maxval=4, group="5-Day Static Time Value Formatting")
+colorAvg_TV_Static= input.color(#FFD700, "Avg Static Time Value Color", group="Static Time Value Style")
+styleAvg_TV_Static= input.string("Dashed", "Avg Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="Static Time Value Style")
+widthAvg_TV_Static= input.int(1, "Avg Static Time Value Line Width", minval=1, maxval=4, group="Static Time Value Style")
+
+// Previous Day Close Formatting
+colorCE_PDC       = input.color(#00E676, "Prev Day CE Close Color", group="Previous Day Close Style")
+colorPE_PDC       = input.color(#FF5252, "Prev Day PE Close Color", group="Previous Day Close Style")
+stylePDC_Levels   = input.string("Dashed", "Prev Day Close Line Style", options=["Solid", "Dashed", "Dotted"], group="Previous Day Close Style")
+widthPDC_Levels   = input.int(1, "Prev Day Close Line Width", minval=1, maxval=4, group="Previous Day Close Style")
 
 // 5-Day Static BEP Styling
-colorStaticBEP    = input.color(color.aqua, "Static BEP Color", group="5-Day Static BEP Formatting")
-styleStaticBEP    = input.string("Dashed", "Static BEP Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static BEP Formatting")
-widthStaticBEP    = input.int(1, "Static BEP Line Width", minval=1, maxval=4, group="5-Day Static BEP Formatting")
+colorStaticBEP    = input.color(color.aqua, "Static BEP Color", group="Static BEP Style")
+styleStaticBEP    = input.string("Dashed", "Static BEP Line Style", options=["Solid", "Dashed", "Dotted"], group="Static BEP Style")
+widthStaticBEP    = input.int(1, "Static BEP Line Width", minval=1, maxval=4, group="Static BEP Style")
 
 // Candle Overlays Formatting
 colorITMBull      = input.color(color.new(#00E676, 50), "ITM Bullish Body", group="Candle Overlays Formatting")
@@ -502,17 +483,17 @@ float bep_stat_d3 = (ce_r3 + pe_r3) / 2.0
 float bep_stat_d4 = (ce_r4 + pe_r4) / 2.0
 
 // ==========================================
-// PLOTTING METRICS ON CHART
+// PLOTTING REALTIME METRICS ON CHART
 // ==========================================
 
-// --- Realtime Plots ---
-plot(showCE_IV_RT_Input  ? ce_iv_rt  : na, "CE Realtime Intrinsic", color=colorCE_IV, linewidth=widthCE_IV_RT)
-plot(showPE_IV_RT_Input  ? pe_iv_rt  : na, "PE Realtime Intrinsic", color=colorPE_IV, linewidth=widthPE_IV_RT)
-plot(showAvg_IV_RT_Input ? avg_iv_rt : na, "Avg Realtime Intrinsic", color=colorAvg_IV, linewidth=widthAvg_IV_RT)
+// --- Realtime Plots (Standard Line Design) ---
+plot(showCE_IV_RT_Input  ? ce_iv_rt  : na, "CE Realtime Intrinsic", color=#00E676, linewidth=2)
+plot(showPE_IV_RT_Input  ? pe_iv_rt  : na, "PE Realtime Intrinsic", color=#FF5252, linewidth=2)
+plot(showAvg_IV_RT_Input ? avg_iv_rt : na, "Avg Realtime Intrinsic", color=#FF00FF, linewidth=2)
 
-plot(showCE_TV_RT_Input  ? ce_tv_rt  : na, "CE Realtime Time Value", color=colorCE_TV_RT, linewidth=widthCE_TV_RT)
-plot(showPE_TV_RT_Input  ? pe_tv_rt  : na, "PE Realtime Time Value", color=colorPE_TV_RT, linewidth=widthPE_TV_RT)
-plot(showAvg_TV_RT_Input ? avg_tv_rt : na, "Avg Realtime Time Value", color=colorAvg_TV_RT, linewidth=widthAvg_TV_RT)
+plot(showCE_TV_RT_Input  ? ce_tv_rt  : na, "CE Realtime Time Value", color=#76FF03, linewidth=2)
+plot(showPE_TV_RT_Input  ? pe_tv_rt  : na, "PE Realtime Time Value", color=#FF6E40, linewidth=2)
+plot(showAvg_TV_RT_Input ? avg_tv_rt : na, "Avg Realtime Time Value", color=#FFD700, linewidth=2)
 
 // ==========================================
 // PLOTTING 5-DAY STATIC LEVEL LINES & LABELS (STRICTLY ON THAT EXACT DAY)
