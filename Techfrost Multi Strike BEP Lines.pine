@@ -25,7 +25,8 @@ manual_strike_val = input.int(24000, "ATM Strike Price (Manual)", group=G_PARSER
 offset_choice_str = input.string("100 Points (+100 / -100)", "Strike Offset Points", options=["50 Points (+50 / -50)", "100 Points (+100 / -100)"], group=G_BEP,
   tooltip="Select offset points (50 or 100). Plots BEP for ATM strike, Upper strike (ATM + Offset), and Lower strike (ATM - Offset).")
 standard_bep_basis = input.string("Today's Day Open", "Static BEP Calculation Basis",
-  options=["Today's Day Open", "Previous Day Close", "First 5 Min Close"], group=G_BEP)
+  options=["Today's Day Open", "Previous Day Close / Settlement Price", "First 5 Min Close"], group=G_BEP,
+  tooltip="Choose reference price basis for Static BEP: Today's 9:15 AM Day Open, Previous Day Settlement Price (Daily Close[1]), or First 5 Min Close.")
 
 show_running_bep  = input.bool(true, "Show Realtime Dynamic BEP Lines", group=G_BEP,
   tooltip="Realtime BEP = (CE LTP + PE LTP) / 2")
@@ -34,7 +35,7 @@ show_standard_bep = input.bool(true, "Show Static BEP Horizontal Lines", group=G
 show_line_labels  = input.bool(true, "Show Line Labels at Chart End", group=G_BEP)
 
 // 3. CE & PE Previous Day High/Low/Close Levels
-show_pdc_lines     = input.bool(true, "Show CE & PE Previous Day Close Lines", group=G_LEVELS)
+show_pdc_lines     = input.bool(true, "Show CE & PE Previous Day Close/Settlement Lines", group=G_LEVELS)
 show_pdh_pdl_lines = input.bool(true, "Show CE & PE Previous Day High & Low Lines", group=G_LEVELS)
 
 // 4. Opposite Option Candles Overlay
@@ -50,11 +51,11 @@ c_atm   = input.color(#FFD700, "ATM BEP Color (Selected Strike)", group=G_COLORS
 c_upper = input.color(#FF1744, "Upper BEP Color (+Offset)", group=G_COLORS)
 c_lower = input.color(#00E676, "Lower BEP Color (-Offset)", group=G_COLORS)
 
-c_ce_pdc = input.color(color.new(#00E676, 20), "CE Prev Close Line Color", group=G_COLORS)
+c_ce_pdc = input.color(color.new(#00E676, 20), "CE Prev Settlement Line Color", group=G_COLORS)
 c_ce_pdh = input.color(color.new(#00E676, 50), "CE Prev High Line Color", group=G_COLORS)
 c_ce_pdl = input.color(color.new(#00E676, 70), "CE Prev Low Line Color", group=G_COLORS)
 
-c_pe_pdc = input.color(color.new(#FF5252, 20), "PE Prev Close Line Color", group=G_COLORS)
+c_pe_pdc = input.color(color.new(#FF5252, 20), "PE Prev Settlement Line Color", group=G_COLORS)
 c_pe_pdh = input.color(color.new(#FF5252, 50), "PE Prev High Line Color", group=G_COLORS)
 c_pe_pdl = input.color(color.new(#FF5252, 70), "PE Prev Low Line Color", group=G_COLORS)
 
@@ -171,8 +172,10 @@ int st_atm   = final_strike
 int st_lower = final_strike - offsetPts
 int st_upper = final_strike + offsetPts
 
+// Helper to fetch contract data including Previous Day Settlement Price (daily close[1])
 f_get_contract_data() =>
     float d_open  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    // d_pdc represents the official Previous Day Close / Settlement Price
     [d_pdc, d_pdh, d_pdl] = request.security(syminfo.tickerid, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
     var float d_f5m = na
     if ta.change(time("D")) != 0
@@ -199,7 +202,7 @@ string pe_upper_ticker = f_build_option_ticker(final_exchange, final_root, final
 [pe_upr_o, pe_upr_pdc, pe_upr_pdh, pe_upr_pdl, pe_upr_f5m, pe_upr_ltp] = request.security(pe_upper_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
 f_resolve_basis(dop, pdc, f5m) =>
-    standard_bep_basis == "Previous Day Close" ? pdc : (standard_bep_basis == "First 5 Min Close" ? f5m : dop)
+    str.contains(standard_bep_basis, "Previous Day") ? pdc : (standard_bep_basis == "First 5 Min Close" ? f5m : dop)
 
 float ce_atm_ref = f_resolve_basis(ce_atm_o, ce_atm_pdc, ce_atm_f5m)
 float pe_atm_ref = f_resolve_basis(pe_atm_o, pe_atm_pdc, pe_atm_f5m)
@@ -227,7 +230,7 @@ plot(show_running_bep ? run_bep_atm   : na, "Realtime ATM BEP (Selected)", color
 plot(show_running_bep ? run_bep_upper : na, "Realtime Upper BEP (+Offset)", color=c_upper, linewidth=2)
 
 // =========================================================================
-// STATIC BEP & PREVIOUS DAY HIGH / LOW / CLOSE HORIZONTAL LINES
+// STATIC BEP & PREVIOUS DAY HIGH / LOW / SETTLEMENT HORIZONTAL LINES
 // =========================================================================
 var line[] level_lines  = array.new_line()
 var label[] level_labels = array.new_label()
@@ -266,15 +269,15 @@ if barstate.islast
         if show_line_labels
             array.push(level_labels, label.new(x2, std_bep_lower, "Lower (" + str.tostring(st_lower) + ") Static BEP: " + str.tostring(std_bep_lower, "#.##"), color=color.new(c_lower, 80), textcolor=c_lower, style=label.style_label_left, size=size.small))
 
-    // 2. CE & PE Previous Day Close Lines
+    // 2. CE & PE Previous Day Settlement Lines
     if show_pdc_lines
         array.push(level_lines, line.new(x1, ce_atm_pdc, x2, ce_atm_pdc, color=c_ce_pdc, width=1, style=line.style_dashed))
         if show_line_labels
-            array.push(level_labels, label.new(x2, ce_atm_pdc, "CE Prev Close: " + str.tostring(ce_atm_pdc, "#.##"), color=color.new(c_ce_pdc, 80), textcolor=c_ce_pdc, style=label.style_label_left, size=size.small))
+            array.push(level_labels, label.new(x2, ce_atm_pdc, "CE Prev Settlement: " + str.tostring(ce_atm_pdc, "#.##"), color=color.new(c_ce_pdc, 80), textcolor=c_ce_pdc, style=label.style_label_left, size=size.small))
 
         array.push(level_lines, line.new(x1, pe_atm_pdc, x2, pe_atm_pdc, color=c_pe_pdc, width=1, style=line.style_dashed))
         if show_line_labels
-            array.push(level_labels, label.new(x2, pe_atm_pdc, "PE Prev Close: " + str.tostring(pe_atm_pdc, "#.##"), color=color.new(c_pe_pdc, 80), textcolor=c_pe_pdc, style=label.style_label_left, size=size.small))
+            array.push(level_labels, label.new(x2, pe_atm_pdc, "PE Prev Settlement: " + str.tostring(pe_atm_pdc, "#.##"), color=color.new(c_pe_pdc, 80), textcolor=c_pe_pdc, style=label.style_label_left, size=size.small))
 
     // 3. CE & PE Previous Day High & Low Lines
     if show_pdh_pdl_lines
@@ -311,10 +314,12 @@ if barstate.islast and show_options_table
            
     info_table := table.new(position_choice, 9, 5, border_width=1, border_color=color.gray)
     
+    string basisTag = str.contains(standard_bep_basis, "Previous Day") ? "Prev Settlement" : (standard_bep_basis == "First 5 Min Close" ? "First 5Min Close" : "Day Open")
+
     // Header Row 0
     table.cell(info_table, 0, 0, "Asset: " + final_root, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 1, 0, "Offset: " + str.tostring(offsetPts), bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 2, 0, "Basis: " + standard_bep_basis, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 2, 0, "Basis: " + basisTag, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 3, 0, "ATM Strike:", bgcolor=#1565C0, text_color=color.silver, text_size=t_sz)
     table.cell(info_table, 4, 0, str.tostring(st_atm), bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
     table.cell(info_table, 5, 0, "Formula:", bgcolor=#1565C0, text_color=color.silver, text_size=t_sz)
@@ -324,8 +329,8 @@ if barstate.islast and show_options_table
 
     // Row 1: Column Headers
     table.cell(info_table, 0, 1, "Strike Level", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 1, 1, "CE Ref", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 2, 1, "PE Ref", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 1, "CE Ref (" + basisTag + ")", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 2, 1, "PE Ref (" + basisTag + ")", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 3, 1, "Static BEP", bgcolor=#37474F, text_color=color.aqua, text_size=t_sz)
     table.cell(info_table, 4, 1, "CE LTP", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 5, 1, "PE LTP", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
