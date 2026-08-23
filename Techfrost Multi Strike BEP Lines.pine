@@ -1,5 +1,5 @@
 //@version=6
-indicator("Techfrost Multi Strike BEP Lines", shorttitle="Techfrost Multi BEP", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
+indicator("Techfrost Multi Strike BEP Lines", shorttitle="TF BEP", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
 
 // =========================================================================
 // INPUTS & USER SETTINGS
@@ -24,8 +24,8 @@ manual_strike_val = input.int(24000, "ATM Strike Price (Manual)", group=G_PARSER
 // 2. BEP Offset & Calculation Settings
 offset_choice_str = input.string("100 Points (+100 / -100)", "Strike Offset Points", options=["50 Points (+50 / -50)", "100 Points (+100 / -100)"], group=G_BEP,
   tooltip="Select offset points (50 or 100). Plots BEP for ATM strike, Upper strike (ATM + Offset), and Lower strike (ATM - Offset).")
-standard_bep_basis = input.string("Day Open Price", "Static BEP Calculation Basis",
-  options=["Day Open Price", "Previous Day Close", "First 5 Min Close"], group=G_BEP)
+standard_bep_basis = input.string("Today's Day Open", "Static BEP Calculation Basis",
+  options=["Today's Day Open", "Previous Day Close", "First 5 Min Close"], group=G_BEP)
 
 show_running_bep  = input.bool(true, "Show Realtime Dynamic BEP Lines", group=G_BEP,
   tooltip="Realtime BEP = (CE LTP + PE LTP) / 2")
@@ -181,7 +181,7 @@ string pe_upper_ticker = f_build_option_ticker(final_exchange, final_root, final
 [ce_upr_o, ce_upr_pdc, ce_upr_pdh, ce_upr_pdl, ce_upr_f5m, ce_upr_ltp] = request.security(ce_upper_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 [pe_upr_o, pe_upr_pdc, pe_upr_pdh, pe_upr_pdl, pe_upr_f5m, pe_upr_ltp] = request.security(pe_upper_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-f_resolve_basis(float dop, float pdc, float f5m) =>
+f_resolve_basis(dop, pdc, f5m) =>
     standard_bep_basis == "Previous Day Close" ? pdc : (standard_bep_basis == "First 5 Min Close" ? f5m : dop)
 
 float ce_atm_ref = f_resolve_basis(ce_atm_o, ce_atm_pdc, ce_atm_f5m)
@@ -316,7 +316,7 @@ if barstate.islast and show_options_table
     table.cell(info_table, 7, 1, "CE Prev High/Low", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 8, 1, "PE Prev High/Low", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
 
-    f_fill_table_row(table tbl, int r, string lbl, float ce_r, float pe_r, float stat_bep, float ce_l, float pe_l, float rt_bep, float ce_h, float ce_lw, float pe_h, float pe_lw, color row_bg) =>
+    f_fill_table_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, rt_bep, ce_h, ce_lw, pe_h, pe_lw, row_bg) =>
         table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
         table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
         table.cell(tbl, 2, r, na(pe_r) ? "N/A" : str.tostring(pe_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)

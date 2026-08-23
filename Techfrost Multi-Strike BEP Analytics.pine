@@ -1,5 +1,5 @@
 //@version=6
-indicator("Techfrost Multi-Strike BEP Analytics", shorttitle="Techfrost BEP Analytics", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
+indicator("Techfrost Multi-Strike BEP Analytics", shorttitle="TF BEP", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -67,7 +67,7 @@ colorCE_PDH      = input.color(color.new(#00E676, 50), "CE Prev High Color", gro
 colorCE_PDL      = input.color(color.new(#00E676, 70), "CE Prev Low Color", group="Styling & Colors")
 
 colorPE_PDC      = input.color(color.new(#FF5252, 20), "PE Prev Close Color", group="Styling & Colors")
-colorPE_PDH      = input.color(color.new(#FF5252, 50), "PE Prev High Color", group=G_COLORS)
+colorPE_PDH      = input.color(color.new(#FF5252, 50), "PE Prev High Color", group="Styling & Colors")
 colorPE_PDL      = input.color(color.new(#FF5252, 70), "PE Prev Low Color", group="Styling & Colors")
 
 colorOppBull     = input.color(color.new(#2962FF, 40), "Opposite Bullish Body", group="Styling & Colors")
@@ -317,7 +317,7 @@ if showTableInput and barstate.islast
     table.cell(summaryTable, 7, 1, "CE Prev High/Low", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 8, 1, "PE Prev High/Low", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
 
-    f_fill_bep_row(table tbl, int r, string lbl, float ce_r, float pe_r, float stat_bep, float ce_l, float pe_l, float rt_bep, float ce_h, float ce_lw, float pe_h, float pe_lw, color row_bg) =>
+    f_fill_bep_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, rt_bep, ce_h, ce_lw, pe_h, pe_lw, row_bg) =>
         table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
         table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
         table.cell(tbl, 2, r, na(pe_r) ? "N/A" : str.tostring(pe_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
