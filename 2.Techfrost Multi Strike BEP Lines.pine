@@ -22,7 +22,8 @@ enum SuffixFormat
 
 enum BEPBasis
     dayOpen   = "Day Open Price"
-    prevClose = "Previous Day Settlement"
+    prevClose = "Previous Day Close"
+    prevSett  = "Previous Day Settlement"
     first5Min = "First 5 Min Close"
 
 enum OffsetChoice
@@ -47,7 +48,7 @@ strike_step_input  = input.int(50, "Custom Strike Step", group=G_INST)
 
 // 2. BEP Calculation Settings
 offset_choice_str  = input.string("100 Points", "Strike Offset Points", options=["50 Points", "100 Points"], group=G_CALC)
-standard_bep_basis = input.string("Day Open Price", "Static BEP Calculation Basis", options=["Day Open Price", "Previous Day Settlement", "First 5 Min Close"], group=G_CALC)
+standard_bep_basis = input.string("Day Open Price", "Static BEP Calculation Basis", options=["Day Open Price", "Previous Day Close", "Previous Day Settlement", "First 5 Min Close"], group=G_CALC)
 
 // 3. Plot Controls
 show_running_bep   = input.bool(true, "Show Realtime Dynamic BEP Lines", group=G_PLOTS)
@@ -201,13 +202,17 @@ plotcandle(show_opp_candles and is_option ? opp_o : na,
            title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
 
 // =========================================================================
-// THREE STRIKES SELECTION (ATM, LOWER/ITM, UPPER/OTM)
+// STRIKES SELECTION (3 ITM, 1 ATM, 3 OTM STRIKES)
 // =========================================================================
 int offsetPts = str.contains(offset_choice_str, "50") ? 50 : 100
 
-int st_atm   = final_strike
-int st_lower = final_strike - offsetPts
-int st_upper = final_strike + offsetPts
+int st_m3  = final_strike - 3 * offsetPts
+int st_m2  = final_strike - 2 * offsetPts
+int st_m1  = final_strike - 1 * offsetPts
+int st_atm = final_strike
+int st_p1  = final_strike + 1 * offsetPts
+int st_p2  = final_strike + 2 * offsetPts
+int st_p3  = final_strike + 3 * offsetPts
 
 f_get_contract_data() =>
     float d_open  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
@@ -220,55 +225,104 @@ f_get_contract_data() =>
             d_f5m := close
     [d_open, d_pdc, d_pdh, d_pdl, na(d_f5m) ? d_open : d_f5m, close]
 
-// --- Fetch Data for ATM, Lower, Upper Strikes ---
+// Fetch Contract Data for 7 Strikes (m3, m2, m1, atm, p1, p2, p3)
+string ce_m3_ticker = f_build_option_symbol(st_m3, true)
+string pe_m3_ticker = f_build_option_symbol(st_m3, false)
+[ce_m3_o, ce_m3_pdc, ce_m3_pdh, ce_m3_pdl, ce_m3_f5m, ce_m3_ltp] = request.security(ce_m3_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_m3_o, pe_m3_pdc, pe_m3_pdh, pe_m3_pdl, pe_m3_f5m, pe_m3_ltp] = request.security(pe_m3_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+
+string ce_m2_ticker = f_build_option_symbol(st_m2, true)
+string pe_m2_ticker = f_build_option_symbol(st_m2, false)
+[ce_m2_o, ce_m2_pdc, ce_m2_pdh, ce_m2_pdl, ce_m2_f5m, ce_m2_ltp] = request.security(ce_m2_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_m2_o, pe_m2_pdc, pe_m2_pdh, pe_m2_pdl, pe_m2_f5m, pe_m2_ltp] = request.security(pe_m2_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+
+string ce_m1_ticker = f_build_option_symbol(st_m1, true)
+string pe_m1_ticker = f_build_option_symbol(st_m1, false)
+[ce_m1_o, ce_m1_pdc, ce_m1_pdh, ce_m1_pdl, ce_m1_f5m, ce_m1_ltp] = request.security(ce_m1_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_m1_o, pe_m1_pdc, pe_m1_pdh, pe_m1_pdl, pe_m1_f5m, pe_m1_ltp] = request.security(pe_m1_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+
 string ce_atm_ticker = f_build_option_symbol(st_atm, true)
 string pe_atm_ticker = f_build_option_symbol(st_atm, false)
 [ce_atm_o, ce_atm_pdc, ce_atm_pdh, ce_atm_pdl, ce_atm_f5m, ce_atm_ltp] = request.security(ce_atm_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 [pe_atm_o, pe_atm_pdc, pe_atm_pdh, pe_atm_pdl, pe_atm_f5m, pe_atm_ltp] = request.security(pe_atm_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-string ce_lower_ticker = f_build_option_symbol(st_lower, true)
-string pe_lower_ticker = f_build_option_symbol(st_lower, false)
-[ce_lwr_o, ce_lwr_pdc, ce_lwr_pdh, ce_lwr_pdl, ce_lwr_f5m, ce_lwr_ltp] = request.security(ce_lower_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
-[pe_lwr_o, pe_lwr_pdc, pe_lwr_pdh, pe_lwr_pdl, pe_lwr_f5m, pe_lwr_ltp] = request.security(pe_lower_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+string ce_p1_ticker = f_build_option_symbol(st_p1, true)
+string pe_p1_ticker = f_build_option_symbol(st_p1, false)
+[ce_p1_o, ce_p1_pdc, ce_p1_pdh, ce_p1_pdl, ce_p1_f5m, ce_p1_ltp] = request.security(ce_p1_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_p1_o, pe_p1_pdc, pe_p1_pdh, pe_p1_pdl, pe_p1_f5m, pe_p1_ltp] = request.security(pe_p1_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-string ce_upper_ticker = f_build_option_symbol(st_upper, true)
-string pe_upper_ticker = f_build_option_symbol(st_upper, false)
-[ce_upr_o, ce_upr_pdc, ce_upr_pdh, ce_upr_pdl, ce_upr_f5m, ce_upr_ltp] = request.security(ce_upper_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
-[pe_upr_o, pe_upr_pdc, pe_upr_pdh, pe_upr_pdl, pe_upr_f5m, pe_upr_ltp] = request.security(pe_upper_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+string ce_p2_ticker = f_build_option_symbol(st_p2, true)
+string pe_p2_ticker = f_build_option_symbol(st_p2, false)
+[ce_p2_o, ce_p2_pdc, ce_p2_pdh, ce_p2_pdl, ce_p2_f5m, ce_p2_ltp] = request.security(ce_p2_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_p2_o, pe_p2_pdc, pe_p2_pdh, pe_p2_pdl, pe_p2_f5m, pe_p2_ltp] = request.security(pe_p2_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
+string ce_p3_ticker = f_build_option_symbol(st_p3, true)
+string pe_p3_ticker = f_build_option_symbol(st_p3, false)
+[ce_p3_o, ce_p3_pdc, ce_p3_pdh, ce_p3_pdl, ce_p3_f5m, ce_p3_ltp] = request.security(ce_p3_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_p3_o, pe_p3_pdc, pe_p3_pdh, pe_p3_pdl, pe_p3_f5m, pe_p3_ltp] = request.security(pe_p3_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+
+// Resolve Basis Reference Values
 f_resolve_basis(dop, pdc, f5m) =>
-    str.contains(standard_bep_basis, "Previous Day") ? pdc : (standard_bep_basis == "First 5 Min Close" ? f5m : dop)
+    (standard_bep_basis == "Previous Day Close" or standard_bep_basis == "Previous Day Settlement") ? pdc : (standard_bep_basis == "First 5 Min Close" ? f5m : dop)
+
+float ce_m3_ref = f_resolve_basis(ce_m3_o, ce_m3_pdc, ce_m3_f5m)
+float pe_m3_ref = f_resolve_basis(pe_m3_o, pe_m3_pdc, pe_m3_f5m)
+
+float ce_m2_ref = f_resolve_basis(ce_m2_o, ce_m2_pdc, ce_m2_f5m)
+float pe_m2_ref = f_resolve_basis(pe_m2_o, pe_m2_pdc, pe_m2_f5m)
+
+float ce_m1_ref = f_resolve_basis(ce_m1_o, ce_m1_pdc, ce_m1_f5m)
+float pe_m1_ref = f_resolve_basis(pe_m1_o, pe_m1_pdc, pe_m1_f5m)
 
 float ce_atm_ref = f_resolve_basis(ce_atm_o, ce_atm_pdc, ce_atm_f5m)
 float pe_atm_ref = f_resolve_basis(pe_atm_o, pe_atm_pdc, pe_atm_f5m)
 
-float ce_lwr_ref = f_resolve_basis(ce_lwr_o, ce_lwr_pdc, ce_lwr_f5m)
-float pe_lwr_ref = f_resolve_basis(pe_lwr_o, pe_lwr_pdc, pe_lwr_f5m)
+float ce_p1_ref = f_resolve_basis(ce_p1_o, ce_p1_pdc, ce_p1_f5m)
+float pe_p1_ref = f_resolve_basis(pe_p1_o, pe_p1_pdc, pe_p1_f5m)
 
-float ce_upr_ref = f_resolve_basis(ce_upr_o, ce_upr_pdc, ce_upr_f5m)
-float pe_upr_ref = f_resolve_basis(pe_upr_o, pe_upr_pdc, pe_upr_f5m)
+float ce_p2_ref = f_resolve_basis(ce_p2_o, ce_p2_pdc, ce_p2_f5m)
+float pe_p2_ref = f_resolve_basis(pe_p2_o, pe_p2_pdc, pe_p2_f5m)
+
+float ce_p3_ref = f_resolve_basis(ce_p3_o, ce_p3_pdc, ce_p3_f5m)
+float pe_p3_ref = f_resolve_basis(pe_p3_o, pe_p3_pdc, pe_p3_f5m)
 
 // =========================================================================
-// BEP CALCULATIONS: EXACT ITM & OTM STRIKE PAIRING
-// ATM BEP = (24000 CE + 24000 PE) / 2
-// ITM BEP = (23900 CE + 24100 PE) / 2
-// OTM BEP = (24100 CE + 23900 PE) / 2
+// BEP CALCULATIONS: EXACT ITM & OTM STRIKE PAIRINGS FOR 7 LEVELS
+// ITM 3 BEP = (CE -3x + PE +3x) / 2  (e.g. 23700 CE + 24300 PE) / 2
+// ITM 2 BEP = (CE -2x + PE +2x) / 2  (e.g. 23800 CE + 24200 PE) / 2
+// ITM 1 BEP = (CE -1x + PE +1x) / 2  (e.g. 23900 CE + 24100 PE) / 2
+// ATM BEP   = (CE ATM + PE ATM) / 2  (e.g. 24000 CE + 24000 PE) / 2
+// OTM 1 BEP = (CE +1x + PE -1x) / 2  (e.g. 24100 CE + 23900 PE) / 2
+// OTM 2 BEP = (CE +2x + PE -2x) / 2  (e.g. 24200 CE + 23800 PE) / 2
+// OTM 3 BEP = (CE +3x + PE -3x) / 2  (e.g. 24300 CE + 23700 PE) / 2
 // =========================================================================
 
 // Realtime Dynamic BEP Values
-float run_bep_atm = (ce_atm_ltp + pe_atm_ltp) / 2.0
-float run_bep_itm = (ce_lwr_ltp + pe_upr_ltp) / 2.0 // (23900 CE + 24100 PE) / 2
-float run_bep_otm = (ce_upr_ltp + pe_lwr_ltp) / 2.0 // (24100 CE + 23900 PE) / 2
+float run_bep_itm3 = (ce_m3_ltp + pe_p3_ltp) / 2.0
+float run_bep_itm2 = (ce_m2_ltp + pe_p2_ltp) / 2.0
+float run_bep_itm1 = (ce_m1_ltp + pe_p1_ltp) / 2.0
+float run_bep_atm  = (ce_atm_ltp + pe_atm_ltp) / 2.0
+float run_bep_otm1 = (ce_p1_ltp + pe_m1_ltp) / 2.0
+float run_bep_otm2 = (ce_p2_ltp + pe_m2_ltp) / 2.0
+float run_bep_otm3 = (ce_p3_ltp + pe_m3_ltp) / 2.0
 
 // Static Reference BEP Values
-float std_bep_atm = (ce_atm_ref + pe_atm_ref) / 2.0
-float std_bep_itm = (ce_lwr_ref + pe_upr_ref) / 2.0 // (23900 CE + 24100 PE) / 2
-float std_bep_otm = (ce_upr_ref + pe_lwr_ref) / 2.0 // (24100 CE + 23900 PE) / 2
+float std_bep_itm3 = (ce_m3_ref + pe_p3_ref) / 2.0
+float std_bep_itm2 = (ce_m2_ref + pe_p2_ref) / 2.0
+float std_bep_itm1 = (ce_m1_ref + pe_p1_ref) / 2.0
+float std_bep_atm  = (ce_atm_ref + pe_atm_ref) / 2.0
+float std_bep_otm1 = (ce_p1_ref + pe_m1_ref) / 2.0
+float std_bep_otm2 = (ce_p2_ref + pe_m2_ref) / 2.0
+float std_bep_otm3 = (ce_p3_ref + pe_m3_ref) / 2.0
 
 // Plot Realtime Dynamic BEP Lines
-plot(show_running_bep ? run_bep_itm : na, "Realtime ITM BEP (CE 23900 + PE 24100)", color=c_itm, linewidth=2)
-plot(show_running_bep ? run_bep_atm : na, "Realtime ATM BEP (24000 CE + 24000 PE)", color=c_atm, linewidth=2)
-plot(show_running_bep ? run_bep_otm : na, "Realtime OTM BEP (CE 24100 + PE 23900)", color=c_otm, linewidth=2)
+plot(show_running_bep ? run_bep_itm3 : na, "Realtime ITM 3 BEP", color=color.new(c_itm, 40), linewidth=1)
+plot(show_running_bep ? run_bep_itm2 : na, "Realtime ITM 2 BEP", color=color.new(c_itm, 20), linewidth=1)
+plot(show_running_bep ? run_bep_itm1 : na, "Realtime ITM 1 BEP", color=c_itm, linewidth=2)
+plot(show_running_bep ? run_bep_atm  : na, "Realtime ATM BEP",   color=c_atm, linewidth=2)
+plot(show_running_bep ? run_bep_otm1 : na, "Realtime OTM 1 BEP", color=c_otm, linewidth=2)
+plot(show_running_bep ? run_bep_otm2 : na, "Realtime OTM 2 BEP", color=color.new(c_otm, 20), linewidth=1)
+plot(show_running_bep ? run_bep_otm3 : na, "Realtime OTM 3 BEP", color=color.new(c_otm, 40), linewidth=1)
 
 // =========================================================================
 // STATIC BEP & PREVIOUS DAY HIGH / LOW / SETTLEMENT HORIZONTAL LINES
@@ -295,20 +349,40 @@ if barstate.islast
 
     // 1. Static BEP Horizontal Lines
     if show_standard_bep
+        // ITM 3 Static BEP
+        array.push(level_lines, line.new(x1, std_bep_itm3, x2, std_bep_itm3, color=color.new(c_itm, 40), width=1, style=line.style_dashed))
+        if show_line_labels
+            array.push(level_labels, label.new(x2, std_bep_itm3, "ITM 3 Static BEP (" + str.tostring(st_m3) + "CE / " + str.tostring(st_p3) + "PE): " + str.tostring(std_bep_itm3, "#.##"), color=color.new(c_itm, 80), textcolor=c_itm, style=label.style_label_left, size=size.small))
+
+        // ITM 2 Static BEP
+        array.push(level_lines, line.new(x1, std_bep_itm2, x2, std_bep_itm2, color=color.new(c_itm, 20), width=1, style=line.style_dashed))
+        if show_line_labels
+            array.push(level_labels, label.new(x2, std_bep_itm2, "ITM 2 Static BEP (" + str.tostring(st_m2) + "CE / " + str.tostring(st_p2) + "PE): " + str.tostring(std_bep_itm2, "#.##"), color=color.new(c_itm, 80), textcolor=c_itm, style=label.style_label_left, size=size.small))
+
+        // ITM 1 Static BEP
+        array.push(level_lines, line.new(x1, std_bep_itm1, x2, std_bep_itm1, color=c_itm, width=1, style=line.style_dashed))
+        if show_line_labels
+            array.push(level_labels, label.new(x2, std_bep_itm1, "ITM 1 Static BEP (" + str.tostring(st_m1) + "CE / " + str.tostring(st_p1) + "PE): " + str.tostring(std_bep_itm1, "#.##"), color=color.new(c_itm, 80), textcolor=c_itm, style=label.style_label_left, size=size.small))
+
         // ATM Static BEP
         array.push(level_lines, line.new(x1, std_bep_atm, x2, std_bep_atm, color=c_atm, width=1, style=line.style_dashed))
         if show_line_labels
             array.push(level_labels, label.new(x2, std_bep_atm, "ATM (" + str.tostring(st_atm) + ") Static BEP: " + str.tostring(std_bep_atm, "#.##"), color=color.new(c_atm, 80), textcolor=c_atm, style=label.style_label_left, size=size.small))
             
-        // ITM Static BEP: (23900 CE + 24100 PE) / 2
-        array.push(level_lines, line.new(x1, std_bep_itm, x2, std_bep_itm, color=c_itm, width=1, style=line.style_dashed))
+        // OTM 1 Static BEP
+        array.push(level_lines, line.new(x1, std_bep_otm1, x2, std_bep_otm1, color=c_otm, width=1, style=line.style_dashed))
         if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_itm, "ITM Static BEP (" + str.tostring(st_lower) + "CE / " + str.tostring(st_upper) + "PE): " + str.tostring(std_bep_itm, "#.##"), color=color.new(c_itm, 80), textcolor=c_itm, style=label.style_label_left, size=size.small))
+            array.push(level_labels, label.new(x2, std_bep_otm1, "OTM 1 Static BEP (" + str.tostring(st_p1) + "CE / " + str.tostring(st_m1) + "PE): " + str.tostring(std_bep_otm1, "#.##"), color=color.new(c_otm, 80), textcolor=c_otm, style=label.style_label_left, size=size.small))
 
-        // OTM Static BEP: (24100 CE + 23900 PE) / 2
-        array.push(level_lines, line.new(x1, std_bep_otm, x2, std_bep_otm, color=c_otm, width=1, style=line.style_dashed))
+        // OTM 2 Static BEP
+        array.push(level_lines, line.new(x1, std_bep_otm2, x2, std_bep_otm2, color=color.new(c_otm, 20), width=1, style=line.style_dashed))
         if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_otm, "OTM Static BEP (" + str.tostring(st_upper) + "CE / " + str.tostring(st_lower) + "PE): " + str.tostring(std_bep_otm, "#.##"), color=color.new(c_otm, 80), textcolor=c_otm, style=label.style_label_left, size=size.small))
+            array.push(level_labels, label.new(x2, std_bep_otm2, "OTM 2 Static BEP (" + str.tostring(st_p2) + "CE / " + str.tostring(st_m2) + "PE): " + str.tostring(std_bep_otm2, "#.##"), color=color.new(c_otm, 80), textcolor=c_otm, style=label.style_label_left, size=size.small))
+
+        // OTM 3 Static BEP
+        array.push(level_lines, line.new(x1, std_bep_otm3, x2, std_bep_otm3, color=color.new(c_otm, 40), width=1, style=line.style_dashed))
+        if show_line_labels
+            array.push(level_labels, label.new(x2, std_bep_otm3, "OTM 3 Static BEP (" + str.tostring(st_p3) + "CE / " + str.tostring(st_m3) + "PE): " + str.tostring(std_bep_otm3, "#.##"), color=color.new(c_otm, 80), textcolor=c_otm, style=label.style_label_left, size=size.small))
 
     // 2. CE & PE Previous Day Settlement Lines
     if show_pdc_lines
@@ -353,9 +427,9 @@ if barstate.islast and show_options_table
            table_size_str == "Small" ? size.small :
            table_size_str == "Normal" ? size.normal : size.large
            
-    info_table := table.new(position_choice, 9, 5, border_width=1, border_color=color.gray)
+    info_table := table.new(position_choice, 9, 9, border_width=1, border_color=color.gray)
     
-    string basisTag = str.contains(standard_bep_basis, "Previous Day") ? "Prev Settlement" : (standard_bep_basis == "First 5 Min Close" ? "First 5Min Close" : "Day Open")
+    string basisTag = (standard_bep_basis == "Previous Day Close" or standard_bep_basis == "Previous Day Settlement") ? "Prev Settlement" : (standard_bep_basis == "First 5 Min Close" ? "First 5Min Close" : "Day Open")
 
     // Header Row 0
     table.cell(info_table, 0, 0, "Asset: " + final_root, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
@@ -379,11 +453,15 @@ if barstate.islast and show_options_table
     table.cell(info_table, 7, 1, "CE Prev High/Low", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 8, 1, "PE Prev High/Low", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
 
-    // Row 2: ITM BEP Pair: (CE 23900 + PE 24100) / 2
-    f_fill_table_row(info_table, 2, "ITM (" + str.tostring(st_lower) + "CE / " + str.tostring(st_upper) + "PE)", ce_lwr_ref, pe_upr_ref, std_bep_itm, ce_lwr_ltp, pe_upr_ltp, run_bep_itm, ce_lwr_pdh, ce_lwr_pdl, pe_upr_pdh, pe_upr_pdl, color.new(#2E7D32, 0), t_sz)
+    // Rows 2-4: ITM 3, ITM 2, ITM 1 BEP Pairs
+    f_fill_table_row(info_table, 2, "ITM 3 (" + str.tostring(st_m3) + "CE / " + str.tostring(st_p3) + "PE)", ce_m3_ref, pe_p3_ref, std_bep_itm3, ce_m3_ltp, pe_p3_ltp, run_bep_itm3, ce_m3_pdh, ce_m3_pdl, pe_p3_pdh, pe_p3_pdl, color.new(#1B5E20, 0), t_sz)
+    f_fill_table_row(info_table, 3, "ITM 2 (" + str.tostring(st_m2) + "CE / " + str.tostring(st_p2) + "PE)", ce_m2_ref, pe_p2_ref, std_bep_itm2, ce_m2_ltp, pe_p2_ltp, run_bep_itm2, ce_m2_pdh, ce_m2_pdl, pe_p2_pdh, pe_p2_pdl, color.new(#2E7D32, 0), t_sz)
+    f_fill_table_row(info_table, 4, "ITM 1 (" + str.tostring(st_m1) + "CE / " + str.tostring(st_p1) + "PE)", ce_m1_ref, pe_p1_ref, std_bep_itm1, ce_m1_ltp, pe_p1_ltp, run_bep_itm1, ce_m1_pdh, ce_m1_pdl, pe_p1_pdh, pe_p1_pdl, color.new(#388E3C, 0), t_sz)
 
-    // Row 3: ATM BEP Pair: (CE 24000 + PE 24000) / 2
-    f_fill_table_row(info_table, 3, "ATM (" + str.tostring(st_atm) + ")", ce_atm_ref, pe_atm_ref, std_bep_atm, ce_atm_ltp, pe_atm_ltp, run_bep_atm, ce_atm_pdh, ce_atm_pdl, pe_atm_pdh, pe_atm_pdl, color.new(#F57F17, 0), t_sz)
+    // Row 5: ATM BEP Pair: (CE 24000 + PE 24000) / 2
+    f_fill_table_row(info_table, 5, "ATM (" + str.tostring(st_atm) + ")", ce_atm_ref, pe_atm_ref, std_bep_atm, ce_atm_ltp, pe_atm_ltp, run_bep_atm, ce_atm_pdh, ce_atm_pdl, pe_atm_pdh, pe_atm_pdl, color.new(#F57F17, 0), t_sz)
 
-    // Row 4: OTM BEP Pair: (CE 24100 + PE 23900) / 2
-    f_fill_table_row(info_table, 4, "OTM (" + str.tostring(st_upper) + "CE / " + str.tostring(st_lower) + "PE)", ce_upr_ref, pe_lwr_ref, std_bep_otm, ce_upr_ltp, pe_lwr_ltp, run_bep_otm, ce_upr_pdh, ce_upr_pdl, pe_lwr_pdh, pe_lwr_pdl, color.new(#C62828, 0), t_sz)
+    // Rows 6-8: OTM 1, OTM 2, OTM 3 BEP Pairs
+    f_fill_table_row(info_table, 6, "OTM 1 (" + str.tostring(st_p1) + "CE / " + str.tostring(st_m1) + "PE)", ce_p1_ref, pe_m1_ref, std_bep_otm1, ce_p1_ltp, pe_m1_ltp, run_bep_otm1, ce_p1_pdh, ce_p1_pdl, pe_m1_pdh, pe_m1_pdl, color.new(#D32F2F, 0), t_sz)
+    f_fill_table_row(info_table, 7, "OTM 2 (" + str.tostring(st_p2) + "CE / " + str.tostring(st_m2) + "PE)", ce_p2_ref, pe_m2_ref, std_bep_otm2, ce_p2_ltp, pe_m2_ltp, run_bep_otm2, ce_p2_pdh, ce_p2_pdl, pe_m2_pdh, pe_m2_pdl, color.new(#C62828, 0), t_sz)
+    f_fill_table_row(info_table, 8, "OTM 3 (" + str.tostring(st_p3) + "CE / " + str.tostring(st_m3) + "PE)", ce_p3_ref, pe_m3_ref, std_bep_otm3, ce_p3_ltp, pe_m3_ltp, run_bep_otm3, ce_p3_pdh, ce_p3_pdl, pe_m3_pdh, pe_m3_pdl, color.new(#B71C1C, 0), t_sz)
