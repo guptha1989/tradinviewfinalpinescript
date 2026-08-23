@@ -78,7 +78,6 @@ showPD_CE_LevelsInput  = input.bool(true, "Show Prev Day CE Levels (PDC, PDH, PD
 showPD_PE_LevelsInput  = input.bool(true, "Show Prev Day PE Levels (PDC, PDH, PDL)", group="Previous Day Levels Plots")
 
 // --- Plot Controls: BEP & Candle Overlays ---
-showRealtimeBEPInput   = input.bool(true, "Show Realtime Dynamic BEP Line", group="BEP & Candle Overlay Plots")
 show5D_Static_BEPInput = input.bool(true, "Show 5-Day Static BEP Level Lines", group="BEP & Candle Overlay Plots")
 
 showITMCandlesInput    = input.bool(true, "Show ITM Option Candles Overlay", group="BEP & Candle Overlay Plots")
@@ -112,9 +111,6 @@ widthPE_TV_RT     = input.int(2, "PE Realtime Time Value Line Width", minval=1, 
 
 colorAvg_TV_RT    = input.color(#FFD700, "Avg Realtime Time Value Color", group="Realtime Plots Styling")
 widthAvg_TV_RT    = input.int(2, "Avg Realtime Time Value Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
-
-colorRealBEP      = input.color(color.orange, "Realtime BEP Color", group="Realtime Plots Styling")
-widthRealBEP      = input.int(2, "Realtime BEP Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
 
 // 5-Day Static Intrinsic Styling
 colorCE_IV_Static = input.color(#00E676, "CE Static Intrinsic Color", group="5-Day Static Intrinsic Formatting")
@@ -496,8 +492,6 @@ float bep_stat_d2 = (ce_r2 + pe_r2) / 2.0
 float bep_stat_d3 = (ce_r3 + pe_r3) / 2.0
 float bep_stat_d4 = (ce_r4 + pe_r4) / 2.0
 
-float bep_realtime = (ce_ltp + pe_ltp) / 2.0
-
 // ==========================================
 // PLOTTING METRICS ON CHART
 // ==========================================
@@ -511,9 +505,6 @@ plot(showAvg_IV_RT_Input ? avg_iv_rt : na, "Avg Realtime Intrinsic", color=color
 plot(showCE_TV_RT_Input  ? ce_tv_rt  : na, "CE Realtime Time Value", color=colorCE_TV_RT, linewidth=widthCE_TV_RT)
 plot(showPE_TV_RT_Input  ? pe_tv_rt  : na, "PE Realtime Time Value", color=colorPE_TV_RT, linewidth=widthPE_TV_RT)
 plot(showAvg_TV_RT_Input ? avg_tv_rt : na, "Avg Realtime Time Value", color=colorAvg_TV_RT, linewidth=widthAvg_TV_RT)
-
-// --- Realtime BEP Plot ---
-plot(showRealtimeBEPInput ? bep_realtime : na, "Realtime Dynamic BEP", color=colorRealBEP, linewidth=widthRealBEP)
 
 // ==========================================
 // PLOTTING 5-DAY STATIC LEVEL LINES & LABELS (STRICTLY ON THAT EXACT DAY)
@@ -659,7 +650,7 @@ if showTableInput and barstate.islast
         f_fill_today_row(summaryTable, 7, "Avg Static Time Value", avg_tv_d0, avg_tv_rt, t_sz)
 
         // Row 8: Static BEP
-        f_fill_today_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_realtime, t_sz)
+        f_fill_today_row(summaryTable, 8, "Static BEP", bep_stat_d0, na, t_sz)
     else
         summaryTable := table.new(position_choice, 8, 11, border_width=1, border_color=color.gray)
 
@@ -695,4 +686,4 @@ if showTableInput and barstate.islast
         f_fill_matrix_row(summaryTable, 7, "Avg Static Time Value", avg_tv_d0, avg_tv_d1, avg_tv_d2, avg_tv_d3, avg_tv_d4, avg_tv_rt, t_sz)
 
         // Row 8: Static BEP
-        f_fill_matrix_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_stat_d1, bep_stat_d2, bep_stat_d3, bep_stat_d4, bep_realtime, t_sz)
+        f_fill_matrix_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_stat_d1, bep_stat_d2, bep_stat_d3, bep_stat_d4, na, t_sz)
