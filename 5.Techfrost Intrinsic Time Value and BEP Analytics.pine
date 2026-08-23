@@ -89,6 +89,11 @@ colorOppBear      = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body",
 f_is_digit(string c) =>
     str.contains("0123456789", c)
 
+f_add_level(lines_arr, labels_arr, x1, x2, val, lbl_text, col, transparency) =>
+    if not na(val)
+        array.push(lines_arr, line.new(x1, val, x2, val, color=color.new(col, transparency), width=1, style=line.style_dashed))
+        array.push(labels_arr, label.new(x2, val, lbl_text + ": " + str.tostring(val, "#.##"), color=color.new(col, 85), textcolor=col, style=label.style_label_left, size=size.small))
+
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
 // ==========================================
@@ -268,21 +273,49 @@ float pe_iv_rt  = math.max(0.0, selectedStrike - spot_ltp)
 float avg_iv_rt = (ce_iv_rt + pe_iv_rt) / 2.0
 
 // 5-Day Static Intrinsic Values (Day 0 to Day 4)
-float ce_iv_d0 = math.max(0.0, spot_r0 - selectedStrike), float pe_iv_d0 = math.max(0.0, selectedStrike - spot_r0), float avg_iv_d0 = (ce_iv_d0 + pe_iv_d0) / 2.0
-float ce_iv_d1 = math.max(0.0, spot_r1 - selectedStrike), float pe_iv_d1 = math.max(0.0, selectedStrike - spot_r1), float avg_iv_d1 = (ce_iv_d1 + pe_iv_d1) / 2.0
-float ce_iv_d2 = math.max(0.0, spot_r2 - selectedStrike), float pe_iv_d2 = math.max(0.0, selectedStrike - spot_r2), float avg_iv_d2 = (ce_iv_d2 + pe_iv_d2) / 2.0
-float ce_iv_d3 = math.max(0.0, spot_r3 - selectedStrike), float pe_iv_d3 = math.max(0.0, selectedStrike - spot_r3), float avg_iv_d3 = (ce_iv_d3 + pe_iv_d3) / 2.0
-float ce_iv_d4 = math.max(0.0, spot_r4 - selectedStrike), float pe_iv_d4 = math.max(0.0, selectedStrike - spot_r4), float avg_iv_d4 = (ce_iv_d4 + pe_iv_d4) / 2.0
+float ce_iv_d0 = math.max(0.0, spot_r0 - selectedStrike)
+float pe_iv_d0 = math.max(0.0, selectedStrike - spot_r0)
+float avg_iv_d0 = (ce_iv_d0 + pe_iv_d0) / 2.0
+
+float ce_iv_d1 = math.max(0.0, spot_r1 - selectedStrike)
+float pe_iv_d1 = math.max(0.0, selectedStrike - spot_r1)
+float avg_iv_d1 = (ce_iv_d1 + pe_iv_d1) / 2.0
+
+float ce_iv_d2 = math.max(0.0, spot_r2 - selectedStrike)
+float pe_iv_d2 = math.max(0.0, selectedStrike - spot_r2)
+float avg_iv_d2 = (ce_iv_d2 + pe_iv_d2) / 2.0
+
+float ce_iv_d3 = math.max(0.0, spot_r3 - selectedStrike)
+float pe_iv_d3 = math.max(0.0, selectedStrike - spot_r3)
+float avg_iv_d3 = (ce_iv_d3 + pe_iv_d3) / 2.0
+
+float ce_iv_d4 = math.max(0.0, spot_r4 - selectedStrike)
+float pe_iv_d4 = math.max(0.0, selectedStrike - spot_r4)
+float avg_iv_d4 = (ce_iv_d4 + pe_iv_d4) / 2.0
 
 // ==========================================
 // 2. 5-DAY TIME VALUE CALCULATIONS (ONLY STATIC)
 // ==========================================
 
-float ce_tv_d0 = math.max(0.0, ce_r0 - ce_iv_d0), float pe_tv_d0 = math.max(0.0, pe_r0 - pe_iv_d0), float avg_tv_d0 = (ce_tv_d0 + pe_tv_d0) / 2.0
-float ce_tv_d1 = math.max(0.0, ce_r1 - ce_iv_d1), float pe_tv_d1 = math.max(0.0, pe_r1 - pe_iv_d1), float avg_tv_d1 = (ce_tv_d1 + pe_tv_d1) / 2.0
-float ce_tv_d2 = math.max(0.0, ce_r2 - ce_iv_d2), float pe_tv_d2 = math.max(0.0, pe_r2 - pe_iv_d2), float avg_tv_d2 = (ce_tv_d2 + pe_tv_d2) / 2.0
-float ce_tv_d3 = math.max(0.0, ce_r3 - ce_iv_d3), float pe_tv_d3 = math.max(0.0, pe_r3 - pe_iv_d3), float avg_tv_d3 = (ce_tv_d3 + pe_tv_d3) / 2.0
-float ce_tv_d4 = math.max(0.0, ce_r4 - ce_iv_d4), float pe_tv_d4 = math.max(0.0, pe_r4 - pe_iv_d4), float avg_tv_d4 = (ce_tv_d4 + pe_tv_d4) / 2.0
+float ce_tv_d0 = math.max(0.0, ce_r0 - ce_iv_d0)
+float pe_tv_d0 = math.max(0.0, pe_r0 - pe_iv_d0)
+float avg_tv_d0 = (ce_tv_d0 + pe_tv_d0) / 2.0
+
+float ce_tv_d1 = math.max(0.0, ce_r1 - ce_iv_d1)
+float pe_tv_d1 = math.max(0.0, pe_r1 - pe_iv_d1)
+float avg_tv_d1 = (ce_tv_d1 + pe_tv_d1) / 2.0
+
+float ce_tv_d2 = math.max(0.0, ce_r2 - ce_iv_d2)
+float pe_tv_d2 = math.max(0.0, pe_r2 - pe_iv_d2)
+float avg_tv_d2 = (ce_tv_d2 + pe_tv_d2) / 2.0
+
+float ce_tv_d3 = math.max(0.0, ce_r3 - ce_iv_d3)
+float pe_tv_d3 = math.max(0.0, pe_r3 - pe_iv_d3)
+float avg_tv_d3 = (ce_tv_d3 + pe_tv_d3) / 2.0
+
+float ce_tv_d4 = math.max(0.0, ce_r4 - ce_iv_d4)
+float pe_tv_d4 = math.max(0.0, pe_r4 - pe_iv_d4)
+float avg_tv_d4 = (ce_tv_d4 + pe_tv_d4) / 2.0
 
 // ==========================================
 // 3. 5-DAY BEP CALCULATIONS: (CE + PE) / 2.0
@@ -332,31 +365,25 @@ if barstate.islast
     int x1 = math.max(0, day_start_bar)
     int x2 = bar_index + 15
 
-    // Helper to push line & label
-    f_add_level(float val, string lbl_text, color col, int transparency) =>
-        if not na(val)
-            array.push(static_lines, line.new(x1, val, x2, val, color=color.new(col, transparency), width=1, style=line.style_dashed))
-            array.push(static_labels, label.new(x2, val, lbl_text + ": " + str.tostring(val, "#.##"), color=color.new(col, 85), textcolor=col, style=label.style_label_left, size=size.small))
-
     // 1. 5-Day Static BEP Levels
     if show5D_Static_BEPInput
-        f_add_level(bep_stat_d0, "BEP [" + date0_str + "]", colorStaticBEP, 0)
-        f_add_level(bep_stat_d1, "BEP [" + date1_str + "]", colorStaticBEP, 30)
-        f_add_level(bep_stat_d2, "BEP [" + date2_str + "]", colorStaticBEP, 50)
-        f_add_level(bep_stat_d3, "BEP [" + date3_str + "]", colorStaticBEP, 70)
-        f_add_level(bep_stat_d4, "BEP [" + date4_str + "]", colorStaticBEP, 80)
+        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d0, "BEP [" + date0_str + "]", colorStaticBEP, 0)
+        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d1, "BEP [" + date1_str + "]", colorStaticBEP, 30)
+        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d2, "BEP [" + date2_str + "]", colorStaticBEP, 50)
+        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d3, "BEP [" + date3_str + "]", colorStaticBEP, 70)
+        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d4, "BEP [" + date4_str + "]", colorStaticBEP, 80)
 
     // 2. 5-Day Static Intrinsic Levels
     if show5D_Static_IV_Input
-        f_add_level(ce_iv_d0, "CE IV [" + date0_str + "]", colorCE_IV, 20)
-        f_add_level(pe_iv_d0, "PE IV [" + date0_str + "]", colorPE_IV, 20)
+        f_add_level(static_lines, static_labels, x1, x2, ce_iv_d0, "CE IV [" + date0_str + "]", colorCE_IV, 20)
+        f_add_level(static_lines, static_labels, x1, x2, pe_iv_d0, "PE IV [" + date0_str + "]", colorPE_IV, 20)
 
     // 3. 5-Day Static Time Value Levels
     if show5D_Static_TV_Input
-        f_add_level(ce_tv_d0, "CE TV [" + date0_str + "]", colorCE_TV, 20)
-        f_add_level(pe_tv_d0, "PE TV [" + date0_str + "]", colorPE_TV, 20)
-        f_add_level(ce_tv_d1, "CE TV [" + date1_str + "]", colorCE_TV, 50)
-        f_add_level(pe_tv_d1, "PE TV [" + date1_str + "]", colorPE_TV, 50)
+        f_add_level(static_lines, static_labels, x1, x2, ce_tv_d0, "CE TV [" + date0_str + "]", colorCE_TV, 20)
+        f_add_level(static_lines, static_labels, x1, x2, pe_tv_d0, "PE TV [" + date0_str + "]", colorPE_TV, 20)
+        f_add_level(static_lines, static_labels, x1, x2, ce_tv_d1, "CE TV [" + date1_str + "]", colorCE_TV, 50)
+        f_add_level(static_lines, static_labels, x1, x2, pe_tv_d1, "PE TV [" + date1_str + "]", colorPE_TV, 50)
 
 // ==========================================
 // 5-DAY SUMMARY MATRIX DASHBOARD TABLE
