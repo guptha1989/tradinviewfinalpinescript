@@ -94,7 +94,7 @@ f_add_level(lines_arr, labels_arr, x1, x2, val, lbl_text, col, transparency) =>
         array.push(lines_arr, line.new(x1, val, x2, val, color=color.new(col, transparency), width=1, style=line.style_dashed))
         array.push(labels_arr, label.new(x2, val, lbl_text + ": " + str.tostring(val, "#.##"), color=color.new(col, 85), textcolor=col, style=label.style_label_left, size=size.small))
 
-f_fill_matrix_row(tbl, r_idx, label_str, v0, v1, v2, v3, v4, v_rt, t_sz) =>
+f_fill_matrix_row(tbl, r_idx, label_str, v0, v1, v2, v3, v4, float v_rt, t_sz) =>
     float avg5d = (v0 + v1 + v2 + v3 + v4) / 5.0
     table.cell(tbl, 0, r_idx, label_str, bgcolor=#212121, text_color=color.white, text_size=t_sz)
     table.cell(tbl, 1, r_idx, str.tostring(v0, "#.##"), bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
@@ -219,11 +219,15 @@ int rawOffsetPts = offsetChoiceInput == OffsetChoice.offset50 ? 50 : (offsetChoi
 int offsetPts = strikeModeInput == StrikeMode.atm ? 0 : rawOffsetPts
 int base_strike = int(chartStrikePrice)
 
-int selectedStrike = base_strike
+int ce_strike = base_strike
+int pe_strike = base_strike
+
 if strikeModeInput == StrikeMode.itm
-    selectedStrike := isCall ? (base_strike - offsetPts) : (base_strike + offsetPts)
+    ce_strike := base_strike - offsetPts
+    pe_strike := base_strike + offsetPts
 else if strikeModeInput == StrikeMode.otm
-    selectedStrike := isCall ? (base_strike + offsetPts) : (base_strike - offsetPts)
+    ce_strike := base_strike + offsetPts
+    pe_strike := base_strike - offsetPts
 
 // ==========================================
 // 5-DAY HISTORICAL DATA FETCHING & PRICE RESOLUTION
@@ -245,8 +249,8 @@ else
         string rootGuess = str.match(cleanTicker, "^[A-Z&]+")
         spotTicker := syminfo.prefix + ":" + (rootGuess != "" ? rootGuess : cleanTicker)
 
-string ce_ticker = f_build_option_symbol(selectedStrike, true)
-string pe_ticker = f_build_option_symbol(selectedStrike, false)
+string ce_ticker = f_build_option_symbol(ce_strike, true)
+string pe_ticker = f_build_option_symbol(pe_strike, false)
 
 // Fetch 5-Day Timestamps for Dates Header
 [d0_t, d1_t, d2_t, d3_t, d4_t] = request.security(spotTicker, "D", [time[0], time[1], time[2], time[3], time[4]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
@@ -282,29 +286,29 @@ spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 // ==========================================
 
 // Realtime Intrinsic Value (Live)
-float ce_iv_rt  = math.max(0.0, spot_ltp - selectedStrike)
-float pe_iv_rt  = math.max(0.0, selectedStrike - spot_ltp)
+float ce_iv_rt  = math.max(0.0, spot_ltp - ce_strike)
+float pe_iv_rt  = math.max(0.0, pe_strike - spot_ltp)
 float avg_iv_rt = (ce_iv_rt + pe_iv_rt) / 2.0
 
 // 5-Day Static Intrinsic Values (Day 0 to Day 4)
-float ce_iv_d0 = math.max(0.0, spot_r0 - selectedStrike)
-float pe_iv_d0 = math.max(0.0, selectedStrike - spot_r0)
+float ce_iv_d0 = math.max(0.0, spot_r0 - ce_strike)
+float pe_iv_d0 = math.max(0.0, pe_strike - spot_r0)
 float avg_iv_d0 = (ce_iv_d0 + pe_iv_d0) / 2.0
 
-float ce_iv_d1 = math.max(0.0, spot_r1 - selectedStrike)
-float pe_iv_d1 = math.max(0.0, selectedStrike - spot_r1)
+float ce_iv_d1 = math.max(0.0, spot_r1 - ce_strike)
+float pe_iv_d1 = math.max(0.0, pe_strike - spot_r1)
 float avg_iv_d1 = (ce_iv_d1 + pe_iv_d1) / 2.0
 
-float ce_iv_d2 = math.max(0.0, spot_r2 - selectedStrike)
-float pe_iv_d2 = math.max(0.0, selectedStrike - spot_r2)
+float ce_iv_d2 = math.max(0.0, spot_r2 - ce_strike)
+float pe_iv_d2 = math.max(0.0, pe_strike - spot_r2)
 float avg_iv_d2 = (ce_iv_d2 + pe_iv_d2) / 2.0
 
-float ce_iv_d3 = math.max(0.0, spot_r3 - selectedStrike)
-float pe_iv_d3 = math.max(0.0, selectedStrike - spot_r3)
+float ce_iv_d3 = math.max(0.0, spot_r3 - ce_strike)
+float pe_iv_d3 = math.max(0.0, pe_strike - spot_r3)
 float avg_iv_d3 = (ce_iv_d3 + pe_iv_d3) / 2.0
 
-float ce_iv_d4 = math.max(0.0, spot_r4 - selectedStrike)
-float pe_iv_d4 = math.max(0.0, selectedStrike - spot_r4)
+float ce_iv_d4 = math.max(0.0, spot_r4 - ce_strike)
+float pe_iv_d4 = math.max(0.0, pe_strike - spot_r4)
 float avg_iv_d4 = (ce_iv_d4 + pe_iv_d4) / 2.0
 
 // ==========================================
@@ -422,7 +426,7 @@ if showTableInput and barstate.islast
 
     // Row 0: Header Banner
     table.cell(summaryTable, 0, 0, "Asset: " + syminfo.ticker, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
-    table.cell(summaryTable, 1, 0, "Strike: " + str.tostring(selectedStrike) + " (" + modeTitle + ")", bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
+    table.cell(summaryTable, 1, 0, "CE/PE Strikes: " + str.tostring(ce_strike) + "/" + str.tostring(pe_strike) + " (" + modeTitle + ")", bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
     string offsetDisplay = strikeModeInput == StrikeMode.atm ? "0 (ATM)" : str.tostring(offsetPts) + " pts (" + modeTitle + ")"
     table.cell(summaryTable, 2, 0, "Offset: " + offsetDisplay, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 3, 0, "Basis: " + basisTag, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
@@ -442,13 +446,13 @@ if showTableInput and barstate.islast
     table.cell(summaryTable, 7, 1, "Realtime LTP", bgcolor=#37474F, text_color=color.orange, text_size=t_sz)
 
     // Rows 2-4: Intrinsic Values
-    f_fill_matrix_row(summaryTable, 2, "CE Static Intrinsic", ce_iv_d0, ce_iv_d1, ce_iv_d2, ce_iv_d3, ce_iv_d4, ce_iv_rt, t_sz)
-    f_fill_matrix_row(summaryTable, 3, "PE Static Intrinsic", pe_iv_d0, pe_iv_d1, pe_iv_d2, pe_iv_d3, pe_iv_d4, pe_iv_rt, t_sz)
+    f_fill_matrix_row(summaryTable, 2, "CE Static Intrinsic (" + str.tostring(ce_strike) + ")", ce_iv_d0, ce_iv_d1, ce_iv_d2, ce_iv_d3, ce_iv_d4, ce_iv_rt, t_sz)
+    f_fill_matrix_row(summaryTable, 3, "PE Static Intrinsic (" + str.tostring(pe_strike) + ")", pe_iv_d0, pe_iv_d1, pe_iv_d2, pe_iv_d3, pe_iv_d4, pe_iv_rt, t_sz)
     f_fill_matrix_row(summaryTable, 4, "Avg Static Intrinsic", avg_iv_d0, avg_iv_d1, avg_iv_d2, avg_iv_d3, avg_iv_d4, avg_iv_rt, t_sz)
 
     // Rows 5-7: Static Time Values
-    f_fill_matrix_row(summaryTable, 5, "CE Static Time Value", ce_tv_d0, ce_tv_d1, ce_tv_d2, ce_tv_d3, ce_tv_d4, na, t_sz)
-    f_fill_matrix_row(summaryTable, 6, "PE Static Time Value", pe_tv_d0, pe_tv_d1, pe_tv_d2, pe_tv_d3, pe_tv_d4, na, t_sz)
+    f_fill_matrix_row(summaryTable, 5, "CE Static Time Value (" + str.tostring(ce_strike) + ")", ce_tv_d0, ce_tv_d1, ce_tv_d2, ce_tv_d3, ce_tv_d4, na, t_sz)
+    f_fill_matrix_row(summaryTable, 6, "PE Static Time Value (" + str.tostring(pe_strike) + ")", pe_tv_d0, pe_tv_d1, pe_tv_d2, pe_tv_d3, pe_tv_d4, na, t_sz)
     f_fill_matrix_row(summaryTable, 7, "Avg Static Time Value", avg_tv_d0, avg_tv_d1, avg_tv_d2, avg_tv_d3, avg_tv_d4, na, t_sz)
 
     // Row 8: Static BEP
