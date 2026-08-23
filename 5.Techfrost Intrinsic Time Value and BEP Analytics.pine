@@ -636,7 +636,7 @@ if showTableInput and barstate.islast
     basisTag  = staticBasisInput == StaticBasis.prevClose ? "Prev Settlement" : (staticBasisInput == StaticBasis.first5Min ? "First 5Min Close" : "Day Open")
 
     if tableDisplayMode == "Today Only"
-        summaryTable := table.new(position_choice, 3, 16, border_width=1, border_color=color.gray)
+        summaryTable := table.new(position_choice, 3, 10, border_width=1, border_color=color.gray)
 
         // Row 0: Banner Header
         table.cell(summaryTable, 0, 0, "Asset: " + syminfo.ticker, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
@@ -660,18 +660,8 @@ if showTableInput and barstate.islast
 
         // Row 8: Static BEP
         f_fill_today_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_realtime, t_sz)
-
-        // Rows 9-11: Prev Day CE Levels
-        f_fill_today_row(summaryTable, 9, "CE Prev Day Close (" + str.tostring(ce_strike) + ")", ce_pdc, na, t_sz)
-        f_fill_today_row(summaryTable, 10, "CE Prev Day High (" + str.tostring(ce_strike) + ")", ce_pdh, na, t_sz)
-        f_fill_today_row(summaryTable, 11, "CE Prev Day Low (" + str.tostring(ce_strike) + ")", ce_pdl, na, t_sz)
-
-        // Rows 12-14: Prev Day PE Levels
-        f_fill_today_row(summaryTable, 12, "PE Prev Day Close (" + str.tostring(pe_strike) + ")", pe_pdc, na, t_sz)
-        f_fill_today_row(summaryTable, 13, "PE Prev Day High (" + str.tostring(pe_strike) + ")", pe_pdh, na, t_sz)
-        f_fill_today_row(summaryTable, 14, "PE Prev Day Low (" + str.tostring(pe_strike) + ")", pe_pdl, na, t_sz)
     else
-        summaryTable := table.new(position_choice, 8, 17, border_width=1, border_color=color.gray)
+        summaryTable := table.new(position_choice, 8, 11, border_width=1, border_color=color.gray)
 
         // Row 0: Banner Header
         table.cell(summaryTable, 0, 0, "Asset: " + syminfo.ticker, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
@@ -706,13 +696,3 @@ if showTableInput and barstate.islast
 
         // Row 8: Static BEP
         f_fill_matrix_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_stat_d1, bep_stat_d2, bep_stat_d3, bep_stat_d4, bep_realtime, t_sz)
-
-        // Rows 9-11: Prev Day CE Levels
-        f_fill_matrix_row(summaryTable, 9, "CE Prev Day Close (" + str.tostring(ce_strike) + ")", ce_pdc, ce_pdc, ce_pdc, ce_pdc, ce_pdc, na, t_sz)
-        f_fill_matrix_row(summaryTable, 10, "CE Prev Day High (" + str.tostring(ce_strike) + ")", ce_pdh, ce_pdh, ce_pdh, ce_pdh, ce_pdh, na, t_sz)
-        f_fill_matrix_row(summaryTable, 11, "CE Prev Day Low (" + str.tostring(ce_strike) + ")", ce_pdl, ce_pdl, ce_pdl, ce_pdl, ce_pdl, na, t_sz)
-
-        // Rows 12-14: Prev Day PE Levels
-        f_fill_matrix_row(summaryTable, 12, "PE Prev Day Close (" + str.tostring(pe_strike) + ")", pe_pdc, pe_pdc, pe_pdc, pe_pdc, pe_pdc, na, t_sz)
-        f_fill_matrix_row(summaryTable, 13, "PE Prev Day High (" + str.tostring(pe_strike) + ")", pe_pdh, pe_pdh, pe_pdh, pe_pdh, pe_pdh, na, t_sz)
-        f_fill_matrix_row(summaryTable, 14, "PE Prev Day Low (" + str.tostring(pe_strike) + ")", pe_pdl, pe_pdl, pe_pdl, pe_pdl, pe_pdl, na, t_sz)
