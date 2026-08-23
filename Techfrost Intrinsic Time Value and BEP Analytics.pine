@@ -1,0 +1,352 @@
+//@version=6
+indicator("Techfrost Intrinsic Time Value and BEP Analytics", shorttitle="TF IVTVBEP", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
+
+// ==========================================
+// ENUMS & INPUTS
+// ==========================================
+
+enum UnderlyingAsset
+    auto      = "Auto-Detect"
+    nifty     = "NIFTY"
+    banknifty = "BANKNIFTY"
+    crudeoil  = "CRUDEOIL"
+    gold      = "GOLD"
+    stock     = "Stock (Equity)"
+
+enum OptionType
+    auto = "Auto-Detect"
+    ce   = "Call (CE)"
+    pe   = "Put (PE)"
+
+enum StrikeMode
+    atm = "ATM (At The Money)"
+    itm = "ITM (In The Money)"
+    otm = "OTM (Out of The Money)"
+
+enum OffsetChoice
+    offset50  = "50 Points"
+    offset100 = "100 Points"
+    offset150 = "150 Points"
+    offset200 = "200 Points"
+
+// --- Instrument Settings ---
+underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
+optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
+spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
+strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
+
+// --- Strike & Offset Settings ---
+strikeModeInput    = input.enum(StrikeMode.atm, "Strike Selection Mode", group="Strike & Offset Settings",
+  tooltip="Choose whether to calculate metrics for ATM, ITM, or OTM strike relative to selected chart option.")
+offsetChoiceInput  = input.enum(OffsetChoice.offset100, "Strike Offset Points", group="Strike & Offset Settings",
+  tooltip="Offset points used to determine ITM / OTM strike level (e.g. 50, 100, 150, 200).")
+
+// --- Plot & Display Controls ---
+showRealtimeIVInput = input.bool(true, "Show Realtime Intrinsic Value Line", group="Plot Controls")
+showRealtimeTVInput = input.bool(true, "Show Realtime Time Value Line", group="Plot Controls")
+showRealtimeBEPInput= input.bool(true, "Show Realtime BEP Line", group="Plot Controls",
+  tooltip="Realtime BEP = (CE LTP + PE LTP) / 2")
+showDayOpenBEPInput = input.bool(true, "Show Day Open Static BEP Line", group="Plot Controls",
+  tooltip="Day Open BEP = (CE Day Open + PE Day Open) / 2")
+showFirst5mBEPInput = input.bool(true, "Show First 5 Min Close Static BEP Line", group="Plot Controls",
+  tooltip="First 5 Min BEP = (CE 9:20 Close + PE 9:20 Close) / 2")
+showOppCandlesInput = input.bool(true, "Show Opposite Option Candles Overlay", group="Plot Controls")
+
+showTableInput      = input.bool(true, "Show IV, TV & BEP Summary Table", group="Display Controls")
+tablePosInput       = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
+tableTextSizeInput  = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls")
+
+// --- Styling & Colors ---
+colorIV          = input.color(#FF00FF, "Intrinsic Value Line Color", group="Styling & Colors")
+colorTV          = input.color(color.yellow, "Time Value Line Color", group="Styling & Colors")
+colorRealBEP     = input.color(color.orange, "Realtime BEP Line Color", group="Styling & Colors")
+colorDayOpenBEP  = input.color(color.aqua, "Day Open BEP Line Color", group="Styling & Colors")
+colorFirst5mBEP  = input.color(#00E676, "First 5 Min BEP Line Color", group="Styling & Colors")
+
+colorOppBull     = input.color(color.new(#2962FF, 40), "Opposite Bullish Candle Body", group="Styling & Colors")
+colorOppBear     = input.color(color.new(#FF6D00, 40), "Opposite Bearish Candle Body", group="Styling & Colors")
+
+// ==========================================
+// HELPER FUNCTIONS (GLOBAL SCOPE)
+// ==========================================
+
+f_is_digit(string c) =>
+    str.contains("0123456789", c)
+
+f_fill_summary_table(tbl, r_idx, label_str, val_str, val_col, bg_col, t_sz) =>
+    table.cell(tbl, 0, r_idx, label_str, bgcolor=bg_col, text_color=color.white, text_size=t_sz)
+    table.cell(tbl, 1, r_idx, val_str, bgcolor=color.black, text_color=val_col, text_size=t_sz)
+
+// ==========================================
+// TICKER PARSING & AUTO-DETECTION
+// ==========================================
+
+string cleanTicker = syminfo.ticker
+int colonPos = str.pos(cleanTicker, ":")
+if colonPos != -1
+    cleanTicker := str.substring(cleanTicker, colonPos + 1)
+cleanTicker := str.replace_all(cleanTicker, " ", "")
+
+int tickerLen = str.length(cleanTicker)
+
+// ----- Detect underlying -----
+UnderlyingAsset actualUnderlying = na
+if underlyingInput == UnderlyingAsset.auto
+    if str.contains(cleanTicker, "BANKNIFTY")
+        actualUnderlying := UnderlyingAsset.banknifty
+    else if str.contains(cleanTicker, "NIFTY")
+        actualUnderlying := UnderlyingAsset.nifty
+    else if str.contains(cleanTicker, "CRUDEOIL")
+        actualUnderlying := UnderlyingAsset.crudeoil
+    else if str.contains(cleanTicker, "GOLD") and not str.contains(cleanTicker, "GOLDM") and not str.contains(cleanTicker, "GOLDPETAL")
+        actualUnderlying := UnderlyingAsset.gold
+    else if str.contains(cleanTicker, "GOLDM")
+        actualUnderlying := UnderlyingAsset.gold
+    else
+        actualUnderlying := UnderlyingAsset.stock
+else
+    actualUnderlying := underlyingInput
+
+// ----- Detect option type -----
+bool isCall = false
+bool isPut  = false
+
+if optionTypeInput == OptionType.ce
+    isCall := true
+else if optionTypeInput == OptionType.pe
+    isPut := true
+else
+    if str.contains(cleanTicker, "CE")
+        isCall := true
+    else if str.contains(cleanTicker, "PE")
+        isPut := true
+    else if str.match(cleanTicker, "C\\d+$") != ""
+        isCall := true
+    else if str.match(cleanTicker, "P\\d+$") != ""
+        isPut := true
+
+// ----- Strike extraction -----
+float detectedStrike = na
+string tickerWithoutCEPE = ""
+
+if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+    tickerWithoutCEPE := str.substring(cleanTicker, 0, tickerLen - 2)
+
+string matchC = str.match(cleanTicker, "C\\d+$")
+string matchP = str.match(cleanTicker, "P\\d+$")
+
+if matchC != ""
+    detectedStrike := str.tonumber(str.substring(matchC, 1))
+else if matchP != ""
+    detectedStrike := str.tonumber(str.substring(matchP, 1))
+else if tickerWithoutCEPE != ""
+    string strikeDigits = str.match(tickerWithoutCEPE, "\\d+$")
+    detectedStrike := str.tonumber(strikeDigits)
+
+float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : (not na(detectedStrike) ? detectedStrike : 24000.0)
+
+// Universal Fail-Safe Option Ticker Construction
+f_build_option_symbol(int target_strike, bool target_is_ce) =>
+    string st_digits = str.tostring(int(chartStrikePrice))
+    int st_len = str.length(st_digits)
+    
+    if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+        int end_trim = 2
+        string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
+        string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
+        string sfx = target_is_ce ? "CE" : "PE"
+        syminfo.prefix + ":" + pfx + str.tostring(target_strike) + sfx
+    else if str.match(cleanTicker, "[CP]\\d+$") != ""
+        string matchCP = str.match(cleanTicker, "[CP]\\d+$")
+        int matchPos = str.pos(cleanTicker, matchCP)
+        string pfx = str.substring(cleanTicker, 0, matchPos)
+        string cp_letter = target_is_ce ? "C" : "P"
+        syminfo.prefix + ":" + pfx + cp_letter + str.tostring(target_strike)
+    else
+        string rep_ticker = str.replace(cleanTicker, st_digits, str.tostring(target_strike))
+        syminfo.prefix + ":" + rep_ticker
+
+// ==========================================
+// OPPOSITE OPTION CANDLES OVERLAY
+// ==========================================
+
+string opp_ticker = f_build_option_symbol(int(chartStrikePrice), not isCall)
+[opp_o, opp_h, opp_l, opp_c] = request.security(opp_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+bool opp_is_bull   = nz(opp_c) >= nz(opp_o)
+color opp_body_col = opp_is_bull ? colorOppBull : colorOppBear
+color opp_wick_col = opp_is_bull ? color.new(colorOppBull, 30) : color.new(colorOppBear, 30)
+
+plotcandle(showOppCandlesInput ? opp_o : na,
+           showOppCandlesInput ? opp_h : na,
+           showOppCandlesInput ? opp_l : na,
+           showOppCandlesInput ? opp_c : na,
+           title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
+
+// ==========================================
+// TARGET STRIKE SELECTION (ATM / ITM / OTM)
+// ==========================================
+
+int offsetPts = offsetChoiceInput == OffsetChoice.offset50 ? 50 : (offsetChoiceInput == OffsetChoice.offset100 ? 100 : (offsetChoiceInput == OffsetChoice.offset150 ? 150 : 200))
+int base_strike = int(chartStrikePrice)
+
+int selectedStrike = base_strike
+if strikeModeInput == StrikeMode.itm
+    selectedStrike := isCall ? (base_strike - offsetPts) : (base_strike + offsetPts)
+else if strikeModeInput == StrikeMode.otm
+    selectedStrike := isCall ? (base_strike + offsetPts) : (base_strike - offsetPts)
+
+// ==========================================
+// SPOT PRICE & OPTION DATA FETCHING
+// ==========================================
+
+// Determine Spot Ticker
+string spotTicker = ""
+if str.length(spotTickerOverride) > 0
+    spotTicker := spotTickerOverride
+else
+    switch actualUnderlying
+        UnderlyingAsset.banknifty => spotTicker := "NSE:BANKNIFTY"
+        UnderlyingAsset.nifty     => spotTicker := "NSE:NIFTY"
+        UnderlyingAsset.crudeoil  => spotTicker := "MCX:CRUDEOIL1!"
+        UnderlyingAsset.gold      => spotTicker := "MCX:GOLD1!"
+        UnderlyingAsset.stock     =>
+            string rootGuess = str.match(cleanTicker, "^[A-Z&]+")
+            spotTicker := syminfo.prefix + ":" + (rootGuess != "" ? rootGuess : cleanTicker)
+
+float spot_close = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
+
+f_get_option_data() =>
+    float d_open  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    var float d_f5m = na
+    if ta.change(time("D")) != 0
+        d_f5m := na
+    if (hour == 9 and minute >= 19) or hour > 9
+        if na(d_f5m)
+            d_f5m := close
+    [d_open, na(d_f5m) ? d_open : d_f5m, close]
+
+string ce_ticker = f_build_option_symbol(selectedStrike, true)
+string pe_ticker = f_build_option_symbol(selectedStrike, false)
+
+[ce_open, ce_f5m, ce_ltp] = request.security(ce_ticker, timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[pe_open, pe_f5m, pe_ltp] = request.security(pe_ticker, timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+
+// ==========================================
+// INTRINSIC, TIME VALUE & BEP CALCULATIONS
+// ==========================================
+
+float spotVal = na(spot_close) ? chartStrikePrice : spot_close
+
+// Intrinsic Value
+float ce_intrinsic  = math.max(0.0, spotVal - selectedStrike)
+float pe_intrinsic  = math.max(0.0, selectedStrike - spotVal)
+float avg_intrinsic = (ce_intrinsic + pe_intrinsic) / 2.0
+
+// Time Value
+float ce_timeval  = math.max(0.0, ce_ltp - ce_intrinsic)
+float pe_timeval  = math.max(0.0, pe_ltp - pe_intrinsic)
+float avg_timeval = (ce_timeval + pe_timeval) / 2.0
+
+// Selected Option Realtime Intrinsic & Time Value
+float realtime_intrinsic = isCall ? ce_intrinsic : pe_intrinsic
+float realtime_timeval   = isCall ? ce_timeval   : pe_timeval
+
+// BEP Calculations: (CE + PE) / 2
+float bep_day_open  = (ce_open + pe_open) / 2.0
+float bep_first_5m  = (ce_f5m  + pe_f5m)  / 2.0
+float bep_realtime  = (ce_ltp  + pe_ltp)  / 2.0
+
+// ==========================================
+// PLOTTING METRICS ON CHART
+// ==========================================
+
+// Realtime Intrinsic & Time Value Plots
+plot(showRealtimeIVInput ? realtime_intrinsic : na, "Realtime Intrinsic Value", color=colorIV, linewidth=2)
+plot(showRealtimeTVInput ? realtime_timeval   : na, "Realtime Time Value", color=colorTV, linewidth=2)
+
+// BEP Lines Plots
+plot(showRealtimeBEPInput ? bep_realtime : na, "Realtime Dynamic BEP", color=colorRealBEP, linewidth=2)
+plot(showDayOpenBEPInput  ? bep_day_open : na, "Day Open Static BEP", color=colorDayOpenBEP, linewidth=1, style=plot.style_linebr)
+plot(showFirst5mBEPInput  ? bep_first_5m : na, "First 5 Min Static BEP", color=colorFirst5mBEP, linewidth=1, style=plot.style_linebr)
+
+// Static Level Labels on Last Bar
+var label[] level_labels = array.new_label()
+if barstate.islast
+    for lb in level_labels
+        label.delete(lb)
+    array.clear(level_labels)
+
+    int x2 = bar_index + 10
+    if showDayOpenBEPInput
+        array.push(level_labels, label.new(x2, bep_day_open, "Day Open BEP: " + str.tostring(bep_day_open, "#.##"), color=color.new(colorDayOpenBEP, 80), textcolor=colorDayOpenBEP, style=label.style_label_left, size=size.small))
+    if showFirst5mBEPInput
+        array.push(level_labels, label.new(x2, bep_first_5m, "First 5M BEP: " + str.tostring(bep_first_5m, "#.##"), color=color.new(colorFirst5mBEP, 80), textcolor=colorFirst5mBEP, style=label.style_label_left, size=size.small))
+
+// ==========================================
+// SUMMARY DASHBOARD TABLE
+// ==========================================
+
+var table summaryTable = na
+if showTableInput and barstate.islast
+    table.delete(summaryTable)
+    
+    position_choice = tablePosInput == "Top Right" ? position.top_right :
+                      tablePosInput == "Top Left" ? position.top_left :
+                      tablePosInput == "Bottom Right" ? position.bottom_right : position.bottom_left
+                      
+    t_sz = tableTextSizeInput == "Tiny" ? size.tiny :
+           tableTextSizeInput == "Small" ? size.small :
+           tableTextSizeInput == "Normal" ? size.normal : size.large
+           
+    summaryTable := table.new(position_choice, 4, 11, border_width=1, border_color=color.gray)
+    
+    modeTitle = strikeModeInput == StrikeMode.atm ? "ATM" : (strikeModeInput == StrikeMode.itm ? "ITM" : "OTM")
+
+    // Header Row 0
+    table.cell(summaryTable, 0, 0, "Asset: " + syminfo.ticker, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 1, 0, "Strike: " + str.tostring(selectedStrike) + " (" + modeTitle + ")", bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
+    table.cell(summaryTable, 2, 0, "Offset: " + str.tostring(offsetPts), bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 3, 0, "IV / TV / BEP Dashboard", bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+
+    // Row Headers & Values
+    table.cell(summaryTable, 0, 1, "Metric", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 1, 1, "Call (CE)", bgcolor=#37474F, text_color=#00E676, text_size=t_sz)
+    table.cell(summaryTable, 2, 1, "Put (PE)", bgcolor=#37474F, text_color=#FF5252, text_size=t_sz)
+    table.cell(summaryTable, 3, 1, "Average / Combined", bgcolor=#37474F, text_color=color.yellow, text_size=t_sz)
+
+    // Row 2: Premium LTP
+    table.cell(summaryTable, 0, 2, "Option LTP", bgcolor=#212121, text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 1, 2, str.tostring(ce_ltp, "#.##"), bgcolor=color.black, text_color=#00E676, text_size=t_sz)
+    table.cell(summaryTable, 2, 2, str.tostring(pe_ltp, "#.##"), bgcolor=color.black, text_color=#FF5252, text_size=t_sz)
+    table.cell(summaryTable, 3, 2, str.tostring((ce_ltp + pe_ltp) / 2.0, "#.##"), bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+
+    // Row 3: Intrinsic Value
+    table.cell(summaryTable, 0, 3, "Intrinsic Value", bgcolor=#212121, text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 1, 3, str.tostring(ce_intrinsic, "#.##"), bgcolor=color.black, text_color=colorIV, text_size=t_sz)
+    table.cell(summaryTable, 2, 3, str.tostring(pe_intrinsic, "#.##"), bgcolor=color.black, text_color=colorIV, text_size=t_sz)
+    table.cell(summaryTable, 3, 3, str.tostring(avg_intrinsic, "#.##"), bgcolor=#4A148C, text_color=color.magenta, text_size=t_sz)
+
+    // Row 4: Time Value
+    table.cell(summaryTable, 0, 4, "Time Value", bgcolor=#212121, text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 1, 4, str.tostring(ce_timeval, "#.##"), bgcolor=color.black, text_color=colorTV, text_size=t_sz)
+    table.cell(summaryTable, 2, 4, str.tostring(pe_timeval, "#.##"), bgcolor=color.black, text_color=colorTV, text_size=t_sz)
+    table.cell(summaryTable, 3, 4, str.tostring(avg_timeval, "#.##"), bgcolor=#E65100, text_color=color.yellow, text_size=t_sz)
+
+    // Row 5: Day Open BEP
+    table.cell(summaryTable, 0, 5, "Day Open BEP", bgcolor=#212121, text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 1, 5, str.tostring(ce_open, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(summaryTable, 2, 5, str.tostring(pe_open, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(summaryTable, 3, 5, str.tostring(bep_day_open, "#.##"), bgcolor=#006064, text_color=colorDayOpenBEP, text_size=t_sz)
+
+    // Row 6: First 5 Min Close BEP
+    table.cell(summaryTable, 0, 6, "First 5 Min BEP", bgcolor=#212121, text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 1, 6, str.tostring(ce_f5m, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(summaryTable, 2, 6, str.tostring(pe_f5m, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(summaryTable, 3, 6, str.tostring(bep_first_5m, "#.##"), bgcolor=#1B5E20, text_color=colorFirst5mBEP, text_size=t_sz)
+
+    // Row 7: Realtime Dynamic BEP
+    table.cell(summaryTable, 0, 7, "Realtime BEP", bgcolor=#212121, text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 1, 7, str.tostring(ce_ltp, "#.##"), bgcolor=color.black, text_color=#00E676, text_size=t_sz)
+    table.cell(summaryTable, 2, 7, str.tostring(pe_ltp, "#.##"), bgcolor=color.black, text_color=#FF5252, text_size=t_sz)
+    table.cell(summaryTable, 3, 7, str.tostring(bep_realtime, "#.##"), bgcolor=#F57F17, text_color=colorRealBEP, text_size=t_sz)
