@@ -35,6 +35,10 @@ enum StaticBasis
     prevClose = "Previous Day Close / Settlement Price"
     first5Min = "First 5 Min Candle Close"
 
+enum TimeValueFormula
+    standard = "Option Price - Intrinsic Value"
+    custom   = "Strike Price - Intrinsic Value"
+
 // --- Instrument Settings ---
 underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
@@ -42,12 +46,14 @@ spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)"
 strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
 
 // --- Strike & Calculation Basis Settings ---
-strikeModeInput    = input.enum(StrikeMode.atm, "Strike Selection Mode", group="Calculation Settings",
+strikeModeInput       = input.enum(StrikeMode.atm, "Strike Selection Mode", group="Calculation Settings",
   tooltip="Choose whether to calculate metrics for ATM, ITM, OTM, or Both ITM & OTM strikes relative to selected chart option.")
-offsetChoiceInput  = input.enum(OffsetChoice.offset100, "Strike Offset Points", group="Calculation Settings",
+offsetChoiceInput     = input.enum(OffsetChoice.offset100, "Strike Offset Points", group="Calculation Settings",
   tooltip="Offset points used to determine ITM / OTM strike levels (e.g. 50, 100, 150, 200).")
-staticBasisInput   = input.enum(StaticBasis.dayOpen, "Static Values Calculation Basis", group="Calculation Settings",
+staticBasisInput      = input.enum(StaticBasis.dayOpen, "Static Values Calculation Basis", group="Calculation Settings",
   tooltip="Basis for Static Intrinsic, Static Time Value, and Static BEP: Day Open, Previous Day Close, or First 5 Min Close.")
+timeValueFormulaInput = input.enum(TimeValueFormula.standard, "Time Value Formula", group="Calculation Settings",
+  tooltip="Formula for Time Value: Option Price - Intrinsic Value OR Strike Price - Intrinsic Value.")
 
 // --- Plot Controls: Intrinsic Value ---
 showCE_IV_RT_Input     = input.bool(true, "Show CE Realtime Intrinsic Line", group="Intrinsic Value Plots")
@@ -58,10 +64,14 @@ show5D_Static_CE_IV    = input.bool(true, "Show 5-Day Static CE Intrinsic Lines"
 show5D_Static_PE_IV    = input.bool(true, "Show 5-Day Static PE Intrinsic Lines", group="Intrinsic Value Plots")
 show5D_Static_Avg_IV   = input.bool(true, "Show 5-Day Static Avg Intrinsic Lines", group="Intrinsic Value Plots")
 
-// --- Plot Controls: Time Value (Only Static) ---
-show5D_Static_CE_TV    = input.bool(true, "Show 5-Day Static CE Time Value Lines", group="Time Value Plots (Only Static)")
-show5D_Static_PE_TV    = input.bool(true, "Show 5-Day Static PE Time Value Lines", group="Time Value Plots (Only Static)")
-show5D_Static_Avg_TV   = input.bool(true, "Show 5-Day Static Avg Time Value Lines", group="Time Value Plots (Only Static)")
+// --- Plot Controls: Time Value ---
+showCE_TV_RT_Input     = input.bool(true, "Show CE Realtime Time Value Line", group="Time Value Plots")
+showPE_TV_RT_Input     = input.bool(true, "Show PE Realtime Time Value Line", group="Time Value Plots")
+showAvg_TV_RT_Input    = input.bool(true, "Show Avg Realtime Time Value Line", group="Time Value Plots")
+
+show5D_Static_CE_TV    = input.bool(true, "Show 5-Day Static CE Time Value Lines", group="Time Value Plots")
+show5D_Static_PE_TV    = input.bool(true, "Show 5-Day Static PE Time Value Lines", group="Time Value Plots")
+show5D_Static_Avg_TV   = input.bool(true, "Show 5-Day Static Avg Time Value Lines", group="Time Value Plots")
 
 // --- Plot Controls: Previous Day Levels (CE & PE) ---
 showPD_CE_LevelsInput  = input.bool(true, "Show Prev Day CE Levels (PDC, PDH, PDL)", group="Previous Day Levels Plots")
@@ -93,6 +103,15 @@ widthPE_IV_RT     = input.int(2, "PE Realtime Intrinsic Line Width", minval=1, m
 
 colorAvg_IV       = input.color(#FF00FF, "Avg Realtime Intrinsic Color", group="Realtime Plots Styling")
 widthAvg_IV_RT    = input.int(2, "Avg Realtime Intrinsic Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
+
+colorCE_TV_RT     = input.color(#76FF03, "CE Realtime Time Value Color", group="Realtime Plots Styling")
+widthCE_TV_RT     = input.int(2, "CE Realtime Time Value Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
+
+colorPE_TV_RT     = input.color(#FF6E40, "PE Realtime Time Value Color", group="Realtime Plots Styling")
+widthPE_TV_RT     = input.int(2, "PE Realtime Time Value Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
+
+colorAvg_TV_RT    = input.color(#FFD700, "Avg Realtime Time Value Color", group="Realtime Plots Styling")
+widthAvg_TV_RT    = input.int(2, "Avg Realtime Time Value Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
 
 colorRealBEP      = input.color(color.orange, "Realtime BEP Color", group="Realtime Plots Styling")
 widthRealBEP      = input.int(2, "Realtime BEP Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
@@ -408,57 +427,63 @@ pe_ltp   = request.security(pe_ticker, timeframe.period, close, ignore_invalid_s
 spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 
 // ==========================================
-// 1. 5-DAY INTRINSIC VALUE CALCULATIONS
+// 1. INTRINSIC VALUE CALCULATIONS (CE: Spot - Strike, PE: Strike - Spot)
 // ==========================================
 
 // Realtime Intrinsic Value (Live)
-float ce_iv_rt  = math.max(0.0, spot_ltp - ce_strike)
-float pe_iv_rt  = math.max(0.0, pe_strike - spot_ltp)
+float ce_iv_rt  = spot_ltp - ce_strike
+float pe_iv_rt  = pe_strike - spot_ltp
 float avg_iv_rt = (ce_iv_rt + pe_iv_rt) / 2.0
 
 // 5-Day Static Intrinsic Values (Day 0 to Day 4)
-float ce_iv_d0 = math.max(0.0, spot_r0 - ce_strike)
-float pe_iv_d0 = math.max(0.0, pe_strike - spot_r0)
+float ce_iv_d0 = spot_r0 - ce_strike
+float pe_iv_d0 = pe_strike - spot_r0
 float avg_iv_d0 = (ce_iv_d0 + pe_iv_d0) / 2.0
 
-float ce_iv_d1 = math.max(0.0, spot_r1 - ce_strike)
-float pe_iv_d1 = math.max(0.0, pe_strike - spot_r1)
+float ce_iv_d1 = spot_r1 - ce_strike
+float pe_iv_d1 = pe_strike - spot_r1
 float avg_iv_d1 = (ce_iv_d1 + pe_iv_d1) / 2.0
 
-float ce_iv_d2 = math.max(0.0, spot_r2 - ce_strike)
-float pe_iv_d2 = math.max(0.0, pe_strike - spot_r2)
+float ce_iv_d2 = spot_r2 - ce_strike
+float pe_iv_d2 = pe_strike - spot_r2
 float avg_iv_d2 = (ce_iv_d2 + pe_iv_d2) / 2.0
 
-float ce_iv_d3 = math.max(0.0, spot_r3 - ce_strike)
-float pe_iv_d3 = math.max(0.0, pe_strike - spot_r3)
+float ce_iv_d3 = spot_r3 - ce_strike
+float pe_iv_d3 = pe_strike - spot_r3
 float avg_iv_d3 = (ce_iv_d3 + pe_iv_d3) / 2.0
 
-float ce_iv_d4 = math.max(0.0, spot_r4 - ce_strike)
-float pe_iv_d4 = math.max(0.0, pe_strike - spot_r4)
+float ce_iv_d4 = spot_r4 - ce_strike
+float pe_iv_d4 = pe_strike - spot_r4
 float avg_iv_d4 = (ce_iv_d4 + pe_iv_d4) / 2.0
 
 // ==========================================
-// 2. 5-DAY TIME VALUE CALCULATIONS (ONLY STATIC)
+// 2. TIME VALUE CALCULATIONS (Option Price - Intrinsic Value OR Strike - Intrinsic Value)
 // ==========================================
 
-float ce_tv_d0 = math.max(0.0, ce_r0 - ce_iv_d0)
-float pe_tv_d0 = math.max(0.0, pe_r0 - pe_iv_d0)
+// Realtime Time Values (Live)
+float ce_tv_rt  = timeValueFormulaInput == TimeValueFormula.standard ? (ce_ltp - ce_iv_rt) : (ce_strike - ce_iv_rt)
+float pe_tv_rt  = timeValueFormulaInput == TimeValueFormula.standard ? (pe_ltp - pe_iv_rt) : (pe_strike - pe_iv_rt)
+float avg_tv_rt = (ce_tv_rt + pe_tv_rt) / 2.0
+
+// 5-Day Static Time Values (Day 0 to Day 4)
+float ce_tv_d0 = timeValueFormulaInput == TimeValueFormula.standard ? (ce_r0 - ce_iv_d0) : (ce_strike - ce_iv_d0)
+float pe_tv_d0 = timeValueFormulaInput == TimeValueFormula.standard ? (pe_r0 - pe_iv_d0) : (pe_strike - pe_iv_d0)
 float avg_tv_d0 = (ce_tv_d0 + pe_tv_d0) / 2.0
 
-float ce_tv_d1 = math.max(0.0, ce_r1 - ce_iv_d1)
-float pe_tv_d1 = math.max(0.0, pe_r1 - pe_iv_d1)
+float ce_tv_d1 = timeValueFormulaInput == TimeValueFormula.standard ? (ce_r1 - ce_iv_d1) : (ce_strike - ce_iv_d1)
+float pe_tv_d1 = timeValueFormulaInput == TimeValueFormula.standard ? (pe_r1 - pe_iv_d1) : (pe_strike - pe_iv_d1)
 float avg_tv_d1 = (ce_tv_d1 + pe_tv_d1) / 2.0
 
-float ce_tv_d2 = math.max(0.0, ce_r2 - ce_iv_d2)
-float pe_tv_d2 = math.max(0.0, pe_r2 - pe_iv_d2)
+float ce_tv_d2 = timeValueFormulaInput == TimeValueFormula.standard ? (ce_r2 - ce_iv_d2) : (ce_strike - ce_iv_d2)
+float pe_tv_d2 = timeValueFormulaInput == TimeValueFormula.standard ? (pe_r2 - pe_iv_d2) : (pe_strike - pe_iv_d2)
 float avg_tv_d2 = (ce_tv_d2 + pe_tv_d2) / 2.0
 
-float ce_tv_d3 = math.max(0.0, ce_r3 - ce_iv_d3)
-float pe_tv_d3 = math.max(0.0, pe_r3 - pe_iv_d3)
+float ce_tv_d3 = timeValueFormulaInput == TimeValueFormula.standard ? (ce_r3 - ce_iv_d3) : (ce_strike - ce_iv_d3)
+float pe_tv_d3 = timeValueFormulaInput == TimeValueFormula.standard ? (pe_r3 - pe_iv_d3) : (pe_strike - pe_iv_d3)
 float avg_tv_d3 = (ce_tv_d3 + pe_tv_d3) / 2.0
 
-float ce_tv_d4 = math.max(0.0, ce_r4 - ce_iv_d4)
-float pe_tv_d4 = math.max(0.0, pe_r4 - pe_iv_d4)
+float ce_tv_d4 = timeValueFormulaInput == TimeValueFormula.standard ? (ce_r4 - ce_iv_d4) : (ce_strike - ce_iv_d4)
+float pe_tv_d4 = timeValueFormulaInput == TimeValueFormula.standard ? (pe_r4 - pe_iv_d4) : (pe_strike - pe_iv_d4)
 float avg_tv_d4 = (ce_tv_d4 + pe_tv_d4) / 2.0
 
 // ==========================================
@@ -481,6 +506,11 @@ float bep_realtime = (ce_ltp + pe_ltp) / 2.0
 plot(showCE_IV_RT_Input  ? ce_iv_rt  : na, "CE Realtime Intrinsic", color=colorCE_IV, linewidth=widthCE_IV_RT)
 plot(showPE_IV_RT_Input  ? pe_iv_rt  : na, "PE Realtime Intrinsic", color=colorPE_IV, linewidth=widthPE_IV_RT)
 plot(showAvg_IV_RT_Input ? avg_iv_rt : na, "Avg Realtime Intrinsic", color=colorAvg_IV, linewidth=widthAvg_IV_RT)
+
+// --- Realtime Time Value Plots ---
+plot(showCE_TV_RT_Input  ? ce_tv_rt  : na, "CE Realtime Time Value", color=colorCE_TV_RT, linewidth=widthCE_TV_RT)
+plot(showPE_TV_RT_Input  ? pe_tv_rt  : na, "PE Realtime Time Value", color=colorPE_TV_RT, linewidth=widthPE_TV_RT)
+plot(showAvg_TV_RT_Input ? avg_tv_rt : na, "Avg Realtime Time Value", color=colorAvg_TV_RT, linewidth=widthAvg_TV_RT)
 
 // --- Realtime BEP Plot ---
 plot(showRealtimeBEPInput ? bep_realtime : na, "Realtime Dynamic BEP", color=colorRealBEP, linewidth=widthRealBEP)
@@ -624,9 +654,9 @@ if showTableInput and barstate.islast
         f_fill_today_row(summaryTable, 4, "Avg Static Intrinsic", avg_iv_d0, avg_iv_rt, t_sz)
 
         // Rows 5-7: Static Time Values
-        f_fill_today_row(summaryTable, 5, "CE Static Time Value (" + str.tostring(ce_strike) + ")", ce_tv_d0, na, t_sz)
-        f_fill_today_row(summaryTable, 6, "PE Static Time Value (" + str.tostring(pe_strike) + ")", pe_tv_d0, na, t_sz)
-        f_fill_today_row(summaryTable, 7, "Avg Static Time Value", avg_tv_d0, na, t_sz)
+        f_fill_today_row(summaryTable, 5, "CE Static Time Value (" + str.tostring(ce_strike) + ")", ce_tv_d0, ce_tv_rt, t_sz)
+        f_fill_today_row(summaryTable, 6, "PE Static Time Value (" + str.tostring(pe_strike) + ")", pe_tv_d0, pe_tv_rt, t_sz)
+        f_fill_today_row(summaryTable, 7, "Avg Static Time Value", avg_tv_d0, avg_tv_rt, t_sz)
 
         // Row 8: Static BEP
         f_fill_today_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_realtime, t_sz)
@@ -670,9 +700,9 @@ if showTableInput and barstate.islast
         f_fill_matrix_row(summaryTable, 4, "Avg Static Intrinsic", avg_iv_d0, avg_iv_d1, avg_iv_d2, avg_iv_d3, avg_iv_d4, avg_iv_rt, t_sz)
 
         // Rows 5-7: Static Time Values
-        f_fill_matrix_row(summaryTable, 5, "CE Static Time Value (" + str.tostring(ce_strike) + ")", ce_tv_d0, ce_tv_d1, ce_tv_d2, ce_tv_d3, ce_tv_d4, na, t_sz)
-        f_fill_matrix_row(summaryTable, 6, "PE Static Time Value (" + str.tostring(pe_strike) + ")", pe_tv_d0, pe_tv_d1, pe_tv_d2, pe_tv_d3, pe_tv_d4, na, t_sz)
-        f_fill_matrix_row(summaryTable, 7, "Avg Static Time Value", avg_tv_d0, avg_tv_d1, avg_tv_d2, avg_tv_d3, avg_tv_d4, na, t_sz)
+        f_fill_matrix_row(summaryTable, 5, "CE Static Time Value (" + str.tostring(ce_strike) + ")", ce_tv_d0, ce_tv_d1, ce_tv_d2, ce_tv_d3, ce_tv_d4, ce_tv_rt, t_sz)
+        f_fill_matrix_row(summaryTable, 6, "PE Static Time Value (" + str.tostring(pe_strike) + ")", pe_tv_d0, pe_tv_d1, pe_tv_d2, pe_tv_d3, pe_tv_d4, pe_tv_rt, t_sz)
+        f_fill_matrix_row(summaryTable, 7, "Avg Static Time Value", avg_tv_d0, avg_tv_d1, avg_tv_d2, avg_tv_d3, avg_tv_d4, avg_tv_rt, t_sz)
 
         // Row 8: Static BEP
         f_fill_matrix_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_stat_d1, bep_stat_d2, bep_stat_d3, bep_stat_d4, bep_realtime, t_sz)
