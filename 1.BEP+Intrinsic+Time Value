@@ -1,107 +1,167 @@
 //@version=6
-indicator("Techfrost Intrinsic,BEP,Time Value All - Options Intrinsic Value (Spot Open-New) 1", overlay=true, precision=2)
+indicator("Techfrost Intrinsic Time Value and BEP Analytics", shorttitle="TF IVTVBEP", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
 // ==========================================
 
-enum TimeValueFormula
-    standard = "Option Price - Intrinsic Value"
-    custom = "Strike Price - Intrinsic Value"
-
 enum UnderlyingAsset
-    auto     = "Auto-Detect"
-    nifty    = "NIFTY"
+    auto      = "Auto-Detect"
+    nifty     = "NIFTY"
     banknifty = "BANKNIFTY"
-    crudeoil = "CRUDEOIL"
-    gold     = "GOLD"
-    stock    = "Stock (Equity)"
+    crudeoil  = "CRUDEOIL"
+    gold      = "GOLD"
+    stock     = "Stock (Equity)"
 
 enum OptionType
     auto = "Auto-Detect"
     ce   = "Call (CE)"
     pe   = "Put (PE)"
 
-enum CalculationBasis
-    dayOpen   = "Today's Day Open"
-    prevClose = "Previous Day Close"
-    first5Min = "First 5 Min Close"
+enum StrikeMode
+    atm  = "ATM (At The Money)"
+    itm  = "ITM (In The Money)"
+    otm  = "OTM (Out of The Money)"
+    both = "Both ITM & OTM"
 
-enum StrikeStepOption
-    step50  = "50 Points (+50 / -50)"
-    step100 = "100 Points (+100 / -100)"
+enum OffsetChoice
+    offset50  = "50 Points"
+    offset100 = "100 Points"
+    offset150 = "150 Points"
+    offset200 = "200 Points"
 
-// --- Instrument & Strike Settings ---
+enum StaticBasis
+    dayOpen   = "Day Open Price (9:15 AM Open)"
+    prevClose = "Previous Day Close / Settlement Price"
+    first5Min = "First 5 Min Candle Close"
+
+// --- Instrument Settings ---
 underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
 spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
 strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
 
-// --- Intrinsic & Time Value Settings ---
-ivTvCalcBasisInput    = input.enum(CalculationBasis.dayOpen, "Intrinsic & Time Value Basis", group="Intrinsic & Time Value",
-  tooltip="Choose whether static reference levels for Intrinsic and Time Value are calculated based on Today's 9:15 AM Open, Previous Day Close, or First 5 Min Close.")
-minRangeInput        = input.float(0.0, "Min Intrinsic Value Range", group="Intrinsic & Time Value")
-maxRangeInput        = input.float(5000.0, "Max Intrinsic Value Range", group="Intrinsic & Time Value")
-timeValueFormulaInput = input.enum(TimeValueFormula.standard, "Time Value Formula", group="Intrinsic & Time Value")
-useAverageValuesInput = input.bool(false, "Use Average Intrinsic & Time Value (CE + PE)", group="Intrinsic & Time Value",
-  tooltip="When enabled, calculates the average Intrinsic and Time Value of CE and PE for the strike. When disabled, displays actual single option values.")
+// --- Strike & Calculation Basis Settings ---
+strikeModeInput    = input.enum(StrikeMode.atm, "Strike Selection Mode", group="Calculation Settings",
+  tooltip="Choose whether to calculate metrics for ATM, ITM, OTM, or Both ITM & OTM strikes relative to selected chart option.")
+offsetChoiceInput  = input.enum(OffsetChoice.offset100, "Strike Offset Points", group="Calculation Settings",
+  tooltip="Offset points used to determine ITM / OTM strike levels (e.g. 50, 100, 150, 200).")
+staticBasisInput   = input.enum(StaticBasis.dayOpen, "Static Values Calculation Basis", group="Calculation Settings",
+  tooltip="Basis for Static Intrinsic, Static Time Value, and Static BEP: Day Open, Previous Day Close, or First 5 Min Close.")
 
-// --- BEP Settings ---
-bepCalcBasisInput     = input.enum(CalculationBasis.dayOpen, "Static BEP Basis", group="BEP Settings",
-  tooltip="Choose whether Static BEP is calculated based on Today's 9:15 AM Open, Previous Day Close, or First 5 Min Close.")
-showStaticBEPInput   = input.bool(true, "Show Static BEP Line", group="BEP Settings",
-  tooltip="Static BEP = (CE Ref Price + PE Ref Price) / 2")
-showRealtimeBEPInput = input.bool(true, "Show Realtime Dynamic BEP Line", group="BEP Settings",
-  tooltip="Realtime BEP = (CE Current Price + PE Current Price) / 2")
+// --- Plot Controls: Intrinsic Value ---
+showCE_IV_RT_Input     = input.bool(true, "Show CE Realtime Intrinsic Line", group="Intrinsic Value Plots")
+showPE_IV_RT_Input     = input.bool(true, "Show PE Realtime Intrinsic Line", group="Intrinsic Value Plots")
+showAvg_IV_RT_Input    = input.bool(true, "Show Avg Realtime Intrinsic Line", group="Intrinsic Value Plots")
 
-// --- VWAP Settings ---
-showVWAPInput        = input.bool(true, "Show CE & PE VWAP Lines", group="VWAP Settings",
-  tooltip="Plots intraday Volume Weighted Average Price (VWAP) for both Call (CE) and Put (PE) options.")
+show5D_Static_CE_IV    = input.bool(true, "Show 5-Day Static CE Intrinsic Lines", group="Intrinsic Value Plots")
+show5D_Static_PE_IV    = input.bool(true, "Show 5-Day Static PE Intrinsic Lines", group="Intrinsic Value Plots")
+show5D_Static_Avg_IV   = input.bool(true, "Show 5-Day Static Avg Intrinsic Lines", group="Intrinsic Value Plots")
 
-// --- CM Ultimate MACD Settings ---
-showMACDSignalsInput   = input.bool(true, "Show MACD Buy/Sell Signals & Status", group="CM Ultimate MACD Settings")
-macdTimeframeInput     = input.timeframe("", "MACD Timeframe", group="CM Ultimate MACD Settings")
-macdFastLength         = input.int(12, "Fast Length", minval=1, group="CM Ultimate MACD Settings")
-macdSlowLength         = input.int(26, "Slow Length", minval=1, group="CM Ultimate MACD Settings")
-macdSignalLength       = input.int(9, "Signal Smoothing", minval=1, maxval=999, group="CM Ultimate MACD Settings")
-macdSmaSource          = input.string("EMA", "Oscillator MA Type", options=["SMA", "EMA"], group="CM Ultimate MACD Settings")
-macdSmaSignal          = input.string("EMA", "Signal Line MA Type", options=["SMA", "EMA"], group="CM Ultimate MACD Settings")
+// --- Plot Controls: Time Value (Only Static) ---
+show5D_Static_CE_TV    = input.bool(true, "Show 5-Day Static CE Time Value Lines", group="Time Value Plots (Only Static)")
+show5D_Static_PE_TV    = input.bool(true, "Show 5-Day Static PE Time Value Lines", group="Time Value Plots (Only Static)")
+show5D_Static_Avg_TV   = input.bool(true, "Show 5-Day Static Avg Time Value Lines", group="Time Value Plots (Only Static)")
 
-// --- PDC Line Settings ---
-showPDCInput         = input.bool(true, "Show Selected Strike CE & PE Prev Close Lines", group="PDC Line Settings",
-  tooltip="Plots horizontal lines for the Previous Day Close of both Call (CE) and Put (PE) for the selected strike.")
+// --- Plot Controls: BEP & Candle Overlays ---
+showRealtimeBEPInput   = input.bool(true, "Show Realtime Dynamic BEP Line", group="BEP & Candle Overlay Plots")
+show5D_Static_BEPInput = input.bool(true, "Show 5-Day Static BEP Level Lines", group="BEP & Candle Overlay Plots")
 
-// --- Multi-Strike Table Settings ---
-strikeStepChoice       = input.enum(StrikeStepOption.step50, "7-Strike Table Step Size", group="Multi-Strike Table Settings",
-  tooltip="Select the strike offset step size (+50/-50 or +100/-100) for the 7-strike table.")
-showMultiBEPTableInput = input.bool(true, "Show 7-Strike BEP & Change Table", group="Multi-Strike Table Settings",
-  tooltip="Displays a 7-strike table (3 below, 1 selected, 3 above) showing Static BEP, Day Open, and Points Changed.")
-multiBEPTablePosInput  = input.string("Bottom Right", "Multi-Strike Table Position", options=["Bottom Right", "Bottom Left", "Top Right", "Top Left"], group="Multi-Strike Table Settings")
+showITMCandlesInput    = input.bool(true, "Show ITM Option Candles Overlay", group="BEP & Candle Overlay Plots")
+showOTMCandlesInput    = input.bool(true, "Show OTM Option Candles Overlay", group="BEP & Candle Overlay Plots")
+showOppCandlesInput    = input.bool(true, "Show Opposite Option Candles Overlay", group="BEP & Candle Overlay Plots")
 
-// --- Opposite Candle Overlay Settings ---
-showOppCandlesInput  = input.bool(true, "Show Opposite Option Candles", group="Opposite Candle Overlay",
-  tooltip="Plots real-time opposite option contract candles (e.g. PE candles on CE chart, CE candles on PE chart).")
+showTableInput         = input.bool(true, "Show Summary Dashboard Table", group="Display Controls")
+tableDisplayMode       = input.string("Today Only", "Table Display Mode", options=["Today Only", "5-Day Matrix"], group="Display Controls")
+tablePosInput          = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
+tableTextSizeInput     = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls")
 
-// --- Display Controls ---
-showTableInput       = input.bool(true, "Show Info Dashboard", group="Display Controls")
-showTimeValueInput   = input.bool(true, "Show Time Value", group="Display Controls")
+// ==========================================
+// VALUE FORMATTING & LINE STYLING CONTROLS
+// ==========================================
 
-// --- Styling & Colors ---
-colorIV          = input.color(#FF00FF, "Intrinsic Value Color", group="Styling & Colors")
-colorTimeValue   = input.color(color.yellow, "Time Value Color", group="Styling & Colors")
-colorStaticBEP   = input.color(color.aqua, "Static BEP Line Color", group="Styling & Colors")
-colorRealtimeBEP = input.color(color.orange, "Realtime BEP Line Color", group="Styling & Colors")
+// Realtime Plots Styling
+colorCE_IV        = input.color(#00E676, "CE Realtime Intrinsic Color", group="Realtime Plots Styling")
+widthCE_IV_RT     = input.int(2, "CE Realtime Intrinsic Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
 
-colorCEVWAP      = input.color(#00E676, "CE VWAP Color", group="Styling & Colors")
-colorPEVWAP      = input.color(#FF5252, "PE VWAP Color", group="Styling & Colors")
+colorPE_IV        = input.color(#FF5252, "PE Realtime Intrinsic Color", group="Realtime Plots Styling")
+widthPE_IV_RT     = input.int(2, "PE Realtime Intrinsic Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
 
-colorCEPDC       = input.color(color.new(#00E676, 20), "CE Prev Close Line Color", group="Styling & Colors")
-colorPEPDC       = input.color(color.new(#FF5252, 20), "PE Prev Close Line Color", group="Styling & Colors")
+colorAvg_IV       = input.color(#FF00FF, "Avg Realtime Intrinsic Color", group="Realtime Plots Styling")
+widthAvg_IV_RT    = input.int(2, "Avg Realtime Intrinsic Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
 
-colorOppBull     = input.color(color.new(#2962FF, 40), "Opposite Bullish Body", group="Styling & Colors")
-colorOppBear     = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", group="Styling & Colors")
-colorOppWickBull = input.color(color.new(#2962FF, 60), "Opposite Bullish Wick", group="Styling & Colors")
-colorOppWickBear = input.color(color.new(#FF6D00, 60), "Opposite Bearish Wick", group="Styling & Colors")
+colorRealBEP      = input.color(color.orange, "Realtime BEP Color", group="Realtime Plots Styling")
+widthRealBEP      = input.int(2, "Realtime BEP Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
+
+// 5-Day Static Intrinsic Styling
+colorCE_IV_Static = input.color(#00E676, "CE Static Intrinsic Color", group="5-Day Static Intrinsic Formatting")
+styleCE_IV_Static = input.string("Dashed", "CE Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Intrinsic Formatting")
+widthCE_IV_Static = input.int(1, "CE Static Intrinsic Line Width", minval=1, maxval=4, group="5-Day Static Intrinsic Formatting")
+
+colorPE_IV_Static = input.color(#FF5252, "PE Static Intrinsic Color", group="5-Day Static Intrinsic Formatting")
+stylePE_IV_Static = input.string("Dashed", "PE Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Intrinsic Formatting")
+widthPE_IV_Static = input.int(1, "PE Static Intrinsic Line Width", minval=1, maxval=4, group="5-Day Static Intrinsic Formatting")
+
+colorAvg_IV_Static= input.color(#FF00FF, "Avg Static Intrinsic Color", group="5-Day Static Intrinsic Formatting")
+styleAvg_IV_Static= input.string("Dashed", "Avg Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Intrinsic Formatting")
+widthAvg_IV_Static= input.int(1, "Avg Static Intrinsic Line Width", minval=1, maxval=4, group="5-Day Static Intrinsic Formatting")
+
+// 5-Day Static Time Value Styling
+colorCE_TV_Static = input.color(#76FF03, "CE Static Time Value Color", group="5-Day Static Time Value Formatting")
+styleCE_TV_Static = input.string("Dashed", "CE Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Time Value Formatting")
+widthCE_TV_Static = input.int(1, "CE Static Time Value Line Width", minval=1, maxval=4, group="5-Day Static Time Value Formatting")
+
+colorPE_TV_Static = input.color(#FF6E40, "PE Static Time Value Color", group="5-Day Static Time Value Formatting")
+stylePE_TV_Static = input.string("Dashed", "PE Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Time Value Formatting")
+widthPE_TV_Static = input.int(1, "PE Static Time Value Line Width", minval=1, maxval=4, group="5-Day Static Time Value Formatting")
+
+colorAvg_TV_Static= input.color(#FFD700, "Avg Static Time Value Color", group="5-Day Static Time Value Formatting")
+styleAvg_TV_Static= input.string("Dashed", "Avg Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Time Value Formatting")
+widthAvg_TV_Static= input.int(1, "Avg Static Time Value Line Width", minval=1, maxval=4, group="5-Day Static Time Value Formatting")
+
+// 5-Day Static BEP Styling
+colorStaticBEP    = input.color(color.aqua, "Static BEP Color", group="5-Day Static BEP Formatting")
+styleStaticBEP    = input.string("Dashed", "Static BEP Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static BEP Formatting")
+widthStaticBEP    = input.int(1, "Static BEP Line Width", minval=1, maxval=4, group="5-Day Static BEP Formatting")
+
+// Candle Overlays Formatting
+colorITMBull      = input.color(color.new(#00E676, 50), "ITM Bullish Body", group="Candle Overlays Formatting")
+colorITMBear      = input.color(color.new(#D50000, 50), "ITM Bearish Body", group="Candle Overlays Formatting")
+
+colorOTMBull      = input.color(color.new(#00B0FF, 50), "OTM Bullish Body", group="Candle Overlays Formatting")
+colorOTMBear      = input.color(color.new(#FF9100, 50), "OTM Bearish Body", group="Candle Overlays Formatting")
+
+colorOppBull      = input.color(color.new(#2962FF, 40), "Opposite Bullish Body", group="Candle Overlays Formatting")
+colorOppBear      = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", group="Candle Overlays Formatting")
+
+// ==========================================
+// HELPER FUNCTIONS (GLOBAL SCOPE ONLY)
+// ==========================================
+
+f_is_digit(c) =>
+    str.contains("0123456789", c)
+
+f_add_level(lines_arr, labels_arr, x1, x2, val, lbl_text, col, transparency, l_style_str, l_width) =>
+    if not na(val) and x2 >= x1
+        string p_style = l_style_str == "Dashed" ? line.style_dashed : (l_style_str == "Dotted" ? line.style_dotted : line.style_solid)
+        array.push(lines_arr, line.new(x1, val, x2, val, color=color.new(col, transparency), width=l_width, style=p_style))
+        array.push(labels_arr, label.new(x2, val, lbl_text + ": " + str.tostring(val, "#.##"), color=color.new(col, 85), textcolor=col, style=label.style_label_left, size=size.small))
+
+f_fill_matrix_row(tbl, r_idx, label_str, v0, v1, v2, v3, v4, float v_rt, t_sz) =>
+    float avg5d = (v0 + v1 + v2 + v3 + v4) / 5.0
+    table.cell(tbl, 0, r_idx, label_str, bgcolor=#212121, text_color=color.white, text_size=t_sz)
+    table.cell(tbl, 1, r_idx, str.tostring(v0, "#.##"), bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(tbl, 2, r_idx, str.tostring(v1, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+    table.cell(tbl, 3, r_idx, str.tostring(v2, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(tbl, 4, r_idx, str.tostring(v3, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(tbl, 5, r_idx, str.tostring(v4, "#.##"), bgcolor=color.black, text_color=color.gray, text_size=t_sz)
+    table.cell(tbl, 6, r_idx, str.tostring(avg5d, "#.##"), bgcolor=#006064, text_color=color.aqua, text_size=t_sz)
+    table.cell(tbl, 7, r_idx, na(v_rt) ? "N/A" : str.tostring(v_rt, "#.##"), bgcolor=#F57F17, text_color=color.yellow, text_size=t_sz)
+
+f_fill_today_row(tbl, r_idx, label_str, v0, float v_rt, t_sz) =>
+    table.cell(tbl, 0, r_idx, label_str, bgcolor=#212121, text_color=color.white, text_size=t_sz)
+    table.cell(tbl, 1, r_idx, str.tostring(v0, "#.##"), bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(tbl, 2, r_idx, na(v_rt) ? "N/A" : str.tostring(v_rt, "#.##"), bgcolor=#F57F17, text_color=color.yellow, text_size=t_sz)
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -151,25 +211,6 @@ else
     else if str.match(cleanTicker, "P\\d+$") != ""
         isPut := true
 
-// ----- Construct Opposite Option Symbol -----
-string oppTickerName = cleanTicker
-if isCall
-    if str.endswith(cleanTicker, "CE")
-        oppTickerName := str.substring(cleanTicker, 0, tickerLen - 2) + "PE"
-    else if str.match(cleanTicker, "C\\d+$") != ""
-        string matchCStr = str.match(cleanTicker, "C\\d+$")
-        int matchPos = str.pos(cleanTicker, matchCStr)
-        oppTickerName := str.substring(cleanTicker, 0, matchPos) + "P" + str.substring(matchCStr, 1)
-else if isPut
-    if str.endswith(cleanTicker, "PE")
-        oppTickerName := str.substring(cleanTicker, 0, tickerLen - 2) + "CE"
-    else if str.match(cleanTicker, "P\\d+$") != ""
-        string matchPStr = str.match(cleanTicker, "P\\d+$")
-        int matchPos = str.pos(cleanTicker, matchPStr)
-        oppTickerName := str.substring(cleanTicker, 0, matchPos) + "C" + str.substring(matchPStr, 1)
-
-string oppSymbol = syminfo.prefix + ":" + oppTickerName
-
 // ----- Strike extraction -----
 float detectedStrike = na
 string tickerWithoutCEPE = ""
@@ -188,455 +229,415 @@ else if tickerWithoutCEPE != ""
     string strikeDigits = str.match(tickerWithoutCEPE, "\\d+$")
     detectedStrike := str.tonumber(strikeDigits)
 
-float strikePrice = strikeOverride > 0.0 ? strikeOverride : detectedStrike
+float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : (not na(detectedStrike) ? detectedStrike : 24000.0)
+
+// Universal Fail-Safe Option Ticker Construction
+f_build_option_symbol(target_strike, target_is_ce) =>
+    string st_digits = str.tostring(int(chartStrikePrice))
+    int st_len = str.length(st_digits)
+    
+    if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+        int end_trim = 2
+        string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
+        string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
+        string sfx = target_is_ce ? "CE" : "PE"
+        syminfo.prefix + ":" + pfx + str.tostring(target_strike) + sfx
+    else if str.match(cleanTicker, "[CP]\\d+$") != ""
+        string matchCP = str.match(cleanTicker, "[CP]\\d+$")
+        int matchPos = str.pos(cleanTicker, matchCP)
+        string pfx = str.substring(cleanTicker, 0, matchPos)
+        string cp_letter = target_is_ce ? "C" : "P"
+        syminfo.prefix + ":" + pfx + cp_letter + str.tostring(target_strike)
+    else
+        string rep_ticker = str.replace(cleanTicker, st_digits, str.tostring(target_strike))
+        syminfo.prefix + ":" + rep_ticker
 
 // ==========================================
-// MULTI-STRIKE TICKER CONSTRUCTION (-3 to +3 STRIKES)
+// TARGET STRIKE SELECTION & CANDLE OVERLAYS
 // ==========================================
 
-int stepVal = strikeStepChoice == StrikeStepOption.step50 ? 50 : 100
-string strikeStr = str.tostring(int(strikePrice))
+int rawOffsetPts = offsetChoiceInput == OffsetChoice.offset50 ? 50 : (offsetChoiceInput == OffsetChoice.offset100 ? 100 : (offsetChoiceInput == OffsetChoice.offset150 ? 150 : 200))
+int offsetPts = (strikeModeInput == StrikeMode.atm) ? 0 : rawOffsetPts
+int base_strike = int(chartStrikePrice)
 
-string currentCE_ticker = isCall ? cleanTicker : oppTickerName
-string currentPE_ticker = isCall ? oppTickerName : cleanTicker
+// Resolve ITM & OTM strikes for Call & Put
+int itm_ce_strike = base_strike - rawOffsetPts
+int itm_pe_strike = base_strike + rawOffsetPts
 
-f_build_strike_ticker(string base_ticker, int target_strike) =>
-    str.replace_all(base_ticker, strikeStr, str.tostring(target_strike))
+int otm_ce_strike = base_strike + rawOffsetPts
+int otm_pe_strike = base_strike - rawOffsetPts
 
-int k_p3 = int(strikePrice) + 3 * stepVal
-int k_p2 = int(strikePrice) + 2 * stepVal
-int k_p1 = int(strikePrice) + 1 * stepVal
-int k_0  = int(strikePrice)
-int k_m1 = int(strikePrice) - 1 * stepVal
-int k_m2 = int(strikePrice) - 2 * stepVal
-int k_m3 = int(strikePrice) - 3 * stepVal
+int ce_strike = base_strike
+int pe_strike = base_strike
+
+if strikeModeInput == StrikeMode.itm
+    ce_strike := itm_ce_strike
+    pe_strike := itm_pe_strike
+else if strikeModeInput == StrikeMode.otm
+    ce_strike := otm_ce_strike
+    pe_strike := otm_pe_strike
+else if strikeModeInput == StrikeMode.both
+    ce_strike := itm_ce_strike
+    pe_strike := otm_pe_strike
+
+// --- 1. ITM Candle Overlay ---
+int current_itm_strike = isCall ? itm_ce_strike : itm_pe_strike
+string itm_ticker = f_build_option_symbol(current_itm_strike, isCall)
+[itm_o, itm_h, itm_l, itm_c] = request.security(itm_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+bool itm_is_bull   = nz(itm_c) >= nz(itm_o)
+color itm_body_col = itm_is_bull ? colorITMBull : colorITMBear
+color itm_wick_col = itm_is_bull ? color.new(colorITMBull, 30) : color.new(colorITMBear, 30)
+
+plotcandle(showITMCandlesInput ? itm_o : na,
+           showITMCandlesInput ? itm_h : na,
+           showITMCandlesInput ? itm_l : na,
+           showITMCandlesInput ? itm_c : na,
+           title="ITM Option Candle", color=itm_body_col, wickcolor=itm_wick_col, bordercolor=itm_wick_col)
+
+// --- 2. OTM Candle Overlay ---
+int current_otm_strike = isCall ? otm_ce_strike : otm_pe_strike
+string otm_ticker = f_build_option_symbol(current_otm_strike, isCall)
+[otm_o, otm_h, otm_l, otm_c] = request.security(otm_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+bool otm_is_bull   = nz(otm_c) >= nz(otm_o)
+color otm_body_col = otm_is_bull ? colorOTMBull : colorOTMBear
+color otm_wick_col = otm_is_bull ? color.new(colorOTMBull, 30) : color.new(colorOTMBear, 30)
+
+plotcandle(showOTMCandlesInput ? otm_o : na,
+           showOTMCandlesInput ? otm_h : na,
+           showOTMCandlesInput ? otm_l : na,
+           showOTMCandlesInput ? otm_c : na,
+           title="OTM Option Candle", color=otm_body_col, wickcolor=otm_wick_col, bordercolor=otm_wick_col)
+
+// --- 3. Opposite Option Candle Overlay ---
+string opp_ticker = f_build_option_symbol(base_strike, not isCall)
+[opp_o, opp_h, opp_l, opp_c] = request.security(opp_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+bool opp_is_bull   = nz(opp_c) >= nz(opp_o)
+color opp_body_col = opp_is_bull ? colorOppBull : colorOppBear
+color opp_wick_col = opp_is_bull ? color.new(colorOppBull, 30) : color.new(colorOppBear, 30)
+
+plotcandle(showOppCandlesInput ? opp_o : na,
+           showOppCandlesInput ? opp_h : na,
+           showOppCandlesInput ? opp_l : na,
+           showOppCandlesInput ? opp_c : na,
+           title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
 
 // ==========================================
-// SPOT TICKER RESOLUTION
+// TRACK DAILY BAR BOUNDARIES FOR LAST 5 DAYS
+// ==========================================
+
+var int[] day_start_bars = array.new_int()
+var int[] day_end_bars   = array.new_int()
+
+bool is_chart_new_day = ta.change(time("D")) != 0 or barstate.isfirst
+if is_chart_new_day
+    if array.size(day_start_bars) > 0
+        array.push(day_end_bars, bar_index - 1)
+    array.push(day_start_bars, bar_index)
+
+if barstate.islast
+    if array.size(day_end_bars) < array.size(day_start_bars)
+        array.push(day_end_bars, bar_index + 15)
+
+// ==========================================
+// 5-DAY HISTORICAL DATA FETCHING & PRICE RESOLUTION
 // ==========================================
 
 string spotTicker = ""
 if str.length(spotTickerOverride) > 0
     spotTicker := spotTickerOverride
 else
-    switch actualUnderlying
-        UnderlyingAsset.banknifty => spotTicker := "NSE:BANKNIFTY"
-        UnderlyingAsset.nifty     => spotTicker := "NSE:NIFTY"
-        UnderlyingAsset.crudeoil  => spotTicker := "MCX:CRUDEOIL1!"
-        UnderlyingAsset.gold      => spotTicker := "MCX:GOLD1!"
-        UnderlyingAsset.stock     =>
-            string rootGuess = str.match(cleanTicker, "^[A-Z&]+")
-            if rootGuess != ""
-                spotTicker := syminfo.prefix + ":" + rootGuess
-            else
-                spotTicker := syminfo.prefix + ":" + cleanTicker
-
-// ==========================================
-// DATA FETCHING (SPOT, 7 OPTION STRIKES & VWAP)
-// ==========================================
-
-// Helper function to extract 5m reference tuple and current close in ONE security call
-f_get_opt_all_data() =>
-    var float d_open = na
-    var float p_close = na
-    var float f5_close = na
-    float d_change = ta.change(time("D"))
-    bool is_new_day = d_change != 0 or na(d_change)
-    if is_new_day
-        p_close := close[1]
-        d_open := open
-        f5_close := close
-    [nz(d_open, open), nz(p_close, close[1]), nz(f5_close, close), close]
-
-get_spot_ref_data() =>
-    var float daily_open_915 = na
-    var float prev_close = na
-    var float f5_close = na
-    float d_change = ta.change(time("D"))
-    bool is_new_day = d_change != 0 or na(d_change)
-    if is_new_day
-        prev_close := close[1]
-        daily_open_915 := open
-        f5_close := close
-    [nz(daily_open_915, open), nz(prev_close, close[1]), nz(f5_close, close)]
-
-// 1. Fetch Spot 5m reference tuple
-[spotDayOpen, spotPrevClose, spotFirst5MinClose] = request.security(spotTicker, "5", get_spot_ref_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-// 2. Fetch 7 strikes CE and PE data (+3 to -3)
-[ce_o_p3, ce_p_p3, ce_f5_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentCE_ticker, k_p3), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p3, pe_p_p3, pe_f5_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentPE_ticker, k_p3), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_p2, ce_p_p2, ce_f5_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentCE_ticker, k_p2), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p2, pe_p_p2, pe_f5_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentPE_ticker, k_p2), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_p1, ce_p_p1, ce_f5_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentCE_ticker, k_p1), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p1, pe_p_p1, pe_f5_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentPE_ticker, k_p1), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_0,  ce_p_0,  ce_f5_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + currentCE_ticker, "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_0,  pe_p_0,  pe_f5_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + currentPE_ticker, "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_m1, ce_p_m1, ce_f5_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentCE_ticker, k_m1), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m1, pe_p_m1, pe_f5_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentPE_ticker, k_m1), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_m2, ce_p_m2, ce_f5_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentCE_ticker, k_m2), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m2, pe_p_m2, pe_f5_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentPE_ticker, k_m2), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_m3, ce_p_m3, ce_f5_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentCE_ticker, k_m3), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m3, pe_p_m3, pe_f5_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_strike_ticker(currentPE_ticker, k_m3), "5", f_get_opt_all_data(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-// 3. Fetch Opposite Option real-time OHLC for candle overlay & VWAP
-string requestTimeframe = timeframe.isintraday ? timeframe.period : "D"
-[oppCurOpen, oppCurHigh, oppCurLow, oppCurClose] = request.security(oppSymbol, requestTimeframe, [open, high, low, close], ignore_invalid_symbol=true)
-float oppVWAPVal = request.security(oppSymbol, requestTimeframe, ta.vwap, ignore_invalid_symbol=true)
-
-// Current Chart Option VWAP
-float chartVWAPVal = ta.vwap
-
-// Assign CE vs PE VWAP
-float ceVWAP = isCall ? chartVWAPVal : oppVWAPVal
-float peVWAP = isCall ? oppVWAPVal   : chartVWAPVal
-
-// Select Reference Prices based on settings
-// --- Spot Ref Price for Intrinsic & Time Value ---
-float spotIvTvRefPrice = switch ivTvCalcBasisInput
-    CalculationBasis.dayOpen   => spotDayOpen
-    CalculationBasis.prevClose => spotPrevClose
-    CalculationBasis.first5Min => spotFirst5MinClose
-
-// Helper to select reference price for options based on BEP basis
-f_select_bep_ref(float d_open, float p_close, float f5_close) =>
-    switch bepCalcBasisInput
-        CalculationBasis.dayOpen   => d_open
-        CalculationBasis.prevClose => p_close
-        CalculationBasis.first5Min => f5_close
-
-// Option Ref Prices for Intrinsic & Time Value
-float optionDayOpen         = isCall ? ce_o_0 : pe_o_0
-float optionPrevClose       = isCall ? ce_p_0 : pe_p_0
-float optionFirst5MinClose  = isCall ? ce_f5_0 : pe_f5_0
-float oppDayOpen            = isCall ? pe_o_0 : ce_o_0
-float oppPrevClose          = isCall ? pe_p_0 : ce_p_0
-float oppFirst5MinClose     = isCall ? pe_f5_0 : ce_f5_0
-
-float chartOptIvTvRefPrice = switch ivTvCalcBasisInput
-    CalculationBasis.dayOpen   => optionDayOpen
-    CalculationBasis.prevClose => optionPrevClose
-    CalculationBasis.first5Min => optionFirst5MinClose
-
-float oppOptIvTvRefPrice = switch ivTvCalcBasisInput
-    CalculationBasis.dayOpen   => oppDayOpen
-    CalculationBasis.prevClose => oppPrevClose
-    CalculationBasis.first5Min => oppFirst5MinClose
-
-float ceIvTvRefPrice = isCall ? chartOptIvTvRefPrice : oppOptIvTvRefPrice
-float peIvTvRefPrice = isCall ? oppOptIvTvRefPrice   : chartOptIvTvRefPrice
-
-// Current Realtime Close Prices
-float ceCurClose = isCall ? close       : oppCurClose
-float peCurClose = isCall ? oppCurClose : close
-
-// ==========================================
-// BEP & INTRINSIC/TIME VALUE CALCULATIONS
-// ==========================================
-
-// Static BEP for all 7 strikes (-3 to +3)
-float static_bep_p3 = (f_select_bep_ref(ce_o_p3, ce_p_p3, ce_f5_p3) + f_select_bep_ref(pe_o_p3, pe_p_p3, pe_f5_p3)) / 2.0
-float static_bep_p2 = (f_select_bep_ref(ce_o_p2, ce_p_p2, ce_f5_p2) + f_select_bep_ref(pe_o_p2, pe_p_p2, pe_f5_p2)) / 2.0
-float static_bep_p1 = (f_select_bep_ref(ce_o_p1, ce_p_p1, ce_f5_p1) + f_select_bep_ref(pe_o_p1, pe_p_p1, pe_f5_p1)) / 2.0
-float static_bep_0  = (f_select_bep_ref(ce_o_0,  ce_p_0,  ce_f5_0)  + f_select_bep_ref(pe_o_0,  pe_p_0,  pe_f5_0))  / 2.0
-float static_bep_m1 = (f_select_bep_ref(ce_o_m1, ce_p_m1, ce_f5_m1) + f_select_bep_ref(pe_o_m1, pe_p_m1, pe_f5_m1)) / 2.0
-float static_bep_m2 = (f_select_bep_ref(ce_o_m2, ce_p_m2, ce_f5_m2) + f_select_bep_ref(pe_o_m2, pe_p_m2, pe_f5_m2)) / 2.0
-float static_bep_m3 = (f_select_bep_ref(ce_o_m3, ce_p_m3, ce_f5_m3) + f_select_bep_ref(pe_o_m3, pe_p_m3, pe_f5_m3)) / 2.0
-
-float staticBEP = static_bep_0
-
-// Realtime Dynamic BEP Value for selected strike
-float realtimeBEP = (ce_c_0 + pe_c_0) / 2.0
-
-// Intrinsic & Time Value Calculations
-// --- Actual Single Option ---
-float rawIntrinsicActual = isCall ? (spotIvTvRefPrice - strikePrice) : (strikePrice - spotIvTvRefPrice)
-float actualIntrinsic    = math.max(minRangeInput, math.min(maxRangeInput, rawIntrinsicActual))
-float actualTimeValue    = timeValueFormulaInput == TimeValueFormula.standard ? (chartOptIvTvRefPrice - actualIntrinsic) : (strikePrice - actualIntrinsic)
-
-// --- Average CE + PE ---
-float ceRawIntrinsic  = math.max(0.0, spotIvTvRefPrice - strikePrice)
-float peRawIntrinsic  = math.max(0.0, strikePrice - spotIvTvRefPrice)
-float avgIntrinsicRaw = (ceRawIntrinsic + peRawIntrinsic) / 2.0
-float avgIntrinsic    = math.max(minRangeInput, math.min(maxRangeInput, avgIntrinsicRaw))
-
-float ceTimeVal       = timeValueFormulaInput == TimeValueFormula.standard ? (ceIvTvRefPrice - ceRawIntrinsic) : (strikePrice - ceRawIntrinsic)
-float peTimeVal       = timeValueFormulaInput == TimeValueFormula.standard ? (peIvTvRefPrice - peRawIntrinsic) : (strikePrice - peRawIntrinsic)
-float avgTimeValue    = (ceTimeVal + peTimeVal) / 2.0
-
-// Final selected metric based on useAverageValuesInput
-float finalIntrinsic = useAverageValuesInput ? avgIntrinsic : actualIntrinsic
-float finalTimeValue = useAverageValuesInput ? avgTimeValue : actualTimeValue
-
-// ==========================================
-// CM ULTIMATE MACD V2.1 CALCULATIONS & DUAL-LINE SIGNALS
-// ==========================================
-
-f_calc_ma(float src_series, int len, string ma_type) =>
-    ma_type == "SMA" ? ta.sma(src_series, len) : ta.ema(src_series, len)
-
-f_cm_macd_calc(int fast_l, int slow_l, int sig_l, string ma_src, string ma_sig) =>
-    float f_ma = f_calc_ma(close, fast_l, ma_src)
-    float s_ma = f_calc_ma(close, slow_l, ma_src)
-    float m_line = f_ma - s_ma
-    float sig_line = f_calc_ma(m_line, sig_l, ma_sig)
-    float h_line = m_line - sig_line
-    [m_line, sig_line, h_line]
-
-string reqMacdTf = str.length(macdTimeframeInput) > 0 ? macdTimeframeInput : requestTimeframe
-[cm_macd, cm_signal, cm_hist] = request.security(syminfo.tickerid, reqMacdTf, f_cm_macd_calc(macdFastLength, macdSlowLength, macdSignalLength, macdSmaSource, macdSmaSignal), ignore_invalid_symbol=true)
-
-// Dual-Line Signal Logic:
-// 1. Both lines above 0
-bool bothAboveZero     = cm_macd > 0 and cm_signal > 0
-bool bothBelowZero     = cm_macd < 0 and cm_signal < 0
-
-bool prevBothAboveZero = cm_macd[1] > 0 and cm_signal[1] > 0
-bool prevBothBelowZero = cm_macd[1] < 0 and cm_signal[1] < 0
-
-// STRONG BUY: MACD crosses ABOVE Signal line while BOTH lines are above 0
-bool macdStrongBuySignal = ta.crossover(cm_macd, cm_signal) and bothAboveZero
-
-// BUY: Both lines crossed above 0 line
-bool macdBuySignal       = bothAboveZero and not prevBothAboveZero and not macdStrongBuySignal
-
-// STRONG SELL: MACD crosses BELOW Signal line while BOTH lines are below 0
-bool macdStrongSellSignal = ta.crossunder(cm_macd, cm_signal) and bothBelowZero
-
-// SELL: Both lines crossed below 0 line
-bool macdSellSignal       = bothBelowZero and not prevBothBelowZero and not macdStrongSellSignal
-
-var string macdRecommendation = "NEUTRAL"
-if macdStrongBuySignal
-    macdRecommendation := "STRONG BUY"
-else if macdBuySignal
-    macdRecommendation := "BUY"
-else if macdStrongSellSignal
-    macdRecommendation := "STRONG SELL"
-else if macdSellSignal
-    macdRecommendation := "SELL"
-
-// ==========================================
-// PLOTS & VISUALIZATION
-// ==========================================
-
-// --- Opposite Option Candles Overlay ---
-bool oppIsBull    = nz(oppCurClose) >= nz(oppCurOpen)
-color oppBodyCol  = oppIsBull ? colorOppBull : colorOppBear
-color oppWickCol  = oppIsBull ? colorOppWickBull : colorOppWickBear
-
-plotcandle(showOppCandlesInput ? oppCurOpen : na,
-           showOppCandlesInput ? oppCurHigh : na,
-           showOppCandlesInput ? oppCurLow : na,
-           showOppCandlesInput ? oppCurClose : na,
-           title="Opposite Option Candle", color=oppBodyCol, wickcolor=oppWickCol, bordercolor=oppWickCol)
-
-// --- CE & PE VWAP Lines ---
-plot(showVWAPInput ? ceVWAP : na, title="CE VWAP", color=colorCEVWAP, linewidth=1, style=plot.style_line)
-plot(showVWAPInput ? peVWAP : na, title="PE VWAP", color=colorPEVWAP, linewidth=1, style=plot.style_line)
-
-// --- Selected Strike CE & PE Previous Day Close Lines ---
-plot(showPDCInput ? ce_p_0 : na, title="CE Prev Close", color=colorCEPDC, linewidth=1, style=plot.style_stepline)
-plot(showPDCInput ? pe_p_0 : na, title="PE Prev Close", color=colorPEPDC, linewidth=1, style=plot.style_stepline)
-
-// --- Selected Strike BEP Lines ---
-plot(showStaticBEPInput ? staticBEP : na, title="Static BEP", color=colorStaticBEP, linewidth=2, style=plot.style_stepline)
-plot(showRealtimeBEPInput ? realtimeBEP : na, title="Realtime Dynamic BEP", color=colorRealtimeBEP, linewidth=2)
-
-// --- Intrinsic Value & Time Value Plots ---
-plot(finalIntrinsic, title="Intrinsic Value", color=colorIV, linewidth=2, style=plot.style_stepline)
-plot(showTimeValueInput ? finalTimeValue : na, title="Time Value", color=colorTimeValue, linewidth=2, style=plot.style_stepline)
-
-// --- MACD Recommendation Shapes ---
-plotshape(showMACDSignalsInput and macdStrongBuySignal, title="MACD Strong Buy Signal", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.small, text="STR BUY", textcolor=color.white)
-plotshape(showMACDSignalsInput and macdBuySignal,       title="MACD Buy Signal",        style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, text="BUY", textcolor=color.white)
-
-plotshape(showMACDSignalsInput and macdStrongSellSignal, title="MACD Strong Sell Signal", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.small, text="STR SELL", textcolor=color.white)
-plotshape(showMACDSignalsInput and macdSellSignal,       title="MACD Sell Signal",        style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small, text="SELL", textcolor=color.white)
-
-// ==========================================
-// LABELS, DASHBOARD & WARNINGS
-// ==========================================
-
-string underlyingName = switch actualUnderlying
-    UnderlyingAsset.banknifty => "BANKNIFTY"
-    UnderlyingAsset.nifty     => "NIFTY"
-    UnderlyingAsset.crudeoil  => "CRUDEOIL"
-    UnderlyingAsset.gold      => "GOLD"
-    UnderlyingAsset.stock     => "STOCK"
-    => "Unknown"
-
-var label warningLabel = na
-if barstate.islast
-    bool needSpotOverride = actualUnderlying == UnderlyingAsset.stock and str.length(spotTickerOverride) == 0
-    if na(strikePrice) or strikePrice <= 0.0
-        msg = "Strike not found. Set Override in settings."
-        if na(warningLabel)
-            warningLabel := label.new(bar_index, close, text=msg, color=color.red, textcolor=color.white, style=label.style_label_lower_right)
-        else
-            label.set_xy(warningLabel, bar_index, close)
-            label.set_text(warningLabel, msg)
-    else if needSpotOverride
-        msg = "Stock option: set 'Spot Symbol Override' (e.g. NSE:RELIANCE) in settings."
-        if na(warningLabel)
-            warningLabel := label.new(bar_index, close, text=msg, color=color.orange, textcolor=color.white, style=label.style_label_lower_right)
-        else
-            label.set_xy(warningLabel, bar_index, close)
-            label.set_text(warningLabel, msg)
+    if actualUnderlying == UnderlyingAsset.banknifty
+        spotTicker := "NSE:BANKNIFTY"
+    else if actualUnderlying == UnderlyingAsset.nifty
+        spotTicker := "NSE:NIFTY"
+    else if actualUnderlying == UnderlyingAsset.crudeoil
+        spotTicker := "MCX:CRUDEOIL1!"
+    else if actualUnderlying == UnderlyingAsset.gold
+        spotTicker := "MCX:GOLD1!"
     else
-        if not na(warningLabel)
-            label.delete(warningLabel)
-            warningLabel := na
+        string rootGuess = str.match(cleanTicker, "^[A-Z&]+")
+        spotTicker := syminfo.prefix + ":" + (rootGuess != "" ? rootGuess : cleanTicker)
 
-// 1. Dashboard Summary Table (Top Right)
-var table infoTable = table.new(position.top_right, 2, 9, bgcolor=color.new(color.black, 30), border_color=color.new(color.gray, 50), border_width=1)
+string ce_ticker = f_build_option_symbol(ce_strike, true)
+string pe_ticker = f_build_option_symbol(pe_strike, false)
 
-if barstate.islast and showTableInput
-    table.cell(infoTable, 0, 0, "Metric",     bgcolor=color.new(color.gray, 20), text_color=color.white,  text_size=size.small)
-    table.cell(infoTable, 1, 0, "Value",      bgcolor=color.new(color.gray, 20), text_color=color.white,  text_size=size.small)
+// Fetch 5-Day Timestamps for Dates Header
+[d0_t, d1_t, d2_t, d3_t, d4_t] = request.security(spotTicker, "D", [time[0], time[1], time[2], time[3], time[4]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-    table.cell(infoTable, 0, 1, "Underlying", text_color=color.silver, text_size=size.small)
-    table.cell(infoTable, 1, 1, underlyingName, text_color=color.white, text_size=size.small)
+string date0_str = na(d0_t) ? "Today" : str.format("{0,date,dd-MMM}", d0_t)
+string date1_str = na(d1_t) ? "T-1"   : str.format("{0,date,dd-MMM}", d1_t)
+string date2_str = na(d2_t) ? "T-2"   : str.format("{0,date,dd-MMM}", d2_t)
+string date3_str = na(d3_t) ? "T-3"   : str.format("{0,date,dd-MMM}", d3_t)
+string date4_str = na(d4_t) ? "T-4"   : str.format("{0,date,dd-MMM}", d4_t)
 
-    string spotLbl = switch ivTvCalcBasisInput
-        CalculationBasis.dayOpen   => "Spot (Open)"
-        CalculationBasis.prevClose => "Spot (PDC)"
-        CalculationBasis.first5Min => "Spot (5m)"
-    table.cell(infoTable, 0, 2, spotLbl,       text_color=color.silver, text_size=size.small)
-    table.cell(infoTable, 1, 2, na(spotIvTvRefPrice) ? "N/A" : str.tostring(spotIvTvRefPrice, "#.##"), text_color=color.white, text_size=size.small)
+// Fetch 5-Day Reference Series based on staticBasisInput
+f_get_5d_series() =>
+    float p0 = staticBasisInput == StaticBasis.prevClose ? close[1] : (staticBasisInput == StaticBasis.first5Min ? open[0] : open[0])
+    float p1 = staticBasisInput == StaticBasis.prevClose ? close[2] : (staticBasisInput == StaticBasis.first5Min ? open[1] : open[1])
+    float p2 = staticBasisInput == StaticBasis.prevClose ? close[3] : (staticBasisInput == StaticBasis.first5Min ? open[2] : open[2])
+    float p3 = staticBasisInput == StaticBasis.prevClose ? close[4] : (staticBasisInput == StaticBasis.first5Min ? open[3] : open[3])
+    float p4 = staticBasisInput == StaticBasis.prevClose ? close[5] : (staticBasisInput == StaticBasis.first5Min ? open[4] : open[4])
+    [p0, p1, p2, p3, p4]
 
-    string typeStr     = isCall ? "CE" : isPut ? "PE" : "Unknown"
-    string detailsText = na(strikePrice) ? "N/A" : (str.tostring(strikePrice, "#") + " " + typeStr)
-    table.cell(infoTable, 0, 3, "Strike",     text_color=color.silver, text_size=size.small)
-    table.cell(infoTable, 1, 3, detailsText,  text_color=color.white,  text_size=size.small)
+[spot_r0, spot_r1, spot_r2, spot_r3, spot_r4] = request.security(spotTicker, "D", f_get_5d_series(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_r0, ce_r1, ce_r2, ce_r3, ce_r4]           = request.security(ce_ticker, "D", f_get_5d_series(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_r0, pe_r1, pe_r2, pe_r3, pe_r4]           = request.security(pe_ticker, "D", f_get_5d_series(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-    string staticBEPLbl = switch bepCalcBasisInput
-        CalculationBasis.dayOpen   => "Static BEP"
-        CalculationBasis.prevClose => "Static BEP (PDC)"
-        CalculationBasis.first5Min => "Static BEP (5m)"
-    table.cell(infoTable, 0, 4, staticBEPLbl, text_color=color.silver, text_size=size.small)
-    table.cell(infoTable, 1, 4, na(staticBEP) ? "N/A" : str.tostring(staticBEP, "#.##"), bgcolor=color.new(color.aqua, 80), text_color=color.aqua, text_size=size.small)
+// Fetch Live Realtime LTP
+spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
+ce_ltp   = request.security(ce_ticker, timeframe.period, close, ignore_invalid_symbol=true)
+pe_ltp   = request.security(pe_ticker, timeframe.period, close, ignore_invalid_symbol=true)
 
-    table.cell(infoTable, 0, 5, "Realtime BEP", text_color=color.silver, text_size=size.small)
-    table.cell(infoTable, 1, 5, na(realtimeBEP) ? "N/A" : str.tostring(realtimeBEP, "#.##"), bgcolor=color.new(color.orange, 80), text_color=color.orange, text_size=size.small)
+spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 
-    string ivLbl = useAverageValuesInput ? "Intrinsic (Avg)" : "Intrinsic"
-    table.cell(infoTable, 0, 6, ivLbl, text_color=color.silver, text_size=size.small)
-    table.cell(infoTable, 1, 6, na(finalIntrinsic) ? "N/A" : str.tostring(finalIntrinsic, "#.##"), bgcolor=color.new(#FF00FF, 80), text_color=#FF00FF, text_size=size.small)
+// ==========================================
+// 1. 5-DAY INTRINSIC VALUE CALCULATIONS
+// ==========================================
 
-    string tvLbl = useAverageValuesInput ? "Time Val (Avg)" : "Time Val"
-    table.cell(infoTable, 0, 7, tvLbl, text_color=color.silver, text_size=size.small)
-    table.cell(infoTable, 1, 7, na(finalTimeValue) ? "N/A" : str.tostring(finalTimeValue, "#.##"), bgcolor=color.new(color.yellow, 80), text_color=color.yellow, text_size=size.small)
+// Realtime Intrinsic Value (Live)
+float ce_iv_rt  = math.max(0.0, spot_ltp - ce_strike)
+float pe_iv_rt  = math.max(0.0, pe_strike - spot_ltp)
+float avg_iv_rt = (ce_iv_rt + pe_iv_rt) / 2.0
 
-    color macdBg = switch macdRecommendation
-        "STRONG BUY"  => color.new(#00C853, 30)
-        "BUY"         => color.new(color.green, 70)
-        "STRONG SELL" => color.new(#D50000, 30)
-        "SELL"        => color.new(color.red, 70)
-        => color.new(color.gray, 70)
+// 5-Day Static Intrinsic Values (Day 0 to Day 4)
+float ce_iv_d0 = math.max(0.0, spot_r0 - ce_strike)
+float pe_iv_d0 = math.max(0.0, pe_strike - spot_r0)
+float avg_iv_d0 = (ce_iv_d0 + pe_iv_d0) / 2.0
 
-    table.cell(infoTable, 0, 8, "MACD Signal", text_color=color.silver, text_size=size.small)
-    table.cell(infoTable, 1, 8, macdRecommendation, bgcolor=macdBg, text_color=color.white, text_size=size.small)
+float ce_iv_d1 = math.max(0.0, spot_r1 - ce_strike)
+float pe_iv_d1 = math.max(0.0, pe_strike - spot_r1)
+float avg_iv_d1 = (ce_iv_d1 + pe_iv_d1) / 2.0
 
+float ce_iv_d2 = math.max(0.0, spot_r2 - ce_strike)
+float pe_iv_d2 = math.max(0.0, pe_strike - spot_r2)
+float avg_iv_d2 = (ce_iv_d2 + pe_iv_d2) / 2.0
 
-// 2. Multi-Strike BEP & Change Table (7 Strikes: -3 to +3)
-f_get_multi_table_pos(string pos_str) =>
-    switch pos_str
-        "Top Right"    => position.top_right
-        "Top Left"     => position.top_left
-        "Bottom Left"  => position.bottom_left
-        => position.bottom_right
+float ce_iv_d3 = math.max(0.0, spot_r3 - ce_strike)
+float pe_iv_d3 = math.max(0.0, pe_strike - spot_r3)
+float avg_iv_d3 = (ce_iv_d3 + pe_iv_d3) / 2.0
 
-var table multiTable = table.new(f_get_multi_table_pos(multiBEPTablePosInput), 6, 8, bgcolor=color.new(color.black, 20), border_color=color.new(color.gray, 50), border_width=1)
+float ce_iv_d4 = math.max(0.0, spot_r4 - ce_strike)
+float pe_iv_d4 = math.max(0.0, pe_strike - spot_r4)
+float avg_iv_d4 = (ce_iv_d4 + pe_iv_d4) / 2.0
 
-// Calculate Nearest BEP to Current Chart Price
-float diff_p3 = math.abs(close - static_bep_p3)
-float diff_p2 = math.abs(close - static_bep_p2)
-float diff_p1 = math.abs(close - static_bep_p1)
-float diff_0  = math.abs(close - static_bep_0)
-float diff_m1 = math.abs(close - static_bep_m1)
-float diff_m2 = math.abs(close - static_bep_m2)
-float diff_m3 = math.abs(close - static_bep_m3)
+// ==========================================
+// 2. 5-DAY TIME VALUE CALCULATIONS (ONLY STATIC)
+// ==========================================
 
-float minBEPDiff = math.min(diff_p3, math.min(diff_p2, math.min(diff_p1, math.min(diff_0, math.min(diff_m1, math.min(diff_m2, diff_m3))))))
+float ce_tv_d0 = math.max(0.0, ce_r0 - ce_iv_d0)
+float pe_tv_d0 = math.max(0.0, pe_r0 - pe_iv_d0)
+float avg_tv_d0 = (ce_tv_d0 + pe_tv_d0) / 2.0
 
-f_fill_strike_row(table tbl, int r, string st_name, float bep_val, bool is_near, float ce_op, float ce_cg, float pe_op, float pe_cg, bool is_sel) =>
-    color st_bg = is_sel ? color.new(color.gray, 40) : color.new(color.black, 30)
-    color st_tc = is_sel ? color.yellow : color.white
-    table.cell(tbl, 0, r, st_name, bgcolor=st_bg, text_color=st_tc, text_size=size.small)
+float ce_tv_d1 = math.max(0.0, ce_r1 - ce_iv_d1)
+float pe_tv_d1 = math.max(0.0, pe_r1 - pe_iv_d1)
+float avg_tv_d1 = (ce_tv_d1 + pe_tv_d1) / 2.0
 
-    color bep_bg = is_near ? color.new(#FFEE58, 10) : color.new(color.black, 30)
-    color bep_tc = is_near ? color.black : color.aqua
-    table.cell(tbl, 1, r, na(bep_val) ? "N/A" : str.tostring(bep_val, "#.##"), bgcolor=bep_bg, text_color=bep_tc, text_size=size.small)
+float ce_tv_d2 = math.max(0.0, ce_r2 - ce_iv_d2)
+float pe_tv_d2 = math.max(0.0, pe_r2 - pe_iv_d2)
+float avg_tv_d2 = (ce_tv_d2 + pe_tv_d2) / 2.0
 
-    table.cell(tbl, 2, r, na(ce_op) ? "N/A" : str.tostring(ce_op, "#.##"), bgcolor=color.new(color.black, 30), text_color=color.white, text_size=size.small)
+float ce_tv_d3 = math.max(0.0, ce_r3 - ce_iv_d3)
+float pe_tv_d3 = math.max(0.0, pe_r3 - pe_iv_d3)
+float avg_tv_d3 = (ce_tv_d3 + pe_tv_d3) / 2.0
 
-    string ce_cg_str = na(ce_cg) ? "N/A" : ((ce_cg >= 0 ? "+" : "") + str.tostring(ce_cg, "#.##"))
-    color ce_cg_bg   = na(ce_cg) ? color.new(color.black, 30) : (ce_cg > 0 ? color.new(#00C853, 75) : (ce_cg < 0 ? color.new(#D50000, 75) : color.new(color.black, 30)))
-    color ce_cg_tc   = na(ce_cg) ? color.silver : color.white
-    table.cell(tbl, 3, r, ce_cg_str, bgcolor=ce_cg_bg, text_color=ce_cg_tc, text_size=size.small)
+float ce_tv_d4 = math.max(0.0, ce_r4 - ce_iv_d4)
+float pe_tv_d4 = math.max(0.0, pe_r4 - pe_iv_d4)
+float avg_tv_d4 = (ce_tv_d4 + pe_tv_d4) / 2.0
 
-    table.cell(tbl, 4, r, na(pe_op) ? "N/A" : str.tostring(pe_op, "#.##"), bgcolor=color.new(color.black, 30), text_color=color.white, text_size=size.small)
+// ==========================================
+// 3. 5-DAY BEP CALCULATIONS: (CE + PE) / 2.0
+// ==========================================
 
-    string pe_cg_str = na(pe_cg) ? "N/A" : ((pe_cg >= 0 ? "+" : "") + str.tostring(pe_cg, "#.##"))
-    color pe_cg_bg   = na(pe_cg) ? color.new(color.black, 30) : (pe_cg > 0 ? color.new(#00C853, 75) : (pe_cg < 0 ? color.new(#D50000, 75) : color.new(color.black, 30)))
-    color pe_cg_tc   = na(pe_cg) ? color.silver : color.white
-    table.cell(tbl, 5, r, pe_cg_str, bgcolor=pe_cg_bg, text_color=pe_cg_tc, text_size=size.small)
+float bep_stat_d0 = (ce_r0 + pe_r0) / 2.0
+float bep_stat_d1 = (ce_r1 + pe_r1) / 2.0
+float bep_stat_d2 = (ce_r2 + pe_r2) / 2.0
+float bep_stat_d3 = (ce_r3 + pe_r3) / 2.0
+float bep_stat_d4 = (ce_r4 + pe_r4) / 2.0
 
-if barstate.islast and showMultiBEPTableInput
-    // Row 0: Column Headers
-    table.cell(multiTable, 0, 0, "Strike",     bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
-    table.cell(multiTable, 1, 0, "Static BEP", bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
-    table.cell(multiTable, 2, 0, "CE Open",    bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
-    table.cell(multiTable, 3, 0, "CE Chg",     bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
-    table.cell(multiTable, 4, 0, "PE Open",    bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
-    table.cell(multiTable, 5, 0, "PE Chg",     bgcolor=color.new(color.gray, 30), text_color=color.white, text_size=size.small)
+float bep_realtime = (ce_ltp + pe_ltp) / 2.0
 
-    // Calculate Points Changed from Day Open
-    float ce_cg_p3 = ce_c_p3 - ce_o_p3
-    float pe_cg_p3 = pe_c_p3 - pe_o_p3
+// ==========================================
+// PLOTTING METRICS ON CHART
+// ==========================================
 
-    float ce_cg_p2 = ce_c_p2 - ce_o_p2
-    float pe_cg_p2 = pe_c_p2 - pe_o_p2
+// --- Realtime Intrinsic Value Plots ---
+plot(showCE_IV_RT_Input  ? ce_iv_rt  : na, "CE Realtime Intrinsic", color=colorCE_IV, linewidth=widthCE_IV_RT)
+plot(showPE_IV_RT_Input  ? pe_iv_rt  : na, "PE Realtime Intrinsic", color=colorPE_IV, linewidth=widthPE_IV_RT)
+plot(showAvg_IV_RT_Input ? avg_iv_rt : na, "Avg Realtime Intrinsic", color=colorAvg_IV, linewidth=widthAvg_IV_RT)
 
-    float ce_cg_p1 = ce_c_p1 - ce_o_p1
-    float pe_cg_p1 = pe_c_p1 - pe_o_p1
+// --- Realtime BEP Plot ---
+plot(showRealtimeBEPInput ? bep_realtime : na, "Realtime Dynamic BEP", color=colorRealBEP, linewidth=widthRealBEP)
 
-    float ce_cg_0  = ce_c_0  - ce_o_0
-    float pe_cg_0  = pe_c_0  - pe_o_0
+// ==========================================
+// PLOTTING 5-DAY STATIC LEVEL LINES & LABELS (STRICTLY ON THAT EXACT DAY)
+// ==========================================
 
-    float ce_cg_m1 = ce_c_m1 - ce_o_m1
-    float pe_cg_m1 = pe_c_m1 - pe_o_m1
+var line[] static_lines  = array.new_line()
+var label[] static_labels = array.new_label()
 
-    float ce_cg_m2 = ce_c_m2 - ce_o_m2
-    float pe_cg_m2 = pe_c_m2 - pe_o_m2
+if barstate.islast
+    for l in static_lines
+        line.delete(l)
+    array.clear(static_lines)
+    
+    for lb in static_labels
+        label.delete(lb)
+    array.clear(static_labels)
 
-    float ce_cg_m3 = ce_c_m3 - ce_o_m3
-    float pe_cg_m3 = pe_c_m3 - pe_o_m3
+    int total_days = array.size(day_start_bars)
+    
+    int idx0 = total_days - 1
+    int x1_0 = idx0 >= 0 ? array.get(day_start_bars, idx0) : bar_index
+    int x2_0 = bar_index + 15
 
-    // Row 1: +3 Strike
-    f_fill_strike_row(multiTable, 1, str.tostring(k_p3), static_bep_p3, diff_p3 == minBEPDiff, ce_o_p3, ce_cg_p3, pe_o_p3, pe_cg_p3, false)
+    int idx1 = total_days - 2
+    int x1_1 = idx1 >= 0 ? array.get(day_start_bars, idx1) : bar_index
+    int x2_1 = idx1 >= 0 and idx1 < array.size(day_end_bars) ? array.get(day_end_bars, idx1) : bar_index
 
-    // Row 2: +2 Strike
-    f_fill_strike_row(multiTable, 2, str.tostring(k_p2), static_bep_p2, diff_p2 == minBEPDiff, ce_o_p2, ce_cg_p2, pe_o_p2, pe_cg_p2, false)
+    int idx2 = total_days - 3
+    int x1_2 = idx2 >= 0 ? array.get(day_start_bars, idx2) : bar_index
+    int x2_2 = idx2 >= 0 and idx2 < array.size(day_end_bars) ? array.get(day_end_bars, idx2) : bar_index
 
-    // Row 3: +1 Strike
-    f_fill_strike_row(multiTable, 3, str.tostring(k_p1), static_bep_p1, diff_p1 == minBEPDiff, ce_o_p1, ce_cg_p1, pe_o_p1, pe_cg_p1, false)
+    int idx3 = total_days - 4
+    int x1_3 = idx3 >= 0 ? array.get(day_start_bars, idx3) : bar_index
+    int x2_3 = idx3 >= 0 and idx3 < array.size(day_end_bars) ? array.get(day_end_bars, idx3) : bar_index
 
-    // Row 4: Selected Strike (Offset 0)
-    f_fill_strike_row(multiTable, 4, str.tostring(k_0) + " (Sel)", static_bep_0, diff_0 == minBEPDiff, ce_o_0, ce_cg_0, pe_o_0, pe_cg_0, true)
+    int idx4 = total_days - 5
+    int x1_4 = idx4 >= 0 ? array.get(day_start_bars, idx4) : bar_index
+    int x2_4 = idx4 >= 0 and idx4 < array.size(day_end_bars) ? array.get(day_end_bars, idx4) : bar_index
 
-    // Row 5: -1 Strike
-    f_fill_strike_row(multiTable, 5, str.tostring(k_m1), static_bep_m1, diff_m1 == minBEPDiff, ce_o_m1, ce_cg_m1, pe_o_m1, pe_cg_m1, false)
+    // 1. 5-Day Static BEP Levels (Labels without dates)
+    if show5D_Static_BEPInput
+        f_add_level(static_lines, static_labels, x1_0, x2_0, bep_stat_d0, "BEP", colorStaticBEP, 0, styleStaticBEP, widthStaticBEP)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, bep_stat_d1, "BEP", colorStaticBEP, 0, styleStaticBEP, widthStaticBEP)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, bep_stat_d2, "BEP", colorStaticBEP, 0, styleStaticBEP, widthStaticBEP)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, bep_stat_d3, "BEP", colorStaticBEP, 0, styleStaticBEP, widthStaticBEP)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, bep_stat_d4, "BEP", colorStaticBEP, 0, styleStaticBEP, widthStaticBEP)
 
-    // Row 6: -2 Strike
-    f_fill_strike_row(multiTable, 6, str.tostring(k_m2), static_bep_m2, diff_m2 == minBEPDiff, ce_o_m2, ce_cg_m2, pe_o_m2, pe_cg_m2, false)
+    // 2. 5-Day Static Intrinsic Levels (Labels without dates)
+    if show5D_Static_CE_IV
+        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_iv_d0, "CE IV", colorCE_IV_Static, 0, styleCE_IV_Static, widthCE_IV_Static)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, ce_iv_d1, "CE IV", colorCE_IV_Static, 0, styleCE_IV_Static, widthCE_IV_Static)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, ce_iv_d2, "CE IV", colorCE_IV_Static, 0, styleCE_IV_Static, widthCE_IV_Static)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, ce_iv_d3, "CE IV", colorCE_IV_Static, 0, styleCE_IV_Static, widthCE_IV_Static)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, ce_iv_d4, "CE IV", colorCE_IV_Static, 0, styleCE_IV_Static, widthCE_IV_Static)
 
-    // Row 7: -3 Strike
-    f_fill_strike_row(multiTable, 7, str.tostring(k_m3), static_bep_m3, diff_m3 == minBEPDiff, ce_o_m3, ce_cg_m3, pe_o_m3, pe_cg_m3, false)
+    if show5D_Static_PE_IV
+        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_iv_d0, "PE IV", colorPE_IV_Static, 0, stylePE_IV_Static, widthPE_IV_Static)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, pe_iv_d1, "PE IV", colorPE_IV_Static, 0, stylePE_IV_Static, widthPE_IV_Static)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, pe_iv_d2, "PE IV", colorPE_IV_Static, 0, stylePE_IV_Static, widthPE_IV_Static)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, pe_iv_d3, "PE IV", colorPE_IV_Static, 0, stylePE_IV_Static, widthPE_IV_Static)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, pe_iv_d4, "PE IV", colorPE_IV_Static, 0, stylePE_IV_Static, widthPE_IV_Static)
+
+    if show5D_Static_Avg_IV
+        f_add_level(static_lines, static_labels, x1_0, x2_0, avg_iv_d0, "Avg IV", colorAvg_IV_Static, 0, styleAvg_IV_Static, widthAvg_IV_Static)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, avg_iv_d1, "Avg IV", colorAvg_IV_Static, 0, styleAvg_IV_Static, widthAvg_IV_Static)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, avg_iv_d2, "Avg IV", colorAvg_IV_Static, 0, styleAvg_IV_Static, widthAvg_IV_Static)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, avg_iv_d3, "Avg IV", colorAvg_IV_Static, 0, styleAvg_IV_Static, widthAvg_IV_Static)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, avg_iv_d4, "Avg IV", colorAvg_IV_Static, 0, styleAvg_IV_Static, widthAvg_IV_Static)
+
+    // 3. 5-Day Static Time Value Levels (Labels without dates)
+    if show5D_Static_CE_TV
+        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_tv_d0, "CE TV", colorCE_TV_Static, 0, styleCE_TV_Static, widthCE_TV_Static)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, ce_tv_d1, "CE TV", colorCE_TV_Static, 0, styleCE_TV_Static, widthCE_TV_Static)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, ce_tv_d2, "CE TV", colorCE_TV_Static, 0, styleCE_TV_Static, widthCE_TV_Static)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, ce_tv_d3, "CE TV", colorCE_TV_Static, 0, styleCE_TV_Static, widthCE_TV_Static)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, ce_tv_d4, "CE TV", colorCE_TV_Static, 0, styleCE_TV_Static, widthCE_TV_Static)
+
+    if show5D_Static_PE_TV
+        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_tv_d0, "PE TV", colorPE_TV_Static, 0, stylePE_TV_Static, widthPE_TV_Static)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, pe_tv_d1, "PE TV", colorPE_TV_Static, 0, stylePE_TV_Static, widthPE_TV_Static)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, pe_tv_d2, "PE TV", colorPE_TV_Static, 0, stylePE_TV_Static, widthPE_TV_Static)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, pe_tv_d3, "PE TV", colorPE_TV_Static, 0, stylePE_TV_Static, widthPE_TV_Static)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, pe_tv_d4, "PE TV", colorPE_TV_Static, 0, stylePE_TV_Static, widthPE_TV_Static)
+
+    if show5D_Static_Avg_TV
+        f_add_level(static_lines, static_labels, x1_0, x2_0, avg_tv_d0, "Avg TV", colorAvg_TV_Static, 0, styleAvg_TV_Static, widthAvg_TV_Static)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, avg_tv_d1, "Avg TV", colorAvg_TV_Static, 0, styleAvg_TV_Static, widthAvg_TV_Static)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, avg_tv_d2, "Avg TV", colorAvg_TV_Static, 0, styleAvg_TV_Static, widthAvg_TV_Static)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, avg_tv_d3, "Avg TV", colorAvg_TV_Static, 0, styleAvg_TV_Static, widthAvg_TV_Static)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, avg_tv_d4, "Avg TV", colorAvg_TV_Static, 0, styleAvg_TV_Static, widthAvg_TV_Static)
+
+// ==========================================
+// SUMMARY DASHBOARD TABLE
+// ==========================================
+
+var table summaryTable = na
+if showTableInput and barstate.islast
+    table.delete(summaryTable)
+    
+    position_choice = tablePosInput == "Top Right" ? position.top_right :
+                      tablePosInput == "Top Left" ? position.top_left :
+                      tablePosInput == "Bottom Right" ? position.bottom_right : position.bottom_left
+                      
+    t_sz = tableTextSizeInput == "Tiny" ? size.tiny :
+           tableTextSizeInput == "Small" ? size.small :
+           tableTextSizeInput == "Normal" ? size.normal : size.large
+           
+    modeTitle = strikeModeInput == StrikeMode.atm ? "ATM" : (strikeModeInput == StrikeMode.itm ? "ITM" : (strikeModeInput == StrikeMode.otm ? "OTM" : "Both ITM & OTM"))
+    basisTag  = staticBasisInput == StaticBasis.prevClose ? "Prev Settlement" : (staticBasisInput == StaticBasis.first5Min ? "First 5Min Close" : "Day Open")
+
+    if tableDisplayMode == "Today Only"
+        summaryTable := table.new(position_choice, 3, 10, border_width=1, border_color=color.gray)
+
+        // Row 0: Banner Header
+        table.cell(summaryTable, 0, 0, "Asset: " + syminfo.ticker, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 1, 0, "CE/PE Strikes: " + str.tostring(ce_strike) + "/" + str.tostring(pe_strike) + " (" + modeTitle + ")", bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
+        table.cell(summaryTable, 2, 0, "Basis: " + basisTag, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+
+        // Row 1: Header Titles
+        table.cell(summaryTable, 0, 1, "Metric", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 1, 1, "Today Static (" + basisTag + ")", bgcolor=#37474F, text_color=color.yellow, text_size=t_sz)
+        table.cell(summaryTable, 2, 1, "Realtime LTP", bgcolor=#37474F, text_color=color.orange, text_size=t_sz)
+
+        // Rows 2-4: Intrinsic Values
+        f_fill_today_row(summaryTable, 2, "CE Static Intrinsic (" + str.tostring(ce_strike) + ")", ce_iv_d0, ce_iv_rt, t_sz)
+        f_fill_today_row(summaryTable, 3, "PE Static Intrinsic (" + str.tostring(pe_strike) + ")", pe_iv_d0, pe_iv_rt, t_sz)
+        f_fill_today_row(summaryTable, 4, "Avg Static Intrinsic", avg_iv_d0, avg_iv_rt, t_sz)
+
+        // Rows 5-7: Static Time Values
+        f_fill_today_row(summaryTable, 5, "CE Static Time Value (" + str.tostring(ce_strike) + ")", ce_tv_d0, na, t_sz)
+        f_fill_today_row(summaryTable, 6, "PE Static Time Value (" + str.tostring(pe_strike) + ")", pe_tv_d0, na, t_sz)
+        f_fill_today_row(summaryTable, 7, "Avg Static Time Value", avg_tv_d0, na, t_sz)
+
+        // Row 8: Static BEP
+        f_fill_today_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_realtime, t_sz)
+    else
+        summaryTable := table.new(position_choice, 8, 11, border_width=1, border_color=color.gray)
+
+        // Row 0: Banner Header
+        table.cell(summaryTable, 0, 0, "Asset: " + syminfo.ticker, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 1, 0, "CE/PE Strikes: " + str.tostring(ce_strike) + "/" + str.tostring(pe_strike) + " (" + modeTitle + ")", bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
+        string offsetDisplay = strikeModeInput == StrikeMode.atm ? "0 (ATM)" : str.tostring(offsetPts) + " pts (" + modeTitle + ")"
+        table.cell(summaryTable, 2, 0, "Offset: " + offsetDisplay, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 3, 0, "Basis: " + basisTag, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 4, 0, "5-Day Analytics Matrix", bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 5, 0, "", bgcolor=#1565C0)
+        table.cell(summaryTable, 6, 0, "", bgcolor=#1565C0)
+        table.cell(summaryTable, 7, 0, "", bgcolor=#1565C0)
+
+        // Row 1: Dates Header
+        table.cell(summaryTable, 0, 1, "Metric (" + basisTag + ")", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 1, 1, date0_str + " (Today)", bgcolor=#37474F, text_color=color.yellow, text_size=t_sz)
+        table.cell(summaryTable, 2, 1, date1_str, bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 3, 1, date2_str, bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 4, 1, date3_str, bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 5, 1, date4_str, bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+        table.cell(summaryTable, 6, 1, "5-Day Avg", bgcolor=#37474F, text_color=color.aqua, text_size=t_sz)
+        table.cell(summaryTable, 7, 1, "Realtime LTP", bgcolor=#37474F, text_color=color.orange, text_size=t_sz)
+
+        // Rows 2-4: Intrinsic Values
+        f_fill_matrix_row(summaryTable, 2, "CE Static Intrinsic (" + str.tostring(ce_strike) + ")", ce_iv_d0, ce_iv_d1, ce_iv_d2, ce_iv_d3, ce_iv_d4, ce_iv_rt, t_sz)
+        f_fill_matrix_row(summaryTable, 3, "PE Static Intrinsic (" + str.tostring(pe_strike) + ")", pe_iv_d0, pe_iv_d1, pe_iv_d2, pe_iv_d3, pe_iv_d4, pe_iv_rt, t_sz)
+        f_fill_matrix_row(summaryTable, 4, "Avg Static Intrinsic", avg_iv_d0, avg_iv_d1, avg_iv_d2, avg_iv_d3, avg_iv_d4, avg_iv_rt, t_sz)
+
+        // Rows 5-7: Static Time Values
+        f_fill_matrix_row(summaryTable, 5, "CE Static Time Value (" + str.tostring(ce_strike) + ")", ce_tv_d0, ce_tv_d1, ce_tv_d2, ce_tv_d3, ce_tv_d4, na, t_sz)
+        f_fill_matrix_row(summaryTable, 6, "PE Static Time Value (" + str.tostring(pe_strike) + ")", pe_tv_d0, pe_tv_d1, pe_tv_d2, pe_tv_d3, pe_tv_d4, na, t_sz)
+        f_fill_matrix_row(summaryTable, 7, "Avg Static Time Value", avg_tv_d0, avg_tv_d1, avg_tv_d2, avg_tv_d3, avg_tv_d4, na, t_sz)
+
+        // Row 8: Static BEP
+        f_fill_matrix_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_stat_d1, bep_stat_d2, bep_stat_d3, bep_stat_d4, bep_realtime, t_sz)
