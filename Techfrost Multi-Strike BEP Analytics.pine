@@ -277,8 +277,8 @@ plot(showStaticBEPInput ? bep_static_atm   : na, "Static ATM BEP (Selected)", co
 plot(showStaticBEPInput ? bep_static_upper : na, "Static Upper BEP (+Offset)", color=colorUpperStat, linewidth=1, style=plot.style_linebr)
 
 // --- CE & PE Previous Day Settlement Lines ---
-plot(showPDCInput ? ce_atm_pdc : na, "CE Prev Settlement", color=colorCE_PDC, linewidth=1, style=plot.style_dashed)
-plot(showPDCInput ? pe_atm_pdc : na, "PE Prev Settlement", color=colorPE_PDC, linewidth=1, style=plot.style_dashed)
+plot(showPDCInput ? ce_atm_pdc : na, "CE Prev Settlement", color=colorCE_PDC, linewidth=1, style=plot.style_linebr)
+plot(showPDCInput ? pe_atm_pdc : na, "PE Prev Settlement", color=colorPE_PDC, linewidth=1, style=plot.style_linebr)
 
 // --- CE & PE Previous Day High & Low Lines ---
 plot(showPDHPDLInput ? ce_atm_pdh : na, "CE Prev Day High", color=colorCE_PDH, linewidth=1, style=plot.style_dotted)

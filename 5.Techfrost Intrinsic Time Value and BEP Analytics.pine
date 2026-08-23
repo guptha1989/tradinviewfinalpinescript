@@ -268,12 +268,12 @@ float bep_realtime  = (ce_ltp  + pe_ltp)  / 2.0
 // Intrinsic Value Lines (CE, PE & Average Plotted Separately)
 plot(showCE_IV_Input  ? ce_intrinsic  : na, "CE Intrinsic Value", color=colorCE_IV, linewidth=2)
 plot(showPE_IV_Input  ? pe_intrinsic  : na, "PE Intrinsic Value", color=colorPE_IV, linewidth=2)
-plot(showAvg_IV_Input ? avg_intrinsic : na, "Average Intrinsic Value", color=colorAvg_IV, linewidth=1, style=plot.style_dashed)
+plot(showAvg_IV_Input ? avg_intrinsic : na, "Average Intrinsic Value", color=colorAvg_IV, linewidth=1, style=plot.style_line)
 
 // Time Value Lines (CE, PE & Average Plotted Separately)
 plot(showCE_TV_Input  ? ce_timeval  : na, "CE Time Value", color=colorCE_TV, linewidth=2)
 plot(showPE_TV_Input  ? pe_timeval  : na, "PE Time Value", color=colorPE_TV, linewidth=2)
-plot(showAvg_TV_Input ? avg_timeval : na, "Average Time Value", color=colorAvg_TV, linewidth=1, style=plot.style_dashed)
+plot(showAvg_TV_Input ? avg_timeval : na, "Average Time Value", color=colorAvg_TV, linewidth=1, style=plot.style_line)
 
 // BEP Lines Plots
 plot(showRealtimeBEPInput ? bep_realtime : na, "Realtime Dynamic BEP", color=colorRealBEP, linewidth=2)
