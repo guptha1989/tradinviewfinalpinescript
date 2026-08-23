@@ -422,9 +422,9 @@ float bep_stat_d4 = (ce_r4 + pe_r4) / 2.0
 // PER-BAR DAILY STATIC REFERENCE SERIES
 // ==========================================
 
-float bar_spot_ref = staticBasisInput == StaticBasis.prevClose ? request.security(spotTicker, "D", close[1]) : request.security(spotTicker, "D", open[0])
-float bar_ce_ref   = staticBasisInput == StaticBasis.prevClose ? request.security(ce_ticker, "D", close[1]) : request.security(ce_ticker, "D", open[0])
-float bar_pe_ref   = staticBasisInput == StaticBasis.prevClose ? request.security(pe_ticker, "D", close[1]) : request.security(pe_ticker, "D", open[0])
+float bar_spot_ref = staticBasisInput == StaticBasis.prevClose ? request.security(spotTicker, "D", close[1], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true) : request.security(spotTicker, "D", open[0], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float bar_ce_ref   = staticBasisInput == StaticBasis.prevClose ? request.security(ce_ticker, "D", close[1], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true) : request.security(ce_ticker, "D", open[0], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float bar_pe_ref   = staticBasisInput == StaticBasis.prevClose ? request.security(pe_ticker, "D", close[1], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true) : request.security(pe_ticker, "D", open[0], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 float bar_ce_iv_stat  = math.max(0.0, bar_spot_ref - ce_strike)
 float bar_pe_iv_stat  = math.max(0.0, pe_strike - bar_spot_ref)
@@ -436,8 +436,8 @@ float bar_avg_tv_stat = (bar_ce_tv_stat + bar_pe_tv_stat) / 2.0
 
 float bar_bep_stat    = (bar_ce_ref + bar_pe_ref) / 2.0
 
-float bar_ce_pdc      = request.security(ce_ticker, "D", close[1])
-float bar_pe_pdc      = request.security(pe_ticker, "D", close[1])
+float bar_ce_pdc      = request.security(ce_ticker, "D", close[1], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float bar_pe_pdc      = request.security(pe_ticker, "D", close[1], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // ==========================================
 // PLOTTING ALL METRICS (EXPOSED IN TRADINGVIEW STYLE TAB)
