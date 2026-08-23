@@ -325,7 +325,7 @@ if showTableInput and barstate.islast
     table.cell(summaryTable, 0, 3, "Intrinsic Value", bgcolor=#212121, text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 1, 3, str.tostring(ce_intrinsic, "#.##"), bgcolor=color.black, text_color=colorIV, text_size=t_sz)
     table.cell(summaryTable, 2, 3, str.tostring(pe_intrinsic, "#.##"), bgcolor=color.black, text_color=colorIV, text_size=t_sz)
-    table.cell(summaryTable, 3, 3, str.tostring(avg_intrinsic, "#.##"), bgcolor=#4A148C, text_color=color.magenta, text_size=t_sz)
+    table.cell(summaryTable, 3, 3, str.tostring(avg_intrinsic, "#.##"), bgcolor=#4A148C, text_color=color.fuchsia, text_size=t_sz)
 
     // Row 4: Time Value
     table.cell(summaryTable, 0, 4, "Time Value", bgcolor=#212121, text_color=color.white, text_size=t_sz)
