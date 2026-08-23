@@ -63,6 +63,10 @@ show5D_Static_CE_TV    = input.bool(true, "Show 5-Day Static CE Time Value Lines
 show5D_Static_PE_TV    = input.bool(true, "Show 5-Day Static PE Time Value Lines", group="Time Value Plots (Only Static)")
 show5D_Static_Avg_TV   = input.bool(true, "Show 5-Day Static Avg Time Value Lines", group="Time Value Plots (Only Static)")
 
+// --- Plot Controls: Previous Day Levels (CE & PE) ---
+showPD_CE_LevelsInput  = input.bool(true, "Show Prev Day CE Levels (PDC, PDH, PDL)", group="Previous Day Levels Plots")
+showPD_PE_LevelsInput  = input.bool(true, "Show Prev Day PE Levels (PDC, PDH, PDL)", group="Previous Day Levels Plots")
+
 // --- Plot Controls: BEP & Candle Overlays ---
 showRealtimeBEPInput   = input.bool(true, "Show Realtime Dynamic BEP Line", group="BEP & Candle Overlay Plots")
 show5D_Static_BEPInput = input.bool(true, "Show 5-Day Static BEP Level Lines", group="BEP & Candle Overlay Plots")
@@ -118,6 +122,12 @@ widthPE_TV_Static = input.int(1, "PE Static Time Value Line Width", minval=1, ma
 colorAvg_TV_Static= input.color(#FFD700, "Avg Static Time Value Color", group="5-Day Static Time Value Formatting")
 styleAvg_TV_Static= input.string("Dashed", "Avg Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Time Value Formatting")
 widthAvg_TV_Static= input.int(1, "Avg Static Time Value Line Width", minval=1, maxval=4, group="5-Day Static Time Value Formatting")
+
+// Previous Day Levels Formatting
+colorCE_PD        = input.color(#00E676, "Prev Day CE Levels Color", group="Previous Day Levels Formatting")
+colorPE_PD        = input.color(#FF5252, "Prev Day PE Levels Color", group="Previous Day Levels Formatting")
+stylePD_Levels    = input.string("Dotted", "Prev Day Levels Line Style", options=["Solid", "Dashed", "Dotted"], group="Previous Day Levels Formatting")
+widthPD_Levels    = input.int(1, "Prev Day Levels Line Width", minval=1, maxval=4, group="Previous Day Levels Formatting")
 
 // 5-Day Static BEP Styling
 colorStaticBEP    = input.color(color.aqua, "Static BEP Color", group="5-Day Static BEP Formatting")
@@ -373,6 +383,10 @@ string date2_str = na(d2_t) ? "T-2"   : str.format("{0,date,dd-MMM}", d2_t)
 string date3_str = na(d3_t) ? "T-3"   : str.format("{0,date,dd-MMM}", d3_t)
 string date4_str = na(d4_t) ? "T-4"   : str.format("{0,date,dd-MMM}", d4_t)
 
+// Fetch Previous Day Daily OHLC for CE & PE tickers
+[ce_pdc, ce_pdh, ce_pdl] = request.security(ce_ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_pdc, pe_pdh, pe_pdl] = request.security(pe_ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
 // Fetch 5-Day Reference Series based on staticBasisInput
 f_get_5d_series() =>
     float p0 = staticBasisInput == StaticBasis.prevClose ? close[1] : (staticBasisInput == StaticBasis.first5Min ? open[0] : open[0])
@@ -561,6 +575,17 @@ if barstate.islast
         f_add_level(static_lines, static_labels, x1_3, x2_3, avg_tv_d3, "Avg TV", colorAvg_TV_Static, 0, styleAvg_TV_Static, widthAvg_TV_Static)
         f_add_level(static_lines, static_labels, x1_4, x2_4, avg_tv_d4, "Avg TV", colorAvg_TV_Static, 0, styleAvg_TV_Static, widthAvg_TV_Static)
 
+    // 4. Previous Day CE & PE Levels (PDC, PDH, PDL - Plotted on Today's session)
+    if showPD_CE_LevelsInput
+        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_pdh, "CE PDH", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
+        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_pdl, "CE PDL", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
+        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_pdc, "CE PDC", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
+
+    if showPD_PE_LevelsInput
+        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_pdh, "PE PDH", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
+        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_pdl, "PE PDL", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
+        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_pdc, "PE PDC", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
+
 // ==========================================
 // SUMMARY DASHBOARD TABLE
 // ==========================================
@@ -581,7 +606,7 @@ if showTableInput and barstate.islast
     basisTag  = staticBasisInput == StaticBasis.prevClose ? "Prev Settlement" : (staticBasisInput == StaticBasis.first5Min ? "First 5Min Close" : "Day Open")
 
     if tableDisplayMode == "Today Only"
-        summaryTable := table.new(position_choice, 3, 10, border_width=1, border_color=color.gray)
+        summaryTable := table.new(position_choice, 3, 16, border_width=1, border_color=color.gray)
 
         // Row 0: Banner Header
         table.cell(summaryTable, 0, 0, "Asset: " + syminfo.ticker, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
@@ -605,8 +630,18 @@ if showTableInput and barstate.islast
 
         // Row 8: Static BEP
         f_fill_today_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_realtime, t_sz)
+
+        // Rows 9-11: Prev Day CE Levels
+        f_fill_today_row(summaryTable, 9, "CE Prev Day Close (" + str.tostring(ce_strike) + ")", ce_pdc, na, t_sz)
+        f_fill_today_row(summaryTable, 10, "CE Prev Day High (" + str.tostring(ce_strike) + ")", ce_pdh, na, t_sz)
+        f_fill_today_row(summaryTable, 11, "CE Prev Day Low (" + str.tostring(ce_strike) + ")", ce_pdl, na, t_sz)
+
+        // Rows 12-14: Prev Day PE Levels
+        f_fill_today_row(summaryTable, 12, "PE Prev Day Close (" + str.tostring(pe_strike) + ")", pe_pdc, na, t_sz)
+        f_fill_today_row(summaryTable, 13, "PE Prev Day High (" + str.tostring(pe_strike) + ")", pe_pdh, na, t_sz)
+        f_fill_today_row(summaryTable, 14, "PE Prev Day Low (" + str.tostring(pe_strike) + ")", pe_pdl, na, t_sz)
     else
-        summaryTable := table.new(position_choice, 8, 11, border_width=1, border_color=color.gray)
+        summaryTable := table.new(position_choice, 8, 17, border_width=1, border_color=color.gray)
 
         // Row 0: Banner Header
         table.cell(summaryTable, 0, 0, "Asset: " + syminfo.ticker, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
@@ -641,3 +676,13 @@ if showTableInput and barstate.islast
 
         // Row 8: Static BEP
         f_fill_matrix_row(summaryTable, 8, "Static BEP", bep_stat_d0, bep_stat_d1, bep_stat_d2, bep_stat_d3, bep_stat_d4, bep_realtime, t_sz)
+
+        // Rows 9-11: Prev Day CE Levels
+        f_fill_matrix_row(summaryTable, 9, "CE Prev Day Close (" + str.tostring(ce_strike) + ")", ce_pdc, ce_pdc, ce_pdc, ce_pdc, ce_pdc, na, t_sz)
+        f_fill_matrix_row(summaryTable, 10, "CE Prev Day High (" + str.tostring(ce_strike) + ")", ce_pdh, ce_pdh, ce_pdh, ce_pdh, ce_pdh, na, t_sz)
+        f_fill_matrix_row(summaryTable, 11, "CE Prev Day Low (" + str.tostring(ce_strike) + ")", ce_pdl, ce_pdl, ce_pdl, ce_pdl, ce_pdl, na, t_sz)
+
+        // Rows 12-14: Prev Day PE Levels
+        f_fill_matrix_row(summaryTable, 12, "PE Prev Day Close (" + str.tostring(pe_strike) + ")", pe_pdc, pe_pdc, pe_pdc, pe_pdc, pe_pdc, na, t_sz)
+        f_fill_matrix_row(summaryTable, 13, "PE Prev Day High (" + str.tostring(pe_strike) + ")", pe_pdh, pe_pdh, pe_pdh, pe_pdh, pe_pdh, na, t_sz)
+        f_fill_matrix_row(summaryTable, 14, "PE Prev Day Low (" + str.tostring(pe_strike) + ")", pe_pdl, pe_pdl, pe_pdl, pe_pdl, pe_pdl, na, t_sz)
