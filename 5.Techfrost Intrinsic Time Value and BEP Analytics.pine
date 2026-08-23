@@ -514,25 +514,6 @@ plot(showCE_TV_RT_Input  ? ce_tv_rt  : na, "CE Realtime Time Value", color=color
 plot(showPE_TV_RT_Input  ? pe_tv_rt  : na, "PE Realtime Time Value", color=colorPE_TV_RT, linewidth=widthPE_TV_RT)
 plot(showAvg_TV_RT_Input ? avg_tv_rt : na, "Avg Realtime Time Value", color=colorAvg_TV_RT, linewidth=widthAvg_TV_RT)
 
-// --- Static Level Plots (Allows Native Formatting in Style Tab) ---
-plot(show5D_Static_CE_IV  ? ce_iv_d0 : na, "CE Static Intrinsic", color=colorCE_IV_Static, linewidth=widthCE_IV_Static)
-plot(show5D_Static_PE_IV  ? pe_iv_d0 : na, "PE Static Intrinsic", color=colorPE_IV_Static, linewidth=widthPE_IV_Static)
-plot(show5D_Static_Avg_IV ? avg_iv_d0 : na, "Avg Static Intrinsic", color=colorAvg_IV_Static, linewidth=widthAvg_IV_Static)
-
-plot(show5D_Static_CE_TV  ? ce_tv_d0 : na, "CE Static Time Value", color=colorCE_TV_Static, linewidth=widthCE_TV_Static)
-plot(show5D_Static_PE_TV  ? pe_tv_d0 : na, "PE Static Time Value", color=colorPE_TV_Static, linewidth=widthPE_TV_Static)
-plot(show5D_Static_Avg_TV ? avg_tv_d0 : na, "Avg Static Time Value", color=colorAvg_TV_Static, linewidth=widthAvg_TV_Static)
-
-plot(show5D_Static_BEPInput ? bep_stat_d0 : na, "5-Day Static BEP", color=colorStaticBEP, linewidth=widthStaticBEP)
-
-plot(showPD_CE_LevelsInput ? ce_pdc0 : na, "CE Prev Day Close", color=colorCE_PD, linewidth=widthPD_Levels)
-plot(showPD_CE_LevelsInput ? ce_pdh0 : na, "CE Prev Day High", color=colorCE_PD, linewidth=widthPD_Levels)
-plot(showPD_CE_LevelsInput ? ce_pdl0 : na, "CE Prev Day Low", color=colorCE_PD, linewidth=widthPD_Levels)
-
-plot(showPD_PE_LevelsInput ? pe_pdc0 : na, "PE Prev Day Close", color=colorPE_PD, linewidth=widthPD_Levels)
-plot(showPD_PE_LevelsInput ? pe_pdh0 : na, "PE Prev Day High", color=colorPE_PD, linewidth=widthPD_Levels)
-plot(showPD_PE_LevelsInput ? pe_pdl0 : na, "PE Prev Day Low", color=colorPE_PD, linewidth=widthPD_Levels)
-
 // ==========================================
 // PLOTTING 5-DAY STATIC LEVEL LINES & LABELS (STRICTLY ON THAT EXACT DAY)
 // ==========================================
