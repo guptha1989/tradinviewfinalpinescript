@@ -240,13 +240,13 @@ float pe_ltp = pe_ltp_raw
 
 // CE Option VWAP Plots
 plot(showCE_VWAP and ce_vwap > 0 ? ce_vwap : na, "CE Option VWAP", color=colorCEVWAP, linewidth=2)
-plot(showCE_VWAP and showCE_Bands and ce_upper > 0 ? ce_upper : na, "CE VWAP Upper Band", color=colorCEBands, linewidth=1, style=plot.style_dashed)
-plot(showCE_VWAP and showCE_Bands and ce_lower > 0 ? ce_lower : na, "CE VWAP Lower Band", color=colorCEBands, linewidth=1, style=plot.style_dashed)
+plot(showCE_VWAP and showCE_Bands and ce_upper > 0 ? ce_upper : na, "CE VWAP Upper Band", color=colorCEBands, linewidth=1, style=plot.style_line)
+plot(showCE_VWAP and showCE_Bands and ce_lower > 0 ? ce_lower : na, "CE VWAP Lower Band", color=colorCEBands, linewidth=1, style=plot.style_line)
 
 // PE Option VWAP Plots
 plot(showPE_VWAP and pe_vwap > 0 ? pe_vwap : na, "PE Option VWAP", color=colorPEVWAP, linewidth=2)
-plot(showPE_VWAP and showPE_Bands and pe_upper > 0 ? pe_upper : na, "PE VWAP Upper Band", color=colorPEBands, linewidth=1, style=plot.style_dashed)
-plot(showPE_VWAP and showPE_Bands and pe_lower > 0 ? pe_lower : na, "PE VWAP Lower Band", color=colorPEBands, linewidth=1, style=plot.style_dashed)
+plot(showPE_VWAP and showPE_Bands and pe_upper > 0 ? pe_upper : na, "PE VWAP Upper Band", color=colorPEBands, linewidth=1, style=plot.style_line)
+plot(showPE_VWAP and showPE_Bands and pe_lower > 0 ? pe_lower : na, "PE VWAP Lower Band", color=colorPEBands, linewidth=1, style=plot.style_line)
 
 // ==========================================
 // SUMMARY DASHBOARD TABLE
