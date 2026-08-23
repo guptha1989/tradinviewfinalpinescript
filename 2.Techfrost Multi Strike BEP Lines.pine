@@ -1,63 +1,79 @@
 //@version=6
-indicator("Techfrost Multi Strike BEP Lines", shorttitle="TF BEP", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
+indicator("Techfrost Multi-Strike BEP Lines Analytics", shorttitle="TF MultiBEP Lines", overlay=true, precision=2)
 
 // =========================================================================
-// INPUTS & USER SETTINGS
+// ENUMS & INPUTS
 // =========================================================================
-var string G_PARSER  = "1. Symbol & Instrument Settings"
-var string G_BEP     = "2. BEP Calculation & Offset Settings"
-var string G_LEVELS  = "3. CE & PE Previous Day High/Low/Close Levels"
-var string G_OPP     = "4. Opposite Option Candles Overlay"
-var string G_COLORS  = "5. Colors & Line Styling"
+enum ATMSelectionMode
+    auto   = "Auto-Detect (Chart Ticker)"
+    manual = "Manual Strike Entry"
 
-// 1. Parser & Instrument Settings
-stock_name_preset = input.string("NIFTY", "Stock Name", options=["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "CRUDEOIL", "Custom"], group=G_PARSER,
-  tooltip="Select underlying instrument preset (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, CRUDEOIL, or Custom).")
-underlying_ticker = input.string("NIFTY", "Custom Underlying Ticker", group=G_PARSER)
-exchange          = input.string("NSE", "Exchange Prefix", group=G_PARSER)
-strike_step_input = input.int(50, "Strike Step Size (Custom)", minval=1, group=G_PARSER)
-expiry_input      = input.string("260804", "Select Expiry Date (YYMMDD/Code)", group=G_PARSER)
-suffixStyle       = input.string("C/P", "Option Suffix Format", options=["CE/PE", "C/P"], group=G_PARSER)
-atm_select_mode   = input.string("Automatic", "ATM Strike Selection Mode", options=["Automatic", "Manual"], group=G_PARSER)
-manual_strike_val = input.int(24000, "ATM Strike Price (Manual)", group=G_PARSER)
+enum PresetStock
+    custom     = "Custom"
+    nifty      = "NIFTY"
+    banknifty  = "BANKNIFTY"
+    finnifty   = "FINNIFTY"
+    midcpnifty = "MIDCPNIFTY"
+    crudeoil   = "CRUDEOIL"
 
-// 2. BEP Offset & Calculation Settings
-offset_choice_str = input.string("100 Points (+100 / -100)", "Strike Offset Points", options=["50 Points (+50 / -50)", "100 Points (+100 / -100)"], group=G_BEP,
-  tooltip="Select offset points (50 or 100). Plots BEP for ATM strike, Upper strike (ATM + Offset), and Lower strike (ATM - Offset).")
-standard_bep_basis = input.string("Today's Day Open", "Static BEP Calculation Basis",
-  options=["Today's Day Open", "Previous Day Close / Settlement Price", "First 5 Min Close"], group=G_BEP,
-  tooltip="Choose reference price basis for Static BEP: Today's 9:15 AM Day Open, Previous Day Settlement Price (Daily Close[1]), or First 5 Min Close.")
+enum SuffixFormat
+    cp    = "C/P"
+    ce_pe = "CE/PE"
 
-show_running_bep  = input.bool(true, "Show Realtime Dynamic BEP Lines", group=G_BEP,
-  tooltip="Realtime BEP = (CE LTP + PE LTP) / 2")
-show_standard_bep = input.bool(true, "Show Static BEP Horizontal Lines", group=G_BEP,
-  tooltip="Static BEP = (CE Ref + PE Ref) / 2")
-show_line_labels  = input.bool(true, "Show Line Labels at Chart End", group=G_BEP)
+enum BEPBasis
+    dayOpen   = "Day Open Price"
+    prevClose = "Previous Day Settlement"
+    first5Min = "First 5 Min Close"
 
-// 3. CE & PE Previous Day High/Low/Close Levels
-show_pdc_lines     = input.bool(true, "Show CE & PE Previous Day Close/Settlement Lines", group=G_LEVELS)
-show_pdh_pdl_lines = input.bool(true, "Show CE & PE Previous Day High & Low Lines", group=G_LEVELS)
+enum OffsetChoice
+    offset50  = "50 Points"
+    offset100 = "100 Points"
 
-// 4. Opposite Option Candles Overlay
-show_opp_candles  = input.bool(true, "Show Opposite Option Candles", group=G_OPP,
-  tooltip="Draw historical & real-time opposite option contract candles (e.g. PE candles on CE chart, CE candles on PE chart).")
-c_opp_bull        = input.color(color.new(#2962FF, 40), "Opposite Bullish Candle Body", group=G_OPP)
-c_opp_bear        = input.color(color.new(#FF6D00, 40), "Opposite Bearish Candle Body", group=G_OPP)
-c_opp_bull_wick   = input.color(color.new(#2962FF, 60), "Opposite Bullish Wick/Border", group=G_OPP)
-c_opp_bear_wick   = input.color(color.new(#FF6D00, 60), "Opposite Bearish Wick/Border", group=G_OPP)
+// --- Settings Groups ---
+G_INST  = "Instrument & Strike Selection"
+G_CALC  = "BEP Calculation Settings"
+G_PLOTS = "Plot Controls"
+G_COLORS= "Styling & Display"
 
-// 5. Colors & Line Styling
-c_atm   = input.color(#FFD700, "ATM BEP Color (Selected Strike)", group=G_COLORS)
-c_upper = input.color(#FF1744, "Upper BEP Color (+Offset)", group=G_COLORS)
-c_lower = input.color(#00E676, "Lower BEP Color (-Offset)", group=G_COLORS)
+// 1. Instrument & Strike Selection
+atm_select_mode    = input.string("Auto-Detect (Chart Ticker)", "ATM Strike Selection", options=["Auto-Detect (Chart Ticker)", "Manual"], group=G_INST)
+manual_strike_val  = input.int(24000, "Manual ATM Strike Price", group=G_INST)
+stock_name_preset  = input.string("NIFTY", "Preset Underlying", options=["Custom", "NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "CRUDEOIL"], group=G_INST)
+underlying_ticker  = input.string("NIFTY", "Custom Underlying Ticker", group=G_INST)
+exchange           = input.string("NSE", "Exchange", group=G_INST)
+expiry_input       = input.string("24829", "Option Expiry (YYMdd)", group=G_INST)
+suffixStyle        = input.string("CE/PE", "Option Suffix Format", options=["C/P", "CE/PE"], group=G_INST)
+strike_step_input  = input.int(50, "Custom Strike Step", group=G_INST)
 
-c_ce_pdc = input.color(color.new(#00E676, 20), "CE Prev Settlement Line Color", group=G_COLORS)
-c_ce_pdh = input.color(color.new(#00E676, 50), "CE Prev High Line Color", group=G_COLORS)
-c_ce_pdl = input.color(color.new(#00E676, 70), "CE Prev Low Line Color", group=G_COLORS)
+// 2. BEP Calculation Settings
+offset_choice_str  = input.string("100 Points", "Strike Offset Points", options=["50 Points", "100 Points"], group=G_CALC)
+standard_bep_basis = input.string("Day Open Price", "Static BEP Calculation Basis", options=["Day Open Price", "Previous Day Settlement", "First 5 Min Close"], group=G_CALC)
 
-c_pe_pdc = input.color(color.new(#FF5252, 20), "PE Prev Settlement Line Color", group=G_COLORS)
-c_pe_pdh = input.color(color.new(#FF5252, 50), "PE Prev High Line Color", group=G_COLORS)
-c_pe_pdl = input.color(color.new(#FF5252, 70), "PE Prev Low Line Color", group=G_COLORS)
+// 3. Plot Controls
+show_running_bep   = input.bool(true, "Show Realtime Dynamic BEP Lines", group=G_PLOTS)
+show_standard_bep  = input.bool(true, "Show Static Level BEP Lines", group=G_PLOTS)
+show_pdc_lines     = input.bool(true, "Show Previous Day Settlement Lines", group=G_PLOTS)
+show_pdh_pdl_lines = input.bool(true, "Show Previous Day High & Low Lines", group=G_PLOTS)
+show_opp_candles   = input.bool(true, "Show Opposite Option Candles Overlay", group=G_PLOTS)
+show_line_labels   = input.bool(true, "Show Level Line Right Labels", group=G_PLOTS)
+
+// 4. Styling & Colors
+c_itm              = input.color(#00E676, "ITM BEP Line Color", group=G_COLORS)
+c_atm              = input.color(color.aqua, "ATM BEP Line Color", group=G_COLORS)
+c_otm              = input.color(#FF5252, "OTM BEP Line Color", group=G_COLORS)
+
+c_opp_bull         = input.color(color.new(#2962FF, 40), "Opposite Bullish Body", group=G_COLORS)
+c_opp_bear         = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", group=G_COLORS)
+c_opp_bull_wick    = input.color(color.new(#2962FF, 60), "Opposite Bullish Wick", group=G_COLORS)
+c_opp_bear_wick    = input.color(color.new(#FF6D00, 60), "Opposite Bearish Wick", group=G_COLORS)
+
+c_ce_pdc           = input.color(color.new(#00E676, 20), "CE Prev Settlement Line Color", group=G_COLORS)
+c_ce_pdh           = input.color(color.new(#00E676, 50), "CE Prev High Line Color", group=G_COLORS)
+c_ce_pdl           = input.color(color.new(#00E676, 70), "CE Prev Low Line Color", group=G_COLORS)
+
+c_pe_pdc           = input.color(color.new(#FF5252, 20), "PE Prev Settlement Line Color", group=G_COLORS)
+c_pe_pdh           = input.color(color.new(#FF5252, 50), "PE Prev High Line Color", group=G_COLORS)
+c_pe_pdl           = input.color(color.new(#FF5252, 70), "PE Prev Low Line Color", group=G_COLORS)
 
 show_options_table = input.bool(true, "Show BEP & Details Table", group=G_COLORS)
 table_pos_str      = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_COLORS)
@@ -185,7 +201,7 @@ plotcandle(show_opp_candles and is_option ? opp_o : na,
            title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
 
 // =========================================================================
-// THREE STRIKES SELECTION (LOWER, ATM, UPPER)
+// THREE STRIKES SELECTION (ATM, LOWER/ITM, UPPER/OTM)
 // =========================================================================
 int offsetPts = str.contains(offset_choice_str, "50") ? 50 : 100
 
@@ -233,20 +249,26 @@ float ce_upr_ref = f_resolve_basis(ce_upr_o, ce_upr_pdc, ce_upr_f5m)
 float pe_upr_ref = f_resolve_basis(pe_upr_o, pe_upr_pdc, pe_upr_f5m)
 
 // =========================================================================
-// BEP CALCULATIONS: (CE + PE) / 2.0 FORMULA
+// BEP CALCULATIONS: EXACT ITM & OTM STRIKE PAIRING
+// ATM BEP = (24000 CE + 24000 PE) / 2
+// ITM BEP = (23900 CE + 24100 PE) / 2
+// OTM BEP = (24100 CE + 23900 PE) / 2
 // =========================================================================
-float run_bep_atm   = (ce_atm_ltp + pe_atm_ltp) / 2.0
-float run_bep_lower = (ce_lwr_ltp + pe_lwr_ltp) / 2.0
-float run_bep_upper = (ce_upr_ltp + pe_upr_ltp) / 2.0
 
-float std_bep_atm   = (ce_atm_ref + pe_atm_ref) / 2.0
-float std_bep_lower = (ce_lwr_ref + pe_lwr_ref) / 2.0
-float std_bep_upper = (ce_upr_ref + pe_upr_ref) / 2.0
+// Realtime Dynamic BEP Values
+float run_bep_atm = (ce_atm_ltp + pe_atm_ltp) / 2.0
+float run_bep_itm = (ce_lwr_ltp + pe_upr_ltp) / 2.0 // (23900 CE + 24100 PE) / 2
+float run_bep_otm = (ce_upr_ltp + pe_lwr_ltp) / 2.0 // (24100 CE + 23900 PE) / 2
+
+// Static Reference BEP Values
+float std_bep_atm = (ce_atm_ref + pe_atm_ref) / 2.0
+float std_bep_itm = (ce_lwr_ref + pe_upr_ref) / 2.0 // (23900 CE + 24100 PE) / 2
+float std_bep_otm = (ce_upr_ref + pe_lwr_ref) / 2.0 // (24100 CE + 23900 PE) / 2
 
 // Plot Realtime Dynamic BEP Lines
-plot(show_running_bep ? run_bep_lower : na, "Realtime Lower BEP (-Offset)", color=c_lower, linewidth=2)
-plot(show_running_bep ? run_bep_atm   : na, "Realtime ATM BEP (Selected)", color=c_atm,   linewidth=2)
-plot(show_running_bep ? run_bep_upper : na, "Realtime Upper BEP (+Offset)", color=c_upper, linewidth=2)
+plot(show_running_bep ? run_bep_itm : na, "Realtime ITM BEP (CE 23900 + PE 24100)", color=c_itm, linewidth=2)
+plot(show_running_bep ? run_bep_atm : na, "Realtime ATM BEP (24000 CE + 24000 PE)", color=c_atm, linewidth=2)
+plot(show_running_bep ? run_bep_otm : na, "Realtime OTM BEP (CE 24100 + PE 23900)", color=c_otm, linewidth=2)
 
 // =========================================================================
 // STATIC BEP & PREVIOUS DAY HIGH / LOW / SETTLEMENT HORIZONTAL LINES
@@ -278,15 +300,15 @@ if barstate.islast
         if show_line_labels
             array.push(level_labels, label.new(x2, std_bep_atm, "ATM (" + str.tostring(st_atm) + ") Static BEP: " + str.tostring(std_bep_atm, "#.##"), color=color.new(c_atm, 80), textcolor=c_atm, style=label.style_label_left, size=size.small))
             
-        // Upper Static BEP
-        array.push(level_lines, line.new(x1, std_bep_upper, x2, std_bep_upper, color=c_upper, width=1, style=line.style_dashed))
+        // ITM Static BEP: (23900 CE + 24100 PE) / 2
+        array.push(level_lines, line.new(x1, std_bep_itm, x2, std_bep_itm, color=c_itm, width=1, style=line.style_dashed))
         if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_upper, "Upper (" + str.tostring(st_upper) + ") Static BEP: " + str.tostring(std_bep_upper, "#.##"), color=color.new(c_upper, 80), textcolor=c_upper, style=label.style_label_left, size=size.small))
+            array.push(level_labels, label.new(x2, std_bep_itm, "ITM Static BEP (" + str.tostring(st_lower) + "CE / " + str.tostring(st_upper) + "PE): " + str.tostring(std_bep_itm, "#.##"), color=color.new(c_itm, 80), textcolor=c_itm, style=label.style_label_left, size=size.small))
 
-        // Lower Static BEP
-        array.push(level_lines, line.new(x1, std_bep_lower, x2, std_bep_lower, color=c_lower, width=1, style=line.style_dashed))
+        // OTM Static BEP: (24100 CE + 23900 PE) / 2
+        array.push(level_lines, line.new(x1, std_bep_otm, x2, std_bep_otm, color=c_otm, width=1, style=line.style_dashed))
         if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_lower, "Lower (" + str.tostring(st_lower) + ") Static BEP: " + str.tostring(std_bep_lower, "#.##"), color=color.new(c_lower, 80), textcolor=c_lower, style=label.style_label_left, size=size.small))
+            array.push(level_labels, label.new(x2, std_bep_otm, "OTM Static BEP (" + str.tostring(st_upper) + "CE / " + str.tostring(st_lower) + "PE): " + str.tostring(std_bep_otm, "#.##"), color=color.new(c_otm, 80), textcolor=c_otm, style=label.style_label_left, size=size.small))
 
     // 2. CE & PE Previous Day Settlement Lines
     if show_pdc_lines
@@ -357,11 +379,11 @@ if barstate.islast and show_options_table
     table.cell(info_table, 7, 1, "CE Prev High/Low", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 8, 1, "PE Prev High/Low", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
 
-    // Row 2: Upper Strike (+Offset)
-    f_fill_table_row(info_table, 2, "Upper (" + str.tostring(st_upper) + ")", ce_upr_ref, pe_upr_ref, std_bep_upper, ce_upr_ltp, pe_upr_ltp, run_bep_upper, ce_upr_pdh, ce_upr_pdl, pe_upr_pdh, pe_upr_pdl, color.new(#C62828, 0), t_sz)
+    // Row 2: ITM BEP Pair: (CE 23900 + PE 24100) / 2
+    f_fill_table_row(info_table, 2, "ITM (" + str.tostring(st_lower) + "CE / " + str.tostring(st_upper) + "PE)", ce_lwr_ref, pe_upr_ref, std_bep_itm, ce_lwr_ltp, pe_upr_ltp, run_bep_itm, ce_lwr_pdh, ce_lwr_pdl, pe_upr_pdh, pe_upr_pdl, color.new(#2E7D32, 0), t_sz)
 
-    // Row 3: ATM Strike (Selected)
+    // Row 3: ATM BEP Pair: (CE 24000 + PE 24000) / 2
     f_fill_table_row(info_table, 3, "ATM (" + str.tostring(st_atm) + ")", ce_atm_ref, pe_atm_ref, std_bep_atm, ce_atm_ltp, pe_atm_ltp, run_bep_atm, ce_atm_pdh, ce_atm_pdl, pe_atm_pdh, pe_atm_pdl, color.new(#F57F17, 0), t_sz)
 
-    // Row 4: Lower Strike (-Offset)
-    f_fill_table_row(info_table, 4, "Lower (" + str.tostring(st_lower) + ")", ce_lwr_ref, pe_lwr_ref, std_bep_lower, ce_lwr_ltp, pe_lwr_ltp, run_bep_lower, ce_lwr_pdh, ce_lwr_pdl, pe_lwr_pdh, pe_lwr_pdl, color.new(#2E7D32, 0), t_sz)
+    // Row 4: OTM BEP Pair: (CE 24100 + PE 23900) / 2
+    f_fill_table_row(info_table, 4, "OTM (" + str.tostring(st_upper) + "CE / " + str.tostring(st_lower) + "PE)", ce_upr_ref, pe_lwr_ref, std_bep_otm, ce_upr_ltp, pe_lwr_ltp, run_bep_otm, ce_upr_pdh, ce_upr_pdl, pe_lwr_pdh, pe_lwr_pdl, color.new(#C62828, 0), t_sz)
