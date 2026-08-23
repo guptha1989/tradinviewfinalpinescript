@@ -42,6 +42,8 @@ enum TimeValueFormula
 // --- Instrument Settings ---
 underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
+manualStrikeInput  = input.int(0, "Manual Strike Selection (0 = Auto)", minval=0, group="Instrument Settings",
+  tooltip="Enter strike price manually (e.g. 24000). Leave at 0 to auto-detect from chart symbol.")
 spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
 strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
 
@@ -55,34 +57,32 @@ staticBasisInput      = input.enum(StaticBasis.dayOpen, "Static Values Calculati
 timeValueFormulaInput = input.enum(TimeValueFormula.standard, "Time Value Formula", group="Calculation Settings",
   tooltip="Formula for Time Value: Option Price - Intrinsic Value OR Strike Price - Intrinsic Value.")
 
-// --- Plot Controls: Intrinsic Value ---
-showCE_IV_RT_Input     = input.bool(true, "Show CE Realtime Intrinsic Line", group="Intrinsic Value Plots")
-showPE_IV_RT_Input     = input.bool(true, "Show PE Realtime Intrinsic Line", group="Intrinsic Value Plots")
-showAvg_IV_RT_Input    = input.bool(true, "Show Avg Realtime Intrinsic Line", group="Intrinsic Value Plots")
+// --- Plot Controls: Realtime Metrics ---
+showCE_IV_RT_Input     = input.bool(true, "Show CE Realtime Intrinsic Line", group="Realtime Plots")
+showPE_IV_RT_Input     = input.bool(true, "Show PE Realtime Intrinsic Line", group="Realtime Plots")
+showAvg_IV_RT_Input    = input.bool(true, "Show Avg Realtime Intrinsic Line", group="Realtime Plots")
 
-show5D_Static_CE_IV    = input.bool(true, "Show 5-Day Static CE Intrinsic Lines", group="Intrinsic Value Plots")
-show5D_Static_PE_IV    = input.bool(true, "Show 5-Day Static PE Intrinsic Lines", group="Intrinsic Value Plots")
-show5D_Static_Avg_IV   = input.bool(true, "Show 5-Day Static Avg Intrinsic Lines", group="Intrinsic Value Plots")
+showCE_TV_RT_Input     = input.bool(true, "Show CE Realtime Time Value Line", group="Realtime Plots")
+showPE_TV_RT_Input     = input.bool(true, "Show PE Realtime Time Value Line", group="Realtime Plots")
+showAvg_TV_RT_Input    = input.bool(true, "Show Avg Realtime Time Value Line", group="Realtime Plots")
 
-// --- Plot Controls: Time Value ---
-showCE_TV_RT_Input     = input.bool(true, "Show CE Realtime Time Value Line", group="Time Value Plots")
-showPE_TV_RT_Input     = input.bool(true, "Show PE Realtime Time Value Line", group="Time Value Plots")
-showAvg_TV_RT_Input    = input.bool(true, "Show Avg Realtime Time Value Line", group="Time Value Plots")
+showPD_CE_CloseInput   = input.bool(true, "Show CE Prev Day Close Line", group="Previous Day Close Plots")
+showPD_PE_CloseInput   = input.bool(true, "Show PE Prev Day Close Line", group="Previous Day Close Plots")
 
-show5D_Static_CE_TV    = input.bool(true, "Show 5-Day Static CE Time Value Lines", group="Time Value Plots")
-show5D_Static_PE_TV    = input.bool(true, "Show 5-Day Static PE Time Value Lines", group="Time Value Plots")
-show5D_Static_Avg_TV   = input.bool(true, "Show 5-Day Static Avg Time Value Lines", group="Time Value Plots")
+// --- Plot Controls: 5-Day Static & Candle Overlays ---
+show5D_Static_CE_IV    = input.bool(true, "Show 5-Day Static CE Intrinsic Lines", group="5-Day Static Plots")
+show5D_Static_PE_IV    = input.bool(true, "Show 5-Day Static PE Intrinsic Lines", group="5-Day Static Plots")
+show5D_Static_Avg_IV   = input.bool(true, "Show 5-Day Static Avg Intrinsic Lines", group="5-Day Static Plots")
 
-// --- Plot Controls: Previous Day Levels (CE & PE) ---
-showPD_CE_LevelsInput  = input.bool(true, "Show Prev Day CE Levels (PDC, PDH, PDL)", group="Previous Day Levels Plots")
-showPD_PE_LevelsInput  = input.bool(true, "Show Prev Day PE Levels (PDC, PDH, PDL)", group="Previous Day Levels Plots")
+show5D_Static_CE_TV    = input.bool(true, "Show 5-Day Static CE Time Value Lines", group="5-Day Static Plots")
+show5D_Static_PE_TV    = input.bool(true, "Show 5-Day Static PE Time Value Lines", group="5-Day Static Plots")
+show5D_Static_Avg_TV   = input.bool(true, "Show 5-Day Static Avg Time Value Lines", group="5-Day Static Plots")
 
-// --- Plot Controls: BEP & Candle Overlays ---
-show5D_Static_BEPInput = input.bool(true, "Show 5-Day Static BEP Level Lines", group="BEP & Candle Overlay Plots")
+show5D_Static_BEPInput = input.bool(true, "Show 5-Day Static BEP Level Lines", group="5-Day Static Plots")
 
-showITMCandlesInput    = input.bool(true, "Show ITM Option Candles Overlay", group="BEP & Candle Overlay Plots")
-showOTMCandlesInput    = input.bool(true, "Show OTM Option Candles Overlay", group="BEP & Candle Overlay Plots")
-showOppCandlesInput    = input.bool(true, "Show Opposite Option Candles Overlay", group="BEP & Candle Overlay Plots")
+showITMCandlesInput    = input.bool(true, "Show ITM Option Candles Overlay", group="Candle Overlay Plots")
+showOTMCandlesInput    = input.bool(true, "Show OTM Option Candles Overlay", group="Candle Overlay Plots")
+showOppCandlesInput    = input.bool(true, "Show Opposite Option Candles Overlay", group="Candle Overlay Plots")
 
 showTableInput         = input.bool(true, "Show Summary Dashboard Table", group="Display Controls")
 tableDisplayMode       = input.string("Today Only", "Table Display Mode", options=["Today Only", "5-Day Matrix"], group="Display Controls")
@@ -112,6 +112,12 @@ widthPE_TV_RT     = input.int(2, "PE Realtime Time Value Line Width", minval=1, 
 colorAvg_TV_RT    = input.color(#FFD700, "Avg Realtime Time Value Color", group="Realtime Plots Styling")
 widthAvg_TV_RT    = input.int(2, "Avg Realtime Time Value Line Width", minval=1, maxval=4, group="Realtime Plots Styling")
 
+// Previous Day Close Formatting
+colorCE_PDC       = input.color(#00E676, "Prev Day CE Close Color", group="Previous Day Close Formatting")
+colorPE_PDC       = input.color(#FF5252, "Prev Day PE Close Color", group="Previous Day Close Formatting")
+stylePDC_Levels   = input.string("Dashed", "Prev Day Close Line Style", options=["Solid", "Dashed", "Dotted"], group="Previous Day Close Formatting")
+widthPDC_Levels   = input.int(1, "Prev Day Close Line Width", minval=1, maxval=4, group="Previous Day Close Formatting")
+
 // 5-Day Static Intrinsic Styling
 colorCE_IV_Static = input.color(#00E676, "CE Static Intrinsic Color", group="5-Day Static Intrinsic Formatting")
 styleCE_IV_Static = input.string("Dashed", "CE Static Intrinsic Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Intrinsic Formatting")
@@ -137,12 +143,6 @@ widthPE_TV_Static = input.int(1, "PE Static Time Value Line Width", minval=1, ma
 colorAvg_TV_Static= input.color(#FFD700, "Avg Static Time Value Color", group="5-Day Static Time Value Formatting")
 styleAvg_TV_Static= input.string("Dashed", "Avg Static Time Value Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static Time Value Formatting")
 widthAvg_TV_Static= input.int(1, "Avg Static Time Value Line Width", minval=1, maxval=4, group="5-Day Static Time Value Formatting")
-
-// Previous Day Levels Formatting
-colorCE_PD        = input.color(#00E676, "Prev Day CE Levels Color", group="Previous Day Levels Formatting")
-colorPE_PD        = input.color(#FF5252, "Prev Day PE Levels Color", group="Previous Day Levels Formatting")
-stylePD_Levels    = input.string("Dotted", "Prev Day Levels Line Style", options=["Solid", "Dashed", "Dotted"], group="Previous Day Levels Formatting")
-widthPD_Levels    = input.int(1, "Prev Day Levels Line Width", minval=1, maxval=4, group="Previous Day Levels Formatting")
 
 // 5-Day Static BEP Styling
 colorStaticBEP    = input.color(color.aqua, "Static BEP Color", group="5-Day Static BEP Formatting")
@@ -254,7 +254,7 @@ else if tickerWithoutCEPE != ""
     string strikeDigits = str.match(tickerWithoutCEPE, "\\d+$")
     detectedStrike := str.tonumber(strikeDigits)
 
-float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : (not na(detectedStrike) ? detectedStrike : 24000.0)
+float chartStrikePrice = manualStrikeInput > 0 ? float(manualStrikeInput) : (strikeOverride > 0.0 ? strikeOverride : (not na(detectedStrike) ? detectedStrike : 24000.0))
 
 // Universal Fail-Safe Option Ticker Construction
 f_build_option_symbol(target_strike, target_is_ce) =>
@@ -398,18 +398,18 @@ string date2_str = na(d2_t) ? "T-2"   : str.format("{0,date,dd-MMM}", d2_t)
 string date3_str = na(d3_t) ? "T-3"   : str.format("{0,date,dd-MMM}", d3_t)
 string date4_str = na(d4_t) ? "T-4"   : str.format("{0,date,dd-MMM}", d4_t)
 
-// Fetch Previous Day Daily OHLC for CE & PE tickers for last 5 days
-[ce_pdc0, ce_pdh0, ce_pdl0] = request.security(ce_ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[ce_pdc1, ce_pdh1, ce_pdl1] = request.security(ce_ticker, "D", [close[2], high[2], low[2]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[ce_pdc2, ce_pdh2, ce_pdl2] = request.security(ce_ticker, "D", [close[3], high[3], low[3]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[ce_pdc3, ce_pdh3, ce_pdl3] = request.security(ce_ticker, "D", [close[4], high[4], low[4]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[ce_pdc4, ce_pdh4, ce_pdl4] = request.security(ce_ticker, "D", [close[5], high[5], low[5]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+// Fetch Previous Day Close (PDC) for CE & PE tickers across last 5 days
+[ce_pdc0] = request.security(ce_ticker, "D", [close[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_pdc1] = request.security(ce_ticker, "D", [close[2]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_pdc2] = request.security(ce_ticker, "D", [close[3]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_pdc3] = request.security(ce_ticker, "D", [close[4]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_pdc4] = request.security(ce_ticker, "D", [close[5]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[pe_pdc0, pe_pdh0, pe_pdl0] = request.security(pe_ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_pdc1, pe_pdh1, pe_pdl1] = request.security(pe_ticker, "D", [close[2], high[2], low[2]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_pdc2, pe_pdh2, pe_pdl2] = request.security(pe_ticker, "D", [close[3], high[3], low[3]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_pdc3, pe_pdh3, pe_pdl3] = request.security(pe_ticker, "D", [close[4], high[4], low[4]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_pdc4, pe_pdh4, pe_pdl4] = request.security(pe_ticker, "D", [close[5], high[5], low[5]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_pdc0] = request.security(pe_ticker, "D", [close[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_pdc1] = request.security(pe_ticker, "D", [close[2]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_pdc2] = request.security(pe_ticker, "D", [close[3]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_pdc3] = request.security(pe_ticker, "D", [close[4]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_pdc4] = request.security(pe_ticker, "D", [close[5]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // Fetch 5-Day Reference Series based on staticBasisInput
 f_get_5d_series() =>
@@ -502,7 +502,7 @@ float bep_stat_d3 = (ce_r3 + pe_r3) / 2.0
 float bep_stat_d4 = (ce_r4 + pe_r4) / 2.0
 
 // ==========================================
-// PLOTTING METRICS ON CHART (EXPOSED IN TRADINGVIEW STYLE TAB)
+// PLOTTING METRICS ON CHART
 // ==========================================
 
 // --- Realtime Plots ---
@@ -604,50 +604,20 @@ if barstate.islast
         f_add_level(static_lines, static_labels, x1_3, x2_3, avg_tv_d3, "Avg TV", colorAvg_TV_Static, 0, styleAvg_TV_Static, widthAvg_TV_Static)
         f_add_level(static_lines, static_labels, x1_4, x2_4, avg_tv_d4, "Avg TV", colorAvg_TV_Static, 0, styleAvg_TV_Static, widthAvg_TV_Static)
 
-    // 4. Previous Day CE & PE Levels (PDC, PDH, PDL - Plotted across ALL 5 days)
-    if showPD_CE_LevelsInput
-        // Day 0 (Today)
-        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_pdh0, "CE PDH", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_pdl0, "CE PDL", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_pdc0, "CE PDC", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        // Day 1 (T-1)
-        f_add_level(static_lines, static_labels, x1_1, x2_1, ce_pdh1, "CE PDH", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_1, x2_1, ce_pdl1, "CE PDL", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_1, x2_1, ce_pdc1, "CE PDC", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        // Day 2 (T-2)
-        f_add_level(static_lines, static_labels, x1_2, x2_2, ce_pdh2, "CE PDH", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_2, x2_2, ce_pdl2, "CE PDL", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_2, x2_2, ce_pdc2, "CE PDC", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        // Day 3 (T-3)
-        f_add_level(static_lines, static_labels, x1_3, x2_3, ce_pdh3, "CE PDH", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_3, x2_3, ce_pdl3, "CE PDL", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_3, x2_3, ce_pdc3, "CE PDC", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        // Day 4 (T-4)
-        f_add_level(static_lines, static_labels, x1_4, x2_4, ce_pdh4, "CE PDH", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_4, x2_4, ce_pdl4, "CE PDL", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_4, x2_4, ce_pdc4, "CE PDC", colorCE_PD, 0, stylePD_Levels, widthPD_Levels)
+    // 4. Previous Day CE & PE Close Levels (PDC - Plotted across ALL 5 days)
+    if showPD_CE_CloseInput
+        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_pdc0, "CE PDC", colorCE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, ce_pdc1, "CE PDC", colorCE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, ce_pdc2, "CE PDC", colorCE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, ce_pdc3, "CE PDC", colorCE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, ce_pdc4, "CE PDC", colorCE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
 
-    if showPD_PE_LevelsInput
-        // Day 0 (Today)
-        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_pdh0, "PE PDH", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_pdl0, "PE PDL", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_pdc0, "PE PDC", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        // Day 1 (T-1)
-        f_add_level(static_lines, static_labels, x1_1, x2_1, pe_pdh1, "PE PDH", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_1, x2_1, pe_pdl1, "PE PDL", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_1, x2_1, pe_pdc1, "PE PDC", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        // Day 2 (T-2)
-        f_add_level(static_lines, static_labels, x1_2, x2_2, pe_pdh2, "PE PDH", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_2, x2_2, pe_pdl2, "PE PDL", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_2, x2_2, pe_pdc2, "PE PDC", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        // Day 3 (T-3)
-        f_add_level(static_lines, static_labels, x1_3, x2_3, pe_pdh3, "PE PDH", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_3, x2_3, pe_pdl3, "PE PDL", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_3, x2_3, pe_pdc3, "PE PDC", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        // Day 4 (T-4)
-        f_add_level(static_lines, static_labels, x1_4, x2_4, pe_pdh4, "PE PDH", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_4, x2_4, pe_pdl4, "PE PDL", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
-        f_add_level(static_lines, static_labels, x1_4, x2_4, pe_pdc4, "PE PDC", colorPE_PD, 0, stylePD_Levels, widthPD_Levels)
+    if showPD_PE_CloseInput
+        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_pdc0, "PE PDC", colorPE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, pe_pdc1, "PE PDC", colorPE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, pe_pdc2, "PE PDC", colorPE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, pe_pdc3, "PE PDC", colorPE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, pe_pdc4, "PE PDC", colorPE_PDC, 0, stylePDC_Levels, widthPDC_Levels)
 
 // ==========================================
 // SUMMARY DASHBOARD TABLE
