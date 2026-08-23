@@ -81,7 +81,7 @@ f_fill_table_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, rt_bep, ce_h, ce
     table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
     table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
     table.cell(tbl, 2, r, na(pe_r) ? "N/A" : str.tostring(pe_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(tbl, 3, r, na(stat_bep) ? "N/A" : str.tostring(stat_bep, "#.##"), bgcolor=#006064, text_color=color.cyan, text_size=t_sz)
+    table.cell(tbl, 3, r, na(stat_bep) ? "N/A" : str.tostring(stat_bep, "#.##"), bgcolor=#006064, text_color=color.aqua, text_size=t_sz)
     table.cell(tbl, 4, r, na(ce_l) ? "N/A" : str.tostring(ce_l, "#.##"), bgcolor=color.black, text_color=#00E676, text_size=t_sz)
     table.cell(tbl, 5, r, na(pe_l) ? "N/A" : str.tostring(pe_l, "#.##"), bgcolor=color.black, text_color=#FF5252, text_size=t_sz)
     table.cell(tbl, 6, r, na(rt_bep) ? "N/A" : str.tostring(rt_bep, "#.##"), bgcolor=#F57F17, text_color=color.yellow, text_size=t_sz)
@@ -173,7 +173,7 @@ int st_upper = final_strike + offsetPts
 
 f_get_contract_data() =>
     float d_open  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
-    [d_pdc, d_pdh, d_pdl] = request.security(syminfo.ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+    [d_pdc, d_pdh, d_pdl] = request.security(syminfo.tickerid, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
     var float d_f5m = na
     if ta.change(time("D")) != 0
         d_f5m := na
@@ -326,7 +326,7 @@ if barstate.islast and show_options_table
     table.cell(info_table, 0, 1, "Strike Level", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 1, 1, "CE Ref", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 2, 1, "PE Ref", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 3, 1, "Static BEP", bgcolor=#37474F, text_color=color.cyan, text_size=t_sz)
+    table.cell(info_table, 3, 1, "Static BEP", bgcolor=#37474F, text_color=color.aqua, text_size=t_sz)
     table.cell(info_table, 4, 1, "CE LTP", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 5, 1, "PE LTP", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 6, 1, "Realtime BEP", bgcolor=#37474F, text_color=color.yellow, text_size=t_sz)
