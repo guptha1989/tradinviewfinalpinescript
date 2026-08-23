@@ -53,14 +53,14 @@ showCE_IV_RT_Input   = input.bool(true, "Show CE Realtime Intrinsic Line", group
 showPE_IV_RT_Input   = input.bool(true, "Show PE Realtime Intrinsic Line", group="Intrinsic Value Plots")
 showAvg_IV_RT_Input  = input.bool(true, "Show Avg Realtime Intrinsic Line", group="Intrinsic Value Plots")
 
-show5D_Static_IV_Input = input.bool(true, "Show 5-Day Static Intrinsic Level Lines", group="Intrinsic Value Plots")
+show5D_Static_IV_Input = input.bool(true, "Show 5-Day Static Intrinsic Level Lines (Plotted on Exact Day)", group="Intrinsic Value Plots")
 
 // --- Plot Controls: Time Value (Only Static) ---
-show5D_Static_TV_Input = input.bool(true, "Show 5-Day Static Time Value Level Lines", group="Time Value Plots (Only Static)")
+show5D_Static_TV_Input = input.bool(true, "Show 5-Day Static Time Value Level Lines (Plotted on Exact Day)", group="Time Value Plots (Only Static)")
 
 // --- Plot Controls: BEP & Overlay ---
 showRealtimeBEPInput = input.bool(true, "Show Realtime Dynamic BEP Line", group="BEP & Overlay Plots")
-show5D_Static_BEPInput = input.bool(true, "Show 5-Day Static BEP Level Lines", group="BEP & Overlay Plots")
+show5D_Static_BEPInput = input.bool(true, "Show 5-Day Static BEP Level Lines (Plotted on Exact Day)", group="BEP & Overlay Plots")
 showOppCandlesInput  = input.bool(true, "Show Opposite Option Candles Overlay", group="BEP & Overlay Plots")
 
 showTableInput       = input.bool(true, "Show 5-Day Summary Matrix Table", group="Display Controls")
@@ -90,7 +90,7 @@ f_is_digit(c) =>
     str.contains("0123456789", c)
 
 f_add_level(lines_arr, labels_arr, x1, x2, val, lbl_text, col, transparency) =>
-    if not na(val)
+    if not na(val) and x2 >= x1
         array.push(lines_arr, line.new(x1, val, x2, val, color=color.new(col, transparency), width=1, style=line.style_dashed))
         array.push(labels_arr, label.new(x2, val, lbl_text + ": " + str.tostring(val, "#.##"), color=color.new(col, 85), textcolor=col, style=label.style_label_left, size=size.small))
 
@@ -230,6 +230,23 @@ else if strikeModeInput == StrikeMode.otm
     pe_strike := base_strike - offsetPts
 
 // ==========================================
+// TRACK DAILY BAR BOUNDARIES FOR LAST 5 DAYS
+// ==========================================
+
+var int[] day_start_bars = array.new_int()
+var int[] day_end_bars   = array.new_int()
+
+bool is_chart_new_day = ta.change(time("D")) != 0 or barstate.isfirst
+if is_chart_new_day
+    if array.size(day_start_bars) > 0
+        array.push(day_end_bars, bar_index - 1)
+    array.push(day_start_bars, bar_index)
+
+if barstate.islast
+    if array.size(day_end_bars) < array.size(day_start_bars)
+        array.push(day_end_bars, bar_index + 15)
+
+// ==========================================
 // 5-DAY HISTORICAL DATA FETCHING & PRICE RESOLUTION
 // ==========================================
 
@@ -360,16 +377,11 @@ plot(showAvg_IV_RT_Input ? avg_iv_rt : na, "Avg Realtime Intrinsic", color=color
 plot(showRealtimeBEPInput ? bep_realtime : na, "Realtime Dynamic BEP", color=colorRealBEP, linewidth=2)
 
 // ==========================================
-// PLOTTING 5-DAY STATIC LEVEL LINES & LABELS ON CHART
+// PLOTTING 5-DAY STATIC LEVEL LINES & LABELS (STRICTLY ON THAT EXACT DAY)
 // ==========================================
 
 var line[] static_lines  = array.new_line()
 var label[] static_labels = array.new_label()
-
-bool is_chart_new_day = ta.change(time("D")) != 0
-var int day_start_bar = bar_index
-if is_chart_new_day
-    day_start_bar := bar_index
 
 if barstate.islast
     for l in static_lines
@@ -380,28 +392,70 @@ if barstate.islast
         label.delete(lb)
     array.clear(static_labels)
 
-    int x1 = math.max(0, day_start_bar)
-    int x2 = bar_index + 15
+    int total_days = array.size(day_start_bars)
+    
+    // Function to get start and end bar index for day offset (0 = Today, 1 = T-1, etc.)
+    int idx0 = total_days - 1
+    int x1_0 = idx0 >= 0 ? array.get(day_start_bars, idx0) : bar_index
+    int x2_0 = bar_index + 15
 
-    // 1. 5-Day Static BEP Levels
+    int idx1 = total_days - 2
+    int x1_1 = idx1 >= 0 ? array.get(day_start_bars, idx1) : bar_index
+    int x2_1 = idx1 >= 0 and idx1 < array.size(day_end_bars) ? array.get(day_end_bars, idx1) : bar_index
+
+    int idx2 = total_days - 3
+    int x1_2 = idx2 >= 0 ? array.get(day_start_bars, idx2) : bar_index
+    int x2_2 = idx2 >= 0 and idx2 < array.size(day_end_bars) ? array.get(day_end_bars, idx2) : bar_index
+
+    int idx3 = total_days - 4
+    int x1_3 = idx3 >= 0 ? array.get(day_start_bars, idx3) : bar_index
+    int x2_3 = idx3 >= 0 and idx3 < array.size(day_end_bars) ? array.get(day_end_bars, idx3) : bar_index
+
+    int idx4 = total_days - 5
+    int x1_4 = idx4 >= 0 ? array.get(day_start_bars, idx4) : bar_index
+    int x2_4 = idx4 >= 0 and idx4 < array.size(day_end_bars) ? array.get(day_end_bars, idx4) : bar_index
+
+    // 1. 5-Day Static BEP Levels (Plotted strictly on their exact day)
     if show5D_Static_BEPInput
-        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d0, "BEP [" + date0_str + "]", colorStaticBEP, 0)
-        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d1, "BEP [" + date1_str + "]", colorStaticBEP, 30)
-        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d2, "BEP [" + date2_str + "]", colorStaticBEP, 50)
-        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d3, "BEP [" + date3_str + "]", colorStaticBEP, 70)
-        f_add_level(static_lines, static_labels, x1, x2, bep_stat_d4, "BEP [" + date4_str + "]", colorStaticBEP, 80)
+        f_add_level(static_lines, static_labels, x1_0, x2_0, bep_stat_d0, "BEP [" + date0_str + "]", colorStaticBEP, 0)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, bep_stat_d1, "BEP [" + date1_str + "]", colorStaticBEP, 0)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, bep_stat_d2, "BEP [" + date2_str + "]", colorStaticBEP, 0)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, bep_stat_d3, "BEP [" + date3_str + "]", colorStaticBEP, 0)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, bep_stat_d4, "BEP [" + date4_str + "]", colorStaticBEP, 0)
 
-    // 2. 5-Day Static Intrinsic Levels
+    // 2. 5-Day Static Intrinsic Levels (Plotted strictly on their exact day)
     if show5D_Static_IV_Input
-        f_add_level(static_lines, static_labels, x1, x2, ce_iv_d0, "CE IV [" + date0_str + "]", colorCE_IV, 20)
-        f_add_level(static_lines, static_labels, x1, x2, pe_iv_d0, "PE IV [" + date0_str + "]", colorPE_IV, 20)
+        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_iv_d0, "CE IV [" + date0_str + "]", colorCE_IV, 0)
+        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_iv_d0, "PE IV [" + date0_str + "]", colorPE_IV, 0)
+        
+        f_add_level(static_lines, static_labels, x1_1, x2_1, ce_iv_d1, "CE IV [" + date1_str + "]", colorCE_IV, 0)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, pe_iv_d1, "PE IV [" + date1_str + "]", colorPE_IV, 0)
 
-    // 3. 5-Day Static Time Value Levels
+        f_add_level(static_lines, static_labels, x1_2, x2_2, ce_iv_d2, "CE IV [" + date2_str + "]", colorCE_IV, 0)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, pe_iv_d2, "PE IV [" + date2_str + "]", colorPE_IV, 0)
+
+        f_add_level(static_lines, static_labels, x1_3, x2_3, ce_iv_d3, "CE IV [" + date3_str + "]", colorCE_IV, 0)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, pe_iv_d3, "PE IV [" + date3_str + "]", colorPE_IV, 0)
+
+        f_add_level(static_lines, static_labels, x1_4, x2_4, ce_iv_d4, "CE IV [" + date4_str + "]", colorCE_IV, 0)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, pe_iv_d4, "PE IV [" + date4_str + "]", colorPE_IV, 0)
+
+    // 3. 5-Day Static Time Value Levels (Plotted strictly on their exact day)
     if show5D_Static_TV_Input
-        f_add_level(static_lines, static_labels, x1, x2, ce_tv_d0, "CE TV [" + date0_str + "]", colorCE_TV, 20)
-        f_add_level(static_lines, static_labels, x1, x2, pe_tv_d0, "PE TV [" + date0_str + "]", colorPE_TV, 20)
-        f_add_level(static_lines, static_labels, x1, x2, ce_tv_d1, "CE TV [" + date1_str + "]", colorCE_TV, 50)
-        f_add_level(static_lines, static_labels, x1, x2, pe_tv_d1, "PE TV [" + date1_str + "]", colorPE_TV, 50)
+        f_add_level(static_lines, static_labels, x1_0, x2_0, ce_tv_d0, "CE TV [" + date0_str + "]", colorCE_TV, 0)
+        f_add_level(static_lines, static_labels, x1_0, x2_0, pe_tv_d0, "PE TV [" + date0_str + "]", colorPE_TV, 0)
+
+        f_add_level(static_lines, static_labels, x1_1, x2_1, ce_tv_d1, "CE TV [" + date1_str + "]", colorCE_TV, 0)
+        f_add_level(static_lines, static_labels, x1_1, x2_1, pe_tv_d1, "PE TV [" + date1_str + "]", colorPE_TV, 0)
+
+        f_add_level(static_lines, static_labels, x1_2, x2_2, ce_tv_d2, "CE TV [" + date2_str + "]", colorCE_TV, 0)
+        f_add_level(static_lines, static_labels, x1_2, x2_2, pe_tv_d2, "PE TV [" + date2_str + "]", colorPE_TV, 0)
+
+        f_add_level(static_lines, static_labels, x1_3, x2_3, ce_tv_d3, "CE TV [" + date3_str + "]", colorCE_TV, 0)
+        f_add_level(static_lines, static_labels, x1_3, x2_3, pe_tv_d3, "PE TV [" + date3_str + "]", colorPE_TV, 0)
+
+        f_add_level(static_lines, static_labels, x1_4, x2_4, ce_tv_d4, "CE TV [" + date4_str + "]", colorCE_TV, 0)
+        f_add_level(static_lines, static_labels, x1_4, x2_4, pe_tv_d4, "PE TV [" + date4_str + "]", colorPE_TV, 0)
 
 // ==========================================
 // 5-DAY SUMMARY MATRIX DASHBOARD TABLE
