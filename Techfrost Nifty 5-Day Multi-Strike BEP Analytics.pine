@@ -1,0 +1,254 @@
+//@version=6
+indicator("Techfrost Nifty 5-Day Multi-Strike BEP Analytics", shorttitle="Nifty BEP5D", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
+
+// ==========================================
+// ENUMS & INPUTS
+// ==========================================
+
+enum CalculationBasis
+    dayOpen    = "Day Open (9:15 AM Open)"
+    prevClose  = "Previous Day Close (PDC)"
+    settlement = "Previous Day Settlement Price"
+
+enum StrikeRangeOption
+    range19 = "19 Strikes (-450 to +450 pts)"
+    range15 = "15 Strikes (-350 to +350 pts)"
+    range11 = "11 Strikes (-250 to +250 pts)"
+
+// --- Instrument Settings (NIFTY Only) ---
+exchangeInput      = input.string("NSE", "Exchange Prefix", group="Instrument Settings")
+expiryInput        = input.string("260804", "Select Expiry Date (YYMMDD/Code)", group="Instrument Settings")
+suffixStyleInput   = input.string("C/P", "Option Suffix Format", options=["CE/PE", "C/P"], group="Instrument Settings")
+atmSelectModeInput = input.string("Automatic", "ATM Strike Selection Mode", options=["Automatic", "Manual"], group="Instrument Settings")
+manualStrikeInput  = input.int(24000, "ATM Strike Price (Manual)", group="Instrument Settings")
+
+// --- BEP Calculation Settings ---
+bepCalcBasisInput  = input.enum(CalculationBasis.dayOpen, "BEP Calculation Basis", group="BEP Settings",
+  tooltip="Choose reference price basis: Day Open (9:15 AM Open), Previous Day Close (PDC), or Previous Day Settlement Price.")
+strikeRangeInput   = input.enum(StrikeRangeOption.range19, "Multi-Strike Range", group="BEP Settings",
+  tooltip="Select range of Nifty strikes around ATM (50 point steps). Max 19 strikes to guarantee TradingView security call safety.")
+
+// --- Display Controls ---
+showTableInput     = input.bool(true, "Show 5-Day BEP Summary Table", group="Display Controls")
+tablePosInput      = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
+tableTextSizeInput = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls")
+showPlotLinesInput = input.bool(true, "Show 5-Day ATM BEP Level Lines on Chart", group="Display Controls")
+
+// --- Styling & Colors ---
+colorATM   = input.color(#FFD700, "ATM BEP Color", group="Styling & Colors")
+colorUpper = input.color(#FF1744, "Upper Strikes Color (+Offset)", group="Styling & Colors")
+colorLower = input.color(#00E676, "Lower Strikes Color (-Offset)", group="Styling & Colors")
+
+// ==========================================
+// TICKER PARSING & NIFTY AUTO-DETECTION
+// ==========================================
+
+string cleanTicker = syminfo.ticker
+int colonPos = str.pos(cleanTicker, ":")
+if colonPos != -1
+    cleanTicker := str.substring(cleanTicker, colonPos + 1)
+cleanTicker := str.replace_all(cleanTicker, " ", "")
+
+f_is_digit(string c) =>
+    str.contains("0123456789", c)
+
+var string root = "NIFTY"
+var string expiry = expiryInput
+var string opt_type = "C"
+var int strike_val = manualStrikeInput
+var bool is_option = false
+
+int tickerLen = str.length(cleanTicker)
+if tickerLen > 7
+    int idx = tickerLen - 1
+    string strike_str = ""
+    while idx >= 0 and f_is_digit(str.substring(cleanTicker, idx, idx + 1))
+        strike_str := str.substring(cleanTicker, idx, idx + 1) + strike_str
+        idx := idx - 1
+        
+    if idx > 2 and str.length(strike_str) > 0
+        string opt_char = str.substring(cleanTicker, idx, idx + 1)
+        if opt_char == "C" or opt_char == "P" or opt_char == "E"
+            opt_type := opt_char == "P" ? "P" : "C"
+            strike_val := int(str.tonumber(strike_str))
+            int exp_len = 5
+            if idx >= 3 and f_is_digit(str.substring(cleanTicker, idx - 3, idx - 2))
+                exp_len := 6
+            if idx >= exp_len
+                expiry := str.substring(cleanTicker, idx - exp_len, idx)
+                root := str.substring(cleanTicker, 0, idx - exp_len)
+                is_option := true
+
+final_root     = "NIFTY"
+final_exchange = exchangeInput
+final_expiry   = is_option ? expiry : expiryInput
+int strike_step = 50
+
+spot_sym = final_exchange + ":" + final_root
+[spot_open, spot_close_today] = request.security(spot_sym, "1D", [open, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+var int base_center_strike = na
+if barstate.isfirst or na(base_center_strike)
+    int calc_strike = (atmSelectModeInput == "Manual") ? manualStrikeInput : (is_option ? strike_val : int(math.round(nz(spot_close_today, spot_open) / strike_step) * strike_step))
+    if calc_strike <= 0
+        calc_strike := manualStrikeInput
+    base_center_strike := calc_strike
+
+int st_center = base_center_strike
+
+f_build_option_ticker(int target_strike, string o_type) =>
+    string st_str = str.tostring(target_strike)
+    if suffixStyleInput == "C/P"
+        string letter = o_type == "CE" or o_type == "C" ? "C" : "P"
+        final_exchange + ":" + final_root + final_expiry + letter + st_str
+    else
+        string letter = o_type == "CE" or o_type == "C" ? "CE" : "PE"
+        final_exchange + ":" + final_root + final_expiry + st_str + letter
+
+// ==========================================
+// 5-DAY HISTORICAL PRICE RESOLUTION
+// ==========================================
+
+f_get_5d_ref_prices() =>
+    float p_d0 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[0] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[1] : close[1])
+    float p_d1 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[1] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[2] : close[2])
+    float p_d2 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[2] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[3] : close[3])
+    float p_d3 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[3] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[4] : close[4])
+    float p_d4 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[4] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[5] : close[5])
+    [p_d0, p_d1, p_d2, p_d3, p_d4]
+
+int max_offset = strikeRangeInput == StrikeRangeOption.range19 ? 9 : (strikeRangeInput == StrikeRangeOption.range15 ? 7 : 5)
+
+// Arrays to store 5-day BEP for strikes
+var float[] bep_d0 = array.new_float(19, na)
+var float[] bep_d1 = array.new_float(19, na)
+var float[] bep_d2 = array.new_float(19, na)
+var float[] bep_d3 = array.new_float(19, na)
+var float[] bep_d4 = array.new_float(19, na)
+var int[] strike_list = array.new_int(19, 0)
+
+// Loop over offsets around ATM (-max_offset to +max_offset)
+for idx = 0 to (2 * max_offset)
+    int offset = idx - max_offset
+    int target_st = st_center + offset * strike_step
+    array.set(strike_list, idx, target_st)
+    
+    string ce_sym = f_build_option_ticker(target_st, "CE")
+    string pe_sym = f_build_option_ticker(target_st, "PE")
+    
+    [ce_0, ce_1, ce_2, ce_3, ce_4] = request.security(ce_sym, "D", f_get_5d_ref_prices(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+    [pe_0, pe_1, pe_2, pe_3, pe_4] = request.security(pe_sym, "D", f_get_5d_ref_prices(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+    
+    array.set(bep_d0, idx, (ce_0 + pe_0) / 2.0)
+    array.set(bep_d1, idx, (ce_1 + pe_1) / 2.0)
+    array.set(bep_d2, idx, (ce_2 + pe_2) / 2.0)
+    array.set(bep_d3, idx, (ce_3 + pe_3) / 2.0)
+    array.set(bep_d4, idx, (ce_4 + pe_4) / 2.0)
+
+// Extract 5-day BEP for ATM Strike (index = max_offset)
+float atm_bep_d0 = array.get(bep_d0, max_offset)
+float atm_bep_d1 = array.get(bep_d1, max_offset)
+float atm_bep_d2 = array.get(bep_d2, max_offset)
+float atm_bep_d3 = array.get(bep_d3, max_offset)
+float atm_bep_d4 = array.get(bep_d4, max_offset)
+
+// ==========================================
+// PLOTTING 5-DAY ATM BEP LINES ON CHART
+// ==========================================
+
+var line[] atm_lines = array.new_line()
+var label[] atm_labels = array.new_label()
+
+bool is_chart_new_day = ta.change(time("D")) != 0
+var int day_start_bar = bar_index
+if is_chart_new_day
+    day_start_bar := bar_index
+
+if barstate.islast and showPlotLinesInput
+    for l in atm_lines
+        line.delete(l)
+    array.clear(atm_lines)
+    
+    for lb in atm_labels
+        label.delete(lb)
+    array.clear(atm_labels)
+
+    int x1 = math.max(0, day_start_bar)
+    int x2 = bar_index + 15
+
+    array.push(atm_lines, line.new(x1, atm_bep_d0, x2, atm_bep_d0, color=colorATM, width=2, style=line.style_solid))
+    array.push(atm_labels, label.new(x2, atm_bep_d0, "ATM (" + str.tostring(st_center) + ") Today BEP: " + str.tostring(atm_bep_d0, "#.##"), color=color.new(colorATM, 80), textcolor=colorATM, style=label.style_label_left, size=size.small))
+
+    array.push(atm_lines, line.new(x1, atm_bep_d1, x2, atm_bep_d1, color=color.new(colorATM, 30), width=1, style=line.style_dashed))
+    array.push(atm_labels, label.new(x2, atm_bep_d1, "ATM T-1 BEP: " + str.tostring(atm_bep_d1, "#.##"), color=color.new(colorATM, 85), textcolor=colorATM, style=label.style_label_left, size=size.small))
+
+    array.push(atm_lines, line.new(x1, atm_bep_d2, x2, atm_bep_d2, color=color.new(colorATM, 50), width=1, style=line.style_dotted))
+    array.push(atm_labels, label.new(x2, atm_bep_d2, "ATM T-2 BEP: " + str.tostring(atm_bep_d2, "#.##"), color=color.new(colorATM, 85), textcolor=colorATM, style=label.style_label_left, size=size.small))
+
+// ==========================================
+// 5-DAY MULTI-STRIKE BEP MATRIX TABLE
+// ==========================================
+
+var table matrixTable = na
+if barstate.islast and showTableInput
+    table.delete(matrixTable)
+    
+    position_choice = tablePosInput == "Top Right" ? position.top_right :
+                      tablePosInput == "Top Left" ? position.top_left :
+                      tablePosInput == "Bottom Right" ? position.bottom_right : position.bottom_left
+                      
+    t_sz = tableTextSizeInput == "Tiny" ? size.tiny :
+           tableTextSizeInput == "Small" ? size.small :
+           tableTextSizeInput == "Normal" ? size.normal : size.large
+           
+    int total_rows = 2 * max_offset + 3
+    matrixTable := table.new(position_choice, 8, total_rows, border_width=1, border_color=color.gray)
+    
+    basisTitle = bepCalcBasisInput == CalculationBasis.dayOpen ? "Day Open" : (bepCalcBasisInput == CalculationBasis.prevClose ? "Prev Close" : "Settlement Price")
+
+    // Header Row 0
+    table.cell(matrixTable, 0, 0, "Asset: NIFTY", bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 1, 0, "Basis: " + basisTitle, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 2, 0, "ATM Strike:", bgcolor=#1565C0, text_color=color.silver, text_size=t_sz)
+    table.cell(matrixTable, 3, 0, str.tostring(st_center), bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
+    table.cell(matrixTable, 4, 0, "5-Day BEP Matrix", bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 5, 0, "", bgcolor=#1565C0)
+    table.cell(matrixTable, 6, 0, "", bgcolor=#1565C0)
+    table.cell(matrixTable, 7, 0, "", bgcolor=#1565C0)
+
+    // Row 1: Column Headers
+    table.cell(matrixTable, 0, 1, "Strike", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 1, 1, "Offset", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 2, 1, "Day 1 (Today)", bgcolor=#37474F, text_color=color.yellow, text_size=t_sz)
+    table.cell(matrixTable, 3, 1, "Day 2 (T-1)", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 4, 1, "Day 3 (T-2)", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 5, 1, "Day 4 (T-3)", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 6, 1, "Day 5 (T-4)", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 7, 1, "5-Day Avg", bgcolor=#37474F, text_color=color.aqua, text_size=t_sz)
+
+    // Populate 5-day BEP rows from Upper (max_offset) down to Lower (-max_offset)
+    int r_idx = 2
+    for idx = (2 * max_offset) to 0 by 1
+        int offset = idx - max_offset
+        int curr_strike = array.get(strike_list, idx)
+        
+        float v0 = array.get(bep_d0, idx)
+        float v1 = array.get(bep_d1, idx)
+        float v2 = array.get(bep_d2, idx)
+        float v3 = array.get(bep_d3, idx)
+        float v4 = array.get(bep_d4, idx)
+        float avg5d = (v0 + v1 + v2 + v3 + v4) / 5.0
+
+        string offset_str = offset == 0 ? "ATM" : (offset > 0 ? "+" + str.tostring(offset * strike_step) : str.tostring(offset * strike_step))
+        color row_bg = offset == 0 ? color.new(#F57F17, 0) : (offset > 0 ? color.new(#C62828, 0) : color.new(#2E7D32, 0))
+
+        table.cell(matrixTable, 0, r_idx, str.tostring(curr_strike), bgcolor=row_bg, text_color=color.white, text_size=t_sz)
+        table.cell(matrixTable, 1, r_idx, offset_str, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
+        table.cell(matrixTable, 2, r_idx, na(v0) ? "N/A" : str.tostring(v0, "#.##"), bgcolor=#F57F17, text_color=color.yellow, text_size=t_sz)
+        table.cell(matrixTable, 3, r_idx, na(v1) ? "N/A" : str.tostring(v1, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+        table.cell(matrixTable, 4, r_idx, na(v2) ? "N/A" : str.tostring(v2, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+        table.cell(matrixTable, 5, r_idx, na(v3) ? "N/A" : str.tostring(v3, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+        table.cell(matrixTable, 6, r_idx, na(v4) ? "N/A" : str.tostring(v4, "#.##"), bgcolor=color.black, text_color=color.gray, text_size=t_sz)
+        table.cell(matrixTable, 7, r_idx, na(avg5d) ? "N/A" : str.tostring(avg5d, "#.##"), bgcolor=#006064, text_color=color.aqua, text_size=t_sz)
+
+        r_idx := r_idx + 1
