@@ -9,6 +9,8 @@ enum CalculationBasis
     dayOpen    = "Day Open (9:15 AM Open)"
     prevClose  = "Previous Day Close (PDC)"
     settlement = "Previous Day Settlement Price"
+    curClose   = "Current Day Close / Live LTP"
+    first5Min  = "First 5 Min Close"
 
 enum StrikeRangeOption
     range19 = "19 Strikes (-450 to +450 pts)"
@@ -24,7 +26,7 @@ manualStrikeInput  = input.int(24000, "ATM Strike Price (Manual)", group="Instru
 
 // --- BEP Calculation Settings ---
 bepCalcBasisInput  = input.enum(CalculationBasis.dayOpen, "BEP Calculation Basis", group="BEP Settings",
-  tooltip="Choose reference price basis: Day Open (9:15 AM Open), Previous Day Close (PDC), or Previous Day Settlement Price.")
+  tooltip="Choose reference price basis: Day Open, Previous Day Close, Previous Day Settlement, Current Day Close / Live LTP, or First 5 Min Close.")
 strikeRangeInput   = input.enum(StrikeRangeOption.range19, "Multi-Strike Range", group="BEP Settings",
   tooltip="Select range of Nifty strikes around ATM (50 point steps). Max 19 strikes to guarantee TradingView security call safety.")
 
@@ -106,15 +108,24 @@ f_build_option_ticker(int target_strike, string o_type) =>
         final_exchange + ":" + final_root + final_expiry + st_str + letter
 
 // ==========================================
-// 5-DAY HISTORICAL PRICE RESOLUTION
+// 5-DAY HISTORICAL PRICE & DATE RESOLUTION
 // ==========================================
 
+// Fetch daily timestamps for column header dates
+[d0_time, d1_time, d2_time, d3_time, d4_time] = request.security(spot_sym, "D", [time[0], time[1], time[2], time[3], time[4]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+string date0_str = na(d0_time) ? "Today" : str.format("{0,date,dd-MMM}", d0_time)
+string date1_str = na(d1_time) ? "T-1"   : str.format("{0,date,dd-MMM}", d1_time)
+string date2_str = na(d2_time) ? "T-2"   : str.format("{0,date,dd-MMM}", d2_time)
+string date3_str = na(d3_time) ? "T-3"   : str.format("{0,date,dd-MMM}", d3_time)
+string date4_str = na(d4_time) ? "T-4"   : str.format("{0,date,dd-MMM}", d4_time)
+
 f_get_5d_ref_prices() =>
-    float p_d0 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[0] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[1] : close[1])
-    float p_d1 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[1] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[2] : close[2])
-    float p_d2 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[2] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[3] : close[3])
-    float p_d3 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[3] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[4] : close[4])
-    float p_d4 = bepCalcBasisInput == CalculationBasis.dayOpen ? open[4] : (bepCalcBasisInput == CalculationBasis.prevClose ? close[5] : close[5])
+    float p_d0 = bepCalcBasisInput == CalculationBasis.curClose ? close[0] : (bepCalcBasisInput == CalculationBasis.dayOpen ? open[0] : (bepCalcBasisInput == CalculationBasis.first5Min ? open[0] : close[1]))
+    float p_d1 = bepCalcBasisInput == CalculationBasis.curClose ? close[1] : (bepCalcBasisInput == CalculationBasis.dayOpen ? open[1] : (bepCalcBasisInput == CalculationBasis.first5Min ? open[1] : close[2]))
+    float p_d2 = bepCalcBasisInput == CalculationBasis.curClose ? close[2] : (bepCalcBasisInput == CalculationBasis.dayOpen ? open[2] : (bepCalcBasisInput == CalculationBasis.first5Min ? open[2] : close[3]))
+    float p_d3 = bepCalcBasisInput == CalculationBasis.curClose ? close[3] : (bepCalcBasisInput == CalculationBasis.dayOpen ? open[3] : (bepCalcBasisInput == CalculationBasis.first5Min ? open[3] : close[4]))
+    float p_d4 = bepCalcBasisInput == CalculationBasis.curClose ? close[4] : (bepCalcBasisInput == CalculationBasis.dayOpen ? open[4] : (bepCalcBasisInput == CalculationBasis.first5Min ? open[4] : close[5]))
     [p_d0, p_d1, p_d2, p_d3, p_d4]
 
 int max_offset = strikeRangeInput == StrikeRangeOption.range19 ? 9 : (strikeRangeInput == StrikeRangeOption.range15 ? 7 : 5)
@@ -177,16 +188,16 @@ if barstate.islast and showPlotLinesInput
     int x2 = bar_index + 15
 
     array.push(atm_lines, line.new(x1, atm_bep_d0, x2, atm_bep_d0, color=colorATM, width=2, style=line.style_solid))
-    array.push(atm_labels, label.new(x2, atm_bep_d0, "ATM (" + str.tostring(st_center) + ") Today BEP: " + str.tostring(atm_bep_d0, "#.##"), color=color.new(colorATM, 80), textcolor=colorATM, style=label.style_label_left, size=size.small))
+    array.push(atm_labels, label.new(x2, atm_bep_d0, "ATM (" + str.tostring(st_center) + ") [" + date0_str + "] BEP: " + str.tostring(atm_bep_d0, "#.##"), color=color.new(colorATM, 80), textcolor=colorATM, style=label.style_label_left, size=size.small))
 
     array.push(atm_lines, line.new(x1, atm_bep_d1, x2, atm_bep_d1, color=color.new(colorATM, 30), width=1, style=line.style_dashed))
-    array.push(atm_labels, label.new(x2, atm_bep_d1, "ATM T-1 BEP: " + str.tostring(atm_bep_d1, "#.##"), color=color.new(colorATM, 85), textcolor=colorATM, style=label.style_label_left, size=size.small))
+    array.push(atm_labels, label.new(x2, atm_bep_d1, "ATM [" + date1_str + "] BEP: " + str.tostring(atm_bep_d1, "#.##"), color=color.new(colorATM, 85), textcolor=colorATM, style=label.style_label_left, size=size.small))
 
     array.push(atm_lines, line.new(x1, atm_bep_d2, x2, atm_bep_d2, color=color.new(colorATM, 50), width=1, style=line.style_dotted))
-    array.push(atm_labels, label.new(x2, atm_bep_d2, "ATM T-2 BEP: " + str.tostring(atm_bep_d2, "#.##"), color=color.new(colorATM, 85), textcolor=colorATM, style=label.style_label_left, size=size.small))
+    array.push(atm_labels, label.new(x2, atm_bep_d2, "ATM [" + date2_str + "] BEP: " + str.tostring(atm_bep_d2, "#.##"), color=color.new(colorATM, 85), textcolor=colorATM, style=label.style_label_left, size=size.small))
 
 // ==========================================
-// 5-DAY MULTI-STRIKE BEP MATRIX TABLE
+// 5-DAY MULTI-STRIKE BEP MATRIX TABLE WITH DATES
 // ==========================================
 
 var table matrixTable = na
@@ -204,7 +215,7 @@ if barstate.islast and showTableInput
     int total_rows = 2 * max_offset + 3
     matrixTable := table.new(position_choice, 8, total_rows, border_width=1, border_color=color.gray)
     
-    basisTitle = bepCalcBasisInput == CalculationBasis.dayOpen ? "Day Open" : (bepCalcBasisInput == CalculationBasis.prevClose ? "Prev Close" : "Settlement Price")
+    basisTitle = bepCalcBasisInput == CalculationBasis.dayOpen ? "Day Open" : (bepCalcBasisInput == CalculationBasis.prevClose ? "Prev Close" : (bepCalcBasisInput == CalculationBasis.curClose ? "Current Close (LTP)" : "Settlement Price"))
 
     // Header Row 0
     table.cell(matrixTable, 0, 0, "Asset: NIFTY", bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
@@ -216,14 +227,14 @@ if barstate.islast and showTableInput
     table.cell(matrixTable, 6, 0, "", bgcolor=#1565C0)
     table.cell(matrixTable, 7, 0, "", bgcolor=#1565C0)
 
-    // Row 1: Column Headers
+    // Row 1: Column Headers with Exact Calendar Dates
     table.cell(matrixTable, 0, 1, "Strike", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(matrixTable, 1, 1, "Offset", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
-    table.cell(matrixTable, 2, 1, "Day 1 (Today)", bgcolor=#37474F, text_color=color.yellow, text_size=t_sz)
-    table.cell(matrixTable, 3, 1, "Day 2 (T-1)", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
-    table.cell(matrixTable, 4, 1, "Day 3 (T-2)", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
-    table.cell(matrixTable, 5, 1, "Day 4 (T-3)", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
-    table.cell(matrixTable, 6, 1, "Day 5 (T-4)", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 2, 1, date0_str + " (Today)", bgcolor=#37474F, text_color=color.yellow, text_size=t_sz)
+    table.cell(matrixTable, 3, 1, date1_str, bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 4, 1, date2_str, bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 5, 1, date3_str, bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(matrixTable, 6, 1, date4_str, bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(matrixTable, 7, 1, "5-Day Avg", bgcolor=#37474F, text_color=color.aqua, text_size=t_sz)
 
     // Populate 5-day BEP rows from Upper (max_offset) down to Lower (-max_offset)
