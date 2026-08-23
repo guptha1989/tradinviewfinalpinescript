@@ -1,5 +1,5 @@
 //@version=6
-indicator("Techfrost Multi-Strike BEP Lines Analytics", shorttitle="TF MultiBEP Lines", overlay=true, precision=2)
+indicator("4. Techfrost Multi-Strike BEP Lines Analytics", shorttitle="TF MultiBEP Lines", overlay=true, precision=2)
 
 // =========================================================================
 // ENUMS & INPUTS
@@ -51,12 +51,11 @@ offset_choice_str  = input.string("100 Points", "Strike Offset Points", options=
 standard_bep_basis = input.string("Day Open Price", "Static BEP Calculation Basis", options=["Day Open Price", "Previous Day Close", "Previous Day Settlement", "First 5 Min Close"], group=G_CALC)
 
 // 3. Plot Controls
-show_running_bep   = input.bool(true, "Show Realtime Dynamic BEP Lines", group=G_PLOTS)
-show_standard_bep  = input.bool(true, "Show Static Level BEP Lines", group=G_PLOTS)
+show_running_bep   = input.bool(true, "Show Realtime Dynamic BEP Lines (ATM, ITM 1, OTM 1 Only)", group=G_PLOTS)
+show_standard_bep  = input.bool(true, "Show Static Level BEP Lines (All 7 Levels)", group=G_PLOTS)
 show_pdc_lines     = input.bool(true, "Show Previous Day Settlement Lines", group=G_PLOTS)
 show_pdh_pdl_lines = input.bool(true, "Show Previous Day High & Low Lines", group=G_PLOTS)
 show_opp_candles   = input.bool(true, "Show Opposite Option Candles Overlay", group=G_PLOTS)
-show_line_labels   = input.bool(true, "Show Level Line Right Labels", group=G_PLOTS)
 
 // 4. Styling & Colors
 c_itm              = input.color(#00E676, "ITM BEP Line Color", group=G_COLORS)
@@ -86,14 +85,14 @@ table_size_str     = input.string("Small", "Table Text Size", options=["Tiny", "
 f_is_digit(string c) =>
     str.contains("0123456789", c)
 
-f_fill_table_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, rt_bep, ce_h, ce_lw, pe_h, pe_lw, row_bg, t_sz) =>
+f_fill_table_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, float rt_bep, ce_h, ce_lw, pe_h, pe_lw, row_bg, t_sz) =>
     table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
     table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
     table.cell(tbl, 2, r, na(pe_r) ? "N/A" : str.tostring(pe_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
     table.cell(tbl, 3, r, na(stat_bep) ? "N/A" : str.tostring(stat_bep, "#.##"), bgcolor=#006064, text_color=color.aqua, text_size=t_sz)
     table.cell(tbl, 4, r, na(ce_l) ? "N/A" : str.tostring(ce_l, "#.##"), bgcolor=color.black, text_color=#00E676, text_size=t_sz)
     table.cell(tbl, 5, r, na(pe_l) ? "N/A" : str.tostring(pe_l, "#.##"), bgcolor=color.black, text_color=#FF5252, text_size=t_sz)
-    table.cell(tbl, 6, r, na(rt_bep) ? "N/A" : str.tostring(rt_bep, "#.##"), bgcolor=#F57F17, text_color=color.yellow, text_size=t_sz)
+    table.cell(tbl, 6, r, na(rt_bep) or rt_bep <= 0 ? "N/A" : str.tostring(rt_bep, "#.##"), bgcolor=#F57F17, text_color=color.yellow, text_size=t_sz)
     
     string ce_hl_str = (na(ce_h) ? "N/A" : str.tostring(ce_h, "#.#")) + " / " + (na(ce_lw) ? "N/A" : str.tostring(ce_lw, "#.#"))
     string pe_hl_str = (na(pe_h) ? "N/A" : str.tostring(pe_h, "#.#")) + " / " + (na(pe_lw) ? "N/A" : str.tostring(pe_lw, "#.#"))
@@ -288,25 +287,14 @@ float pe_p3_ref = f_resolve_basis(pe_p3_o, pe_p3_pdc, pe_p3_f5m)
 
 // =========================================================================
 // BEP CALCULATIONS: EXACT ITM & OTM STRIKE PAIRINGS FOR 7 LEVELS
-// ITM 3 BEP = (CE -3x + PE +3x) / 2  (e.g. 23700 CE + 24300 PE) / 2
-// ITM 2 BEP = (CE -2x + PE +2x) / 2  (e.g. 23800 CE + 24200 PE) / 2
-// ITM 1 BEP = (CE -1x + PE +1x) / 2  (e.g. 23900 CE + 24100 PE) / 2
-// ATM BEP   = (CE ATM + PE ATM) / 2  (e.g. 24000 CE + 24000 PE) / 2
-// OTM 1 BEP = (CE +1x + PE -1x) / 2  (e.g. 24100 CE + 23900 PE) / 2
-// OTM 2 BEP = (CE +2x + PE -2x) / 2  (e.g. 24200 CE + 23800 PE) / 2
-// OTM 3 BEP = (CE +3x + PE -3x) / 2  (e.g. 24300 CE + 23700 PE) / 2
 // =========================================================================
 
-// Realtime Dynamic BEP Values
-float run_bep_itm3 = (ce_m3_ltp + pe_p3_ltp) / 2.0
-float run_bep_itm2 = (ce_m2_ltp + pe_p2_ltp) / 2.0
+// Realtime Dynamic BEP Values (ATM, ITM 1, OTM 1 Only)
 float run_bep_itm1 = (ce_m1_ltp + pe_p1_ltp) / 2.0
 float run_bep_atm  = (ce_atm_ltp + pe_atm_ltp) / 2.0
 float run_bep_otm1 = (ce_p1_ltp + pe_m1_ltp) / 2.0
-float run_bep_otm2 = (ce_p2_ltp + pe_m2_ltp) / 2.0
-float run_bep_otm3 = (ce_p3_ltp + pe_m3_ltp) / 2.0
 
-// Static Reference BEP Values
+// Static Reference BEP Values (All 7 Levels)
 float std_bep_itm3 = (ce_m3_ref + pe_p3_ref) / 2.0
 float std_bep_itm2 = (ce_m2_ref + pe_p2_ref) / 2.0
 float std_bep_itm1 = (ce_m1_ref + pe_p1_ref) / 2.0
@@ -315,102 +303,33 @@ float std_bep_otm1 = (ce_p1_ref + pe_m1_ref) / 2.0
 float std_bep_otm2 = (ce_p2_ref + pe_m2_ref) / 2.0
 float std_bep_otm3 = (ce_p3_ref + pe_m3_ref) / 2.0
 
-// Plot Realtime Dynamic BEP Lines
-plot(show_running_bep ? run_bep_itm3 : na, "Realtime ITM 3 BEP", color=color.new(c_itm, 40), linewidth=1)
-plot(show_running_bep ? run_bep_itm2 : na, "Realtime ITM 2 BEP", color=color.new(c_itm, 20), linewidth=1)
-plot(show_running_bep ? run_bep_itm1 : na, "Realtime ITM 1 BEP", color=c_itm, linewidth=2)
-plot(show_running_bep ? run_bep_atm  : na, "Realtime ATM BEP",   color=c_atm, linewidth=2)
-plot(show_running_bep ? run_bep_otm1 : na, "Realtime OTM 1 BEP", color=c_otm, linewidth=2)
-plot(show_running_bep ? run_bep_otm2 : na, "Realtime OTM 2 BEP", color=color.new(c_otm, 20), linewidth=1)
-plot(show_running_bep ? run_bep_otm3 : na, "Realtime OTM 3 BEP", color=color.new(c_otm, 40), linewidth=1)
-
 // =========================================================================
-// STATIC BEP & PREVIOUS DAY HIGH / LOW / SETTLEMENT HORIZONTAL LINES
+// PLOTTING ALL LINES (EXPOSED DIRECTLY IN TRADINGVIEW STYLE TAB)
 // =========================================================================
-var line[] level_lines  = array.new_line()
-var label[] level_labels = array.new_label()
 
-bool is_chart_new_day = ta.change(time("D")) != 0
-var int day_start_bar = bar_index
-if is_chart_new_day
-    day_start_bar := bar_index
+// --- Realtime Plots (ATM, ITM 1, OTM 1 ONLY) ---
+plot(show_running_bep and run_bep_itm1 > 0 ? run_bep_itm1 : na, "Realtime ITM 1 BEP", color=c_itm, linewidth=2)
+plot(show_running_bep and run_bep_atm  > 0 ? run_bep_atm  : na, "Realtime ATM BEP",   color=c_atm, linewidth=2)
+plot(show_running_bep and run_bep_otm1 > 0 ? run_bep_otm1 : na, "Realtime OTM 1 BEP", color=c_otm, linewidth=2)
 
-if barstate.islast
-    for l in level_lines
-        line.delete(l)
-    array.clear(level_lines)
-    
-    for lb in level_labels
-        label.delete(lb)
-    array.clear(level_labels)
+// --- Static BEP Level Plots (Exposed Directly in TradingView Style Tab) ---
+plot(show_standard_bep and std_bep_itm3 > 0 ? std_bep_itm3 : na, "ITM 3 Static BEP", color=color.new(c_itm, 40), style=plot.style_linebr)
+plot(show_standard_bep and std_bep_itm2 > 0 ? std_bep_itm2 : na, "ITM 2 Static BEP", color=color.new(c_itm, 20), style=plot.style_linebr)
+plot(show_standard_bep and std_bep_itm1 > 0 ? std_bep_itm1 : na, "ITM 1 Static BEP", color=c_itm, style=plot.style_linebr)
+plot(show_standard_bep and std_bep_atm  > 0 ? std_bep_atm  : na, "ATM Static BEP",   color=c_atm, style=plot.style_linebr)
+plot(show_standard_bep and std_bep_otm1 > 0 ? std_bep_otm1 : na, "OTM 1 Static BEP", color=c_otm, style=plot.style_linebr)
+plot(show_standard_bep and std_bep_otm2 > 0 ? std_bep_otm2 : na, "OTM 2 Static BEP", color=color.new(c_otm, 20), style=plot.style_linebr)
+plot(show_standard_bep and std_bep_otm3 > 0 ? std_bep_otm3 : na, "OTM 3 Static BEP", color=color.new(c_otm, 40), style=plot.style_linebr)
 
-    int x1 = math.max(0, day_start_bar)
-    int x2 = bar_index + 15
+// --- Previous Day Level Plots (Exposed Directly in TradingView Style Tab) ---
+plot(show_pdc_lines and ce_atm_pdc > 0 ? ce_atm_pdc : na, "CE Prev Settlement", color=c_ce_pdc, style=plot.style_linebr)
+plot(show_pdc_lines and pe_atm_pdc > 0 ? pe_atm_pdc : na, "PE Prev Settlement", color=c_pe_pdc, style=plot.style_linebr)
 
-    // 1. Static BEP Horizontal Lines
-    if show_standard_bep
-        // ITM 3 Static BEP
-        array.push(level_lines, line.new(x1, std_bep_itm3, x2, std_bep_itm3, color=color.new(c_itm, 40), width=1, style=line.style_dashed))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_itm3, "ITM 3 Static BEP (" + str.tostring(st_m3) + "CE / " + str.tostring(st_p3) + "PE): " + str.tostring(std_bep_itm3, "#.##"), color=color.new(c_itm, 80), textcolor=c_itm, style=label.style_label_left, size=size.small))
+plot(show_pdh_pdl_lines and ce_atm_pdh > 0 ? ce_atm_pdh : na, "CE Prev High", color=c_ce_pdh, style=plot.style_linebr)
+plot(show_pdh_pdl_lines and ce_atm_pdl > 0 ? ce_atm_pdl : na, "CE Prev Low",  color=c_ce_pdl, style=plot.style_linebr)
 
-        // ITM 2 Static BEP
-        array.push(level_lines, line.new(x1, std_bep_itm2, x2, std_bep_itm2, color=color.new(c_itm, 20), width=1, style=line.style_dashed))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_itm2, "ITM 2 Static BEP (" + str.tostring(st_m2) + "CE / " + str.tostring(st_p2) + "PE): " + str.tostring(std_bep_itm2, "#.##"), color=color.new(c_itm, 80), textcolor=c_itm, style=label.style_label_left, size=size.small))
-
-        // ITM 1 Static BEP
-        array.push(level_lines, line.new(x1, std_bep_itm1, x2, std_bep_itm1, color=c_itm, width=1, style=line.style_dashed))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_itm1, "ITM 1 Static BEP (" + str.tostring(st_m1) + "CE / " + str.tostring(st_p1) + "PE): " + str.tostring(std_bep_itm1, "#.##"), color=color.new(c_itm, 80), textcolor=c_itm, style=label.style_label_left, size=size.small))
-
-        // ATM Static BEP
-        array.push(level_lines, line.new(x1, std_bep_atm, x2, std_bep_atm, color=c_atm, width=1, style=line.style_dashed))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_atm, "ATM (" + str.tostring(st_atm) + ") Static BEP: " + str.tostring(std_bep_atm, "#.##"), color=color.new(c_atm, 80), textcolor=c_atm, style=label.style_label_left, size=size.small))
-            
-        // OTM 1 Static BEP
-        array.push(level_lines, line.new(x1, std_bep_otm1, x2, std_bep_otm1, color=c_otm, width=1, style=line.style_dashed))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_otm1, "OTM 1 Static BEP (" + str.tostring(st_p1) + "CE / " + str.tostring(st_m1) + "PE): " + str.tostring(std_bep_otm1, "#.##"), color=color.new(c_otm, 80), textcolor=c_otm, style=label.style_label_left, size=size.small))
-
-        // OTM 2 Static BEP
-        array.push(level_lines, line.new(x1, std_bep_otm2, x2, std_bep_otm2, color=color.new(c_otm, 20), width=1, style=line.style_dashed))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_otm2, "OTM 2 Static BEP (" + str.tostring(st_p2) + "CE / " + str.tostring(st_m2) + "PE): " + str.tostring(std_bep_otm2, "#.##"), color=color.new(c_otm, 80), textcolor=c_otm, style=label.style_label_left, size=size.small))
-
-        // OTM 3 Static BEP
-        array.push(level_lines, line.new(x1, std_bep_otm3, x2, std_bep_otm3, color=color.new(c_otm, 40), width=1, style=line.style_dashed))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, std_bep_otm3, "OTM 3 Static BEP (" + str.tostring(st_p3) + "CE / " + str.tostring(st_m3) + "PE): " + str.tostring(std_bep_otm3, "#.##"), color=color.new(c_otm, 80), textcolor=c_otm, style=label.style_label_left, size=size.small))
-
-    // 2. CE & PE Previous Day Settlement Lines
-    if show_pdc_lines
-        array.push(level_lines, line.new(x1, ce_atm_pdc, x2, ce_atm_pdc, color=c_ce_pdc, width=1, style=line.style_dashed))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, ce_atm_pdc, "CE Prev Settlement: " + str.tostring(ce_atm_pdc, "#.##"), color=color.new(c_ce_pdc, 80), textcolor=c_ce_pdc, style=label.style_label_left, size=size.small))
-
-        array.push(level_lines, line.new(x1, pe_atm_pdc, x2, pe_atm_pdc, color=c_pe_pdc, width=1, style=line.style_dashed))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, pe_atm_pdc, "PE Prev Settlement: " + str.tostring(pe_atm_pdc, "#.##"), color=color.new(c_pe_pdc, 80), textcolor=c_pe_pdc, style=label.style_label_left, size=size.small))
-
-    // 3. CE & PE Previous Day High & Low Lines
-    if show_pdh_pdl_lines
-        array.push(level_lines, line.new(x1, ce_atm_pdh, x2, ce_atm_pdh, color=c_ce_pdh, width=1, style=line.style_dotted))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, ce_atm_pdh, "CE Prev High: " + str.tostring(ce_atm_pdh, "#.##"), color=color.new(c_ce_pdh, 80), textcolor=c_ce_pdh, style=label.style_label_left, size=size.small))
-
-        array.push(level_lines, line.new(x1, ce_atm_pdl, x2, ce_atm_pdl, color=c_ce_pdl, width=1, style=line.style_dotted))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, ce_atm_pdl, "CE Prev Low: " + str.tostring(ce_atm_pdl, "#.##"), color=color.new(c_ce_pdl, 80), textcolor=c_ce_pdl, style=label.style_label_left, size=size.small))
-
-        array.push(level_lines, line.new(x1, pe_atm_pdh, x2, pe_atm_pdh, color=c_pe_pdh, width=1, style=line.style_dotted))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, pe_atm_pdh, "PE Prev High: " + str.tostring(pe_atm_pdh, "#.##"), color=color.new(c_pe_pdh, 80), textcolor=c_pe_pdh, style=label.style_label_left, size=size.small))
-
-        array.push(level_lines, line.new(x1, pe_atm_pdl, x2, pe_atm_pdl, color=c_pe_pdl, width=1, style=line.style_dotted))
-        if show_line_labels
-            array.push(level_labels, label.new(x2, pe_atm_pdl, "PE Prev Low: " + str.tostring(pe_atm_pdl, "#.##"), color=color.new(c_pe_pdl, 80), textcolor=c_pe_pdl, style=label.style_label_left, size=size.small))
+plot(show_pdh_pdl_lines and pe_atm_pdh > 0 ? pe_atm_pdh : na, "PE Prev High", color=c_pe_pdh, style=plot.style_linebr)
+plot(show_pdh_pdl_lines and pe_atm_pdl > 0 ? pe_atm_pdl : na, "PE Prev Low",  color=c_pe_pdl, style=plot.style_linebr)
 
 // =========================================================================
 // SUMMARY DASHBOARD TABLE
@@ -454,8 +373,8 @@ if barstate.islast and show_options_table
     table.cell(info_table, 8, 1, "PE Prev High/Low", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
 
     // Rows 2-4: ITM 3, ITM 2, ITM 1 BEP Pairs
-    f_fill_table_row(info_table, 2, "ITM 3 (" + str.tostring(st_m3) + "CE / " + str.tostring(st_p3) + "PE)", ce_m3_ref, pe_p3_ref, std_bep_itm3, ce_m3_ltp, pe_p3_ltp, run_bep_itm3, ce_m3_pdh, ce_m3_pdl, pe_p3_pdh, pe_p3_pdl, color.new(#1B5E20, 0), t_sz)
-    f_fill_table_row(info_table, 3, "ITM 2 (" + str.tostring(st_m2) + "CE / " + str.tostring(st_p2) + "PE)", ce_m2_ref, pe_p2_ref, std_bep_itm2, ce_m2_ltp, pe_p2_ltp, run_bep_itm2, ce_m2_pdh, ce_m2_pdl, pe_p2_pdh, pe_p2_pdl, color.new(#2E7D32, 0), t_sz)
+    f_fill_table_row(info_table, 2, "ITM 3 (" + str.tostring(st_m3) + "CE / " + str.tostring(st_p3) + "PE)", ce_m3_ref, pe_p3_ref, std_bep_itm3, ce_m3_ltp, pe_p3_ltp, na, ce_m3_pdh, ce_m3_pdl, pe_p3_pdh, pe_p3_pdl, color.new(#1B5E20, 0), t_sz)
+    f_fill_table_row(info_table, 3, "ITM 2 (" + str.tostring(st_m2) + "CE / " + str.tostring(st_p2) + "PE)", ce_m2_ref, pe_p2_ref, std_bep_itm2, ce_m2_ltp, pe_p2_ltp, na, ce_m2_pdh, ce_m2_pdl, pe_p2_pdh, pe_p2_pdl, color.new(#2E7D32, 0), t_sz)
     f_fill_table_row(info_table, 4, "ITM 1 (" + str.tostring(st_m1) + "CE / " + str.tostring(st_p1) + "PE)", ce_m1_ref, pe_p1_ref, std_bep_itm1, ce_m1_ltp, pe_p1_ltp, run_bep_itm1, ce_m1_pdh, ce_m1_pdl, pe_p1_pdh, pe_p1_pdl, color.new(#388E3C, 0), t_sz)
 
     // Row 5: ATM BEP Pair: (CE 24000 + PE 24000) / 2
@@ -463,5 +382,5 @@ if barstate.islast and show_options_table
 
     // Rows 6-8: OTM 1, OTM 2, OTM 3 BEP Pairs
     f_fill_table_row(info_table, 6, "OTM 1 (" + str.tostring(st_p1) + "CE / " + str.tostring(st_m1) + "PE)", ce_p1_ref, pe_m1_ref, std_bep_otm1, ce_p1_ltp, pe_m1_ltp, run_bep_otm1, ce_p1_pdh, ce_p1_pdl, pe_m1_pdh, pe_m1_pdl, color.new(#D32F2F, 0), t_sz)
-    f_fill_table_row(info_table, 7, "OTM 2 (" + str.tostring(st_p2) + "CE / " + str.tostring(st_m2) + "PE)", ce_p2_ref, pe_m2_ref, std_bep_otm2, ce_p2_ltp, pe_m2_ltp, run_bep_otm2, ce_p2_pdh, ce_p2_pdl, pe_m2_pdh, pe_m2_pdl, color.new(#C62828, 0), t_sz)
-    f_fill_table_row(info_table, 8, "OTM 3 (" + str.tostring(st_p3) + "CE / " + str.tostring(st_m3) + "PE)", ce_p3_ref, pe_m3_ref, std_bep_otm3, ce_p3_ltp, pe_m3_ltp, run_bep_otm3, ce_p3_pdh, ce_p3_pdl, pe_m3_pdh, pe_m3_pdl, color.new(#B71C1C, 0), t_sz)
+    f_fill_table_row(info_table, 7, "OTM 2 (" + str.tostring(st_p2) + "CE / " + str.tostring(st_m2) + "PE)", ce_p2_ref, pe_m2_ref, std_bep_otm2, ce_p2_ltp, pe_m2_ltp, na, ce_p2_pdh, ce_p2_pdl, pe_m2_pdh, pe_m2_pdl, color.new(#C62828, 0), t_sz)
+    f_fill_table_row(info_table, 8, "OTM 3 (" + str.tostring(st_p3) + "CE / " + str.tostring(st_m3) + "PE)", ce_p3_ref, pe_m3_ref, std_bep_otm3, ce_p3_ltp, pe_m3_ltp, na, ce_p3_pdh, ce_p3_pdl, pe_m3_pdh, pe_m3_pdl, color.new(#B71C1C, 0), t_sz)
