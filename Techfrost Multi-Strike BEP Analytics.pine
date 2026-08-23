@@ -77,6 +77,9 @@ colorOppBear     = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", 
 // HELPER FUNCTIONS (GLOBAL SCOPE)
 // ==========================================
 
+f_is_digit(string c) =>
+    str.contains("0123456789", c)
+
 f_fill_bep_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, rt_bep, ce_h, ce_lw, pe_h, pe_lw, row_bg, t_sz) =>
     table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
     table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
@@ -159,40 +162,32 @@ else if tickerWithoutCEPE != ""
 
 float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : (not na(detectedStrike) ? detectedStrike : 24000.0)
 
-// ==========================================
-// FAIL-SAFE CE & PE TICKER PREFIX CONSTRUCTION
-// ==========================================
-
-string strikeDigitsStr = str.tostring(int(chartStrikePrice))
-int digitsLen = str.length(strikeDigitsStr)
-
-string ce_prefix = ""
-string pe_prefix = ""
-
-if isCall
-    ce_prefix := str.substring(cleanTicker, 0, str.length(cleanTicker) - digitsLen)
-    int cPos = str.length(ce_prefix) - 1
-    pe_prefix := str.substring(ce_prefix, 0, cPos) + "P"
-else if isPut
-    pe_prefix := str.substring(cleanTicker, 0, str.length(cleanTicker) - digitsLen)
-    int pPos = str.length(pe_prefix) - 1
-    ce_prefix := str.substring(pe_prefix, 0, pPos) + "C"
-else
-    ce_prefix := cleanTicker + "C"
-    pe_prefix := cleanTicker + "P"
-
-f_build_ce_ticker(int target_strike) =>
-    ce_prefix + str.tostring(target_strike)
-
-f_build_pe_ticker(int target_strike) =>
-    pe_prefix + str.tostring(target_strike)
+// Universal Fail-Safe Option Ticker Construction
+f_build_option_symbol(int target_strike, bool target_is_ce) =>
+    string st_digits = str.tostring(int(chartStrikePrice))
+    int st_len = str.length(st_digits)
+    
+    if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+        int end_trim = 2
+        string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
+        string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
+        string sfx = target_is_ce ? "CE" : "PE"
+        syminfo.prefix + ":" + pfx + str.tostring(target_strike) + sfx
+    else if str.match(cleanTicker, "[CP]\\d+$") != ""
+        string matchCP = str.match(cleanTicker, "[CP]\\d+$")
+        int matchPos = str.pos(cleanTicker, matchCP)
+        string pfx = str.substring(cleanTicker, 0, matchPos)
+        string cp_letter = target_is_ce ? "C" : "P"
+        syminfo.prefix + ":" + pfx + cp_letter + str.tostring(target_strike)
+    else
+        string rep_ticker = str.replace(cleanTicker, st_digits, str.tostring(target_strike))
+        syminfo.prefix + ":" + rep_ticker
 
 // ==========================================
 // OPPOSITE OPTION CANDLES OVERLAY
 // ==========================================
 
-string opp_prefix = isCall ? pe_prefix : ce_prefix
-string opp_ticker = syminfo.prefix + ":" + opp_prefix + str.tostring(int(chartStrikePrice))
+string opp_ticker = f_build_option_symbol(int(chartStrikePrice), not isCall)
 
 [opp_o, opp_h, opp_l, opp_c] = request.security(opp_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
 
@@ -219,10 +214,8 @@ int st_upper = st_atm + offsetPts
 // DATA FETCHING & REFERENCE PRICE RESOLUTION
 // ==========================================
 
-// Helper to fetch contract data including Previous Day Settlement Price (daily close[1])
 f_get_option_data() =>
     float d_open  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
-    // d_pdc represents the official Previous Day Close / Settlement Price
     [d_pdc, d_pdh, d_pdl] = request.security(syminfo.tickerid, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
     var float d_f5m = na
     if ta.change(time("D")) != 0
@@ -233,14 +226,14 @@ f_get_option_data() =>
     [d_open, d_pdc, d_pdh, d_pdl, na(d_f5m) ? d_open : d_f5m, close]
 
 // Fetch data for ATM, Lower, Upper strikes
-[ce_atm_o, ce_atm_pdc, ce_atm_pdh, ce_atm_pdl, ce_atm_f5m, ce_atm_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(st_atm), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
-[pe_atm_o, pe_atm_pdc, pe_atm_pdh, pe_atm_pdl, pe_atm_f5m, pe_atm_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(st_atm), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[ce_atm_o, ce_atm_pdc, ce_atm_pdh, ce_atm_pdl, ce_atm_f5m, ce_atm_ltp] = request.security(f_build_option_symbol(st_atm, true), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[pe_atm_o, pe_atm_pdc, pe_atm_pdh, pe_atm_pdl, pe_atm_f5m, pe_atm_ltp] = request.security(f_build_option_symbol(st_atm, false), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
 
-[ce_lwr_o, ce_lwr_pdc, ce_lwr_pdh, ce_lwr_pdl, ce_lwr_f5m, ce_lwr_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(st_lower), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
-[pe_lwr_o, pe_lwr_pdc, pe_lwr_pdh, pe_lwr_pdl, pe_lwr_f5m, pe_lwr_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(st_lower), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[ce_lwr_o, ce_lwr_pdc, ce_lwr_pdh, ce_lwr_pdl, ce_lwr_f5m, ce_lwr_ltp] = request.security(f_build_option_symbol(st_lower, true), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[pe_lwr_o, pe_lwr_pdc, pe_lwr_pdh, pe_lwr_pdl, pe_lwr_f5m, pe_lwr_ltp] = request.security(f_build_option_symbol(st_lower, false), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
 
-[ce_upr_o, ce_upr_pdc, ce_upr_pdh, ce_upr_pdl, ce_upr_f5m, ce_upr_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(st_upper), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
-[pe_upr_o, pe_upr_pdc, pe_upr_pdh, pe_upr_pdl, pe_upr_f5m, pe_upr_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(st_upper), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[ce_upr_o, ce_upr_pdc, ce_upr_pdh, ce_upr_pdl, ce_upr_f5m, ce_upr_ltp] = request.security(f_build_option_symbol(st_upper, true), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[pe_upr_o, pe_upr_pdc, pe_upr_pdh, pe_upr_pdl, pe_upr_f5m, pe_upr_ltp] = request.security(f_build_option_symbol(st_upper, false), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
 
 // Helper to extract ref price based on user selection
 f_resolve_ref(float op, float pdc, float f5m, CalculationBasis basis) =>
