@@ -148,7 +148,7 @@ f_is_digit(c) =>
     str.contains("0123456789", c)
 
 f_add_level(lines_arr, labels_arr, x1, x2, val, lbl_text, col, transparency, l_style_str, l_width) =>
-    if not na(val) and x2 >= x1
+    if not na(val) and val > 0 and x2 >= x1
         string p_style = l_style_str == "Dashed" ? line.style_dashed : (l_style_str == "Dotted" ? line.style_dotted : line.style_solid)
         array.push(lines_arr, line.new(x1, val, x2, val, color=color.new(col, transparency), width=l_width, style=p_style))
         array.push(labels_arr, label.new(x2, val, lbl_text + ": " + str.tostring(val, "#.##"), color=color.new(col, 85), textcolor=col, style=label.style_label_left, size=size.small))
@@ -487,13 +487,13 @@ float bep_stat_d4 = (ce_r4 + pe_r4) / 2.0
 // ==========================================
 
 // --- Realtime Plots (Standard Line Design) ---
-plot(showCE_IV_RT_Input  ? ce_iv_rt  : na, "CE Realtime Intrinsic", color=#00E676, linewidth=2)
-plot(showPE_IV_RT_Input  ? pe_iv_rt  : na, "PE Realtime Intrinsic", color=#FF5252, linewidth=2)
-plot(showAvg_IV_RT_Input ? avg_iv_rt : na, "Avg Realtime Intrinsic", color=#FF00FF, linewidth=2)
+plot(showCE_IV_RT_Input and ce_iv_rt > 0 ? ce_iv_rt : na, "CE Realtime Intrinsic", color=#00E676, linewidth=2)
+plot(showPE_IV_RT_Input and pe_iv_rt > 0 ? pe_iv_rt : na, "PE Realtime Intrinsic", color=#FF5252, linewidth=2)
+plot(showAvg_IV_RT_Input and avg_iv_rt > 0 ? avg_iv_rt : na, "Avg Realtime Intrinsic", color=#FF00FF, linewidth=2)
 
-plot(showCE_TV_RT_Input  ? ce_tv_rt  : na, "CE Realtime Time Value", color=#76FF03, linewidth=2)
-plot(showPE_TV_RT_Input  ? pe_tv_rt  : na, "PE Realtime Time Value", color=#FF6E40, linewidth=2)
-plot(showAvg_TV_RT_Input ? avg_tv_rt : na, "Avg Realtime Time Value", color=#FFD700, linewidth=2)
+plot(showCE_TV_RT_Input and ce_tv_rt > 0 ? ce_tv_rt : na, "CE Realtime Time Value", color=#76FF03, linewidth=2)
+plot(showPE_TV_RT_Input and pe_tv_rt > 0 ? pe_tv_rt : na, "PE Realtime Time Value", color=#FF6E40, linewidth=2)
+plot(showAvg_TV_RT_Input and avg_tv_rt > 0 ? avg_tv_rt : na, "Avg Realtime Time Value", color=#FFD700, linewidth=2)
 
 // ==========================================
 // PLOTTING 5-DAY STATIC LEVEL LINES & LABELS (STRICTLY ON THAT EXACT DAY)
