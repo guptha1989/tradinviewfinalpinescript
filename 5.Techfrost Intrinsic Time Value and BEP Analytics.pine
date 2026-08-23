@@ -187,7 +187,8 @@ plotcandle(showOppCandlesInput ? opp_o : na,
 // TARGET STRIKE SELECTION (ATM / ITM / OTM)
 // ==========================================
 
-int offsetPts = offsetChoiceInput == OffsetChoice.offset50 ? 50 : (offsetChoiceInput == OffsetChoice.offset100 ? 100 : (offsetChoiceInput == OffsetChoice.offset150 ? 150 : 200))
+int rawOffsetPts = offsetChoiceInput == OffsetChoice.offset50 ? 50 : (offsetChoiceInput == OffsetChoice.offset100 ? 100 : (offsetChoiceInput == OffsetChoice.offset150 ? 150 : 200))
+int offsetPts = strikeModeInput == StrikeMode.atm ? 0 : rawOffsetPts
 int base_strike = int(chartStrikePrice)
 
 int selectedStrike = base_strike
@@ -306,7 +307,8 @@ if showTableInput and barstate.islast
     // Header Row 0
     table.cell(summaryTable, 0, 0, "Asset: " + syminfo.ticker, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 1, 0, "Strike: " + str.tostring(selectedStrike) + " (" + modeTitle + ")", bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
-    table.cell(summaryTable, 2, 0, "Offset: " + str.tostring(offsetPts), bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    string offsetDisplay = strikeModeInput == StrikeMode.atm ? "0 (ATM)" : str.tostring(offsetPts) + " pts (" + modeTitle + ")"
+    table.cell(summaryTable, 2, 0, "Offset: " + offsetDisplay, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 3, 0, "IV / TV / BEP Dashboard", bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
 
     // Row Headers & Values
