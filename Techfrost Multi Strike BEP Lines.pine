@@ -63,7 +63,7 @@ table_pos_str      = input.string("Top Right", "Table Position", options=["Top R
 table_size_str     = input.string("Small", "Table Text Size", options=["Tiny", "Small", "Normal", "Large"], group=G_COLORS)
 
 // =========================================================================
-// OPTION CONTRACT PARSER & TICKER BUILDER
+// HELPER FUNCTIONS (GLOBAL SCOPE)
 // =========================================================================
 f_is_digit(string c) =>
     str.contains("0123456789", c)
@@ -77,6 +77,23 @@ f_build_option_ticker(string exch, string rt, string exp, int st, string o_type,
         string letter = o_type == "CE" or o_type == "C" ? "CE" : "PE"
         exch + ":" + rt + exp + st_str + letter
 
+f_fill_table_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, rt_bep, ce_h, ce_lw, pe_h, pe_lw, row_bg, t_sz) =>
+    table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
+    table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(tbl, 2, r, na(pe_r) ? "N/A" : str.tostring(pe_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(tbl, 3, r, na(stat_bep) ? "N/A" : str.tostring(stat_bep, "#.##"), bgcolor=#006064, text_color=color.cyan, text_size=t_sz)
+    table.cell(tbl, 4, r, na(ce_l) ? "N/A" : str.tostring(ce_l, "#.##"), bgcolor=color.black, text_color=#00E676, text_size=t_sz)
+    table.cell(tbl, 5, r, na(pe_l) ? "N/A" : str.tostring(pe_l, "#.##"), bgcolor=color.black, text_color=#FF5252, text_size=t_sz)
+    table.cell(tbl, 6, r, na(rt_bep) ? "N/A" : str.tostring(rt_bep, "#.##"), bgcolor=#F57F17, text_color=color.yellow, text_size=t_sz)
+    
+    string ce_hl_str = (na(ce_h) ? "N/A" : str.tostring(ce_h, "#.#")) + " / " + (na(ce_lw) ? "N/A" : str.tostring(ce_lw, "#.#"))
+    string pe_hl_str = (na(pe_h) ? "N/A" : str.tostring(pe_h, "#.#")) + " / " + (na(pe_lw) ? "N/A" : str.tostring(pe_lw, "#.#"))
+    table.cell(tbl, 7, r, ce_hl_str, bgcolor=color.black, text_color=color.new(#00E676, 20), text_size=t_sz)
+    table.cell(tbl, 8, r, pe_hl_str, bgcolor=color.black, text_color=color.new(#FF5252, 20), text_size=t_sz)
+
+// =========================================================================
+// OPTION CONTRACT PARSER & TICKER BUILDER
+// =========================================================================
 var string root = underlying_ticker
 var string expiry = expiry_input
 var string opt_type = "C"
@@ -316,25 +333,11 @@ if barstate.islast and show_options_table
     table.cell(info_table, 7, 1, "CE Prev High/Low", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 8, 1, "PE Prev High/Low", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
 
-    f_fill_table_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, rt_bep, ce_h, ce_lw, pe_h, pe_lw, row_bg) =>
-        table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
-        table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-        table.cell(tbl, 2, r, na(pe_r) ? "N/A" : str.tostring(pe_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-        table.cell(tbl, 3, r, na(stat_bep) ? "N/A" : str.tostring(stat_bep, "#.##"), bgcolor=#006064, text_color=color.cyan, text_size=t_sz)
-        table.cell(tbl, 4, r, na(ce_l) ? "N/A" : str.tostring(ce_l, "#.##"), bgcolor=color.black, text_color=#00E676, text_size=t_sz)
-        table.cell(tbl, 5, r, na(pe_l) ? "N/A" : str.tostring(pe_l, "#.##"), bgcolor=color.black, text_color=#FF5252, text_size=t_sz)
-        table.cell(tbl, 6, r, na(rt_bep) ? "N/A" : str.tostring(rt_bep, "#.##"), bgcolor=#F57F17, text_color=color.yellow, text_size=t_sz)
-        
-        string ce_hl_str = (na(ce_h) ? "N/A" : str.tostring(ce_h, "#.#")) + " / " + (na(ce_lw) ? "N/A" : str.tostring(ce_lw, "#.#"))
-        string pe_hl_str = (na(pe_h) ? "N/A" : str.tostring(pe_h, "#.#")) + " / " + (na(pe_lw) ? "N/A" : str.tostring(pe_lw, "#.#"))
-        table.cell(tbl, 7, r, ce_hl_str, bgcolor=color.black, text_color=color.new(#00E676, 20), text_size=t_sz)
-        table.cell(tbl, 8, r, pe_hl_str, bgcolor=color.black, text_color=color.new(#FF5252, 20), text_size=t_sz)
-
     // Row 2: Upper Strike (+Offset)
-    f_fill_table_row(info_table, 2, "Upper (" + str.tostring(st_upper) + ")", ce_upr_ref, pe_upr_ref, std_bep_upper, ce_upr_ltp, pe_upr_ltp, run_bep_upper, ce_upr_pdh, ce_upr_pdl, pe_upr_pdh, pe_upr_pdl, color.new(#C62828, 0))
+    f_fill_table_row(info_table, 2, "Upper (" + str.tostring(st_upper) + ")", ce_upr_ref, pe_upr_ref, std_bep_upper, ce_upr_ltp, pe_upr_ltp, run_bep_upper, ce_upr_pdh, ce_upr_pdl, pe_upr_pdh, pe_upr_pdl, color.new(#C62828, 0), t_sz)
 
     // Row 3: ATM Strike (Selected)
-    f_fill_table_row(info_table, 3, "ATM (" + str.tostring(st_atm) + ")", ce_atm_ref, pe_atm_ref, std_bep_atm, ce_atm_ltp, pe_atm_ltp, run_bep_atm, ce_atm_pdh, ce_atm_pdl, pe_atm_pdh, pe_atm_pdl, color.new(#F57F17, 0))
+    f_fill_table_row(info_table, 3, "ATM (" + str.tostring(st_atm) + ")", ce_atm_ref, pe_atm_ref, std_bep_atm, ce_atm_ltp, pe_atm_ltp, run_bep_atm, ce_atm_pdh, ce_atm_pdl, pe_atm_pdh, pe_atm_pdl, color.new(#F57F17, 0), t_sz)
 
     // Row 4: Lower Strike (-Offset)
-    f_fill_table_row(info_table, 4, "Lower (" + str.tostring(st_lower) + ")", ce_lwr_ref, pe_lwr_ref, std_bep_lower, ce_lwr_ltp, pe_lwr_ltp, run_bep_lower, ce_lwr_pdh, ce_lwr_pdl, pe_lwr_pdh, pe_lwr_pdl, color.new(#2E7D32, 0))
+    f_fill_table_row(info_table, 4, "Lower (" + str.tostring(st_lower) + ")", ce_lwr_ref, pe_lwr_ref, std_bep_lower, ce_lwr_ltp, pe_lwr_ltp, run_bep_lower, ce_lwr_pdh, ce_lwr_pdl, pe_lwr_pdh, pe_lwr_pdl, color.new(#2E7D32, 0), t_sz)

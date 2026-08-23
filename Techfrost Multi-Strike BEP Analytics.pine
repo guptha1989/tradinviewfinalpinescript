@@ -74,6 +74,24 @@ colorOppBull     = input.color(color.new(#2962FF, 40), "Opposite Bullish Body", 
 colorOppBear     = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", group="Styling & Colors")
 
 // ==========================================
+// HELPER FUNCTIONS (GLOBAL SCOPE)
+// ==========================================
+
+f_fill_bep_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, rt_bep, ce_h, ce_lw, pe_h, pe_lw, row_bg, t_sz) =>
+    table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
+    table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(tbl, 2, r, na(pe_r) ? "N/A" : str.tostring(pe_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(tbl, 3, r, na(stat_bep) ? "N/A" : str.tostring(stat_bep, "#.##"), bgcolor=color.new(#006064, 0), text_color=color.cyan, text_size=t_sz)
+    table.cell(tbl, 4, r, na(ce_l) ? "N/A" : str.tostring(ce_l, "#.##"), bgcolor=color.black, text_color=color.new(#00E676, 0), text_size=t_sz)
+    table.cell(tbl, 5, r, na(pe_l) ? "N/A" : str.tostring(pe_l, "#.##"), bgcolor=color.black, text_color=color.new(#FF5252, 0), text_size=t_sz)
+    table.cell(tbl, 6, r, na(rt_bep) ? "N/A" : str.tostring(rt_bep, "#.##"), bgcolor=color.new(#F57F17, 0), text_color=color.yellow, text_size=t_sz)
+    
+    string ce_hl_str = (na(ce_h) ? "N/A" : str.tostring(ce_h, "#.#")) + " / " + (na(ce_lw) ? "N/A" : str.tostring(ce_lw, "#.#"))
+    string pe_hl_str = (na(pe_h) ? "N/A" : str.tostring(pe_h, "#.#")) + " / " + (na(pe_lw) ? "N/A" : str.tostring(pe_lw, "#.#"))
+    table.cell(tbl, 7, r, ce_hl_str, bgcolor=color.black, text_color=color.new(#00E676, 20), text_size=t_sz)
+    table.cell(tbl, 8, r, pe_hl_str, bgcolor=color.black, text_color=color.new(#FF5252, 20), text_size=t_sz)
+
+// ==========================================
 // TICKER PARSING & AUTO-DETECTION
 // ==========================================
 
@@ -317,25 +335,11 @@ if showTableInput and barstate.islast
     table.cell(summaryTable, 7, 1, "CE Prev High/Low", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 8, 1, "PE Prev High/Low", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
 
-    f_fill_bep_row(tbl, r, lbl, ce_r, pe_r, stat_bep, ce_l, pe_l, rt_bep, ce_h, ce_lw, pe_h, pe_lw, row_bg) =>
-        table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
-        table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-        table.cell(tbl, 2, r, na(pe_r) ? "N/A" : str.tostring(pe_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-        table.cell(tbl, 3, r, na(stat_bep) ? "N/A" : str.tostring(stat_bep, "#.##"), bgcolor=color.new(#006064, 0), text_color=color.cyan, text_size=t_sz)
-        table.cell(tbl, 4, r, na(ce_l) ? "N/A" : str.tostring(ce_l, "#.##"), bgcolor=color.black, text_color=color.new(#00E676, 0), text_size=t_sz)
-        table.cell(tbl, 5, r, na(pe_l) ? "N/A" : str.tostring(pe_l, "#.##"), bgcolor=color.black, text_color=color.new(#FF5252, 0), text_size=t_sz)
-        table.cell(tbl, 6, r, na(rt_bep) ? "N/A" : str.tostring(rt_bep, "#.##"), bgcolor=color.new(#F57F17, 0), text_color=color.yellow, text_size=t_sz)
-        
-        string ce_hl_str = (na(ce_h) ? "N/A" : str.tostring(ce_h, "#.#")) + " / " + (na(ce_lw) ? "N/A" : str.tostring(ce_lw, "#.#"))
-        string pe_hl_str = (na(pe_h) ? "N/A" : str.tostring(pe_h, "#.#")) + " / " + (na(pe_lw) ? "N/A" : str.tostring(pe_lw, "#.#"))
-        table.cell(tbl, 7, r, ce_hl_str, bgcolor=color.black, text_color=color.new(#00E676, 20), text_size=t_sz)
-        table.cell(tbl, 8, r, pe_hl_str, bgcolor=color.black, text_color=color.new(#FF5252, 20), text_size=t_sz)
-
     // Row 2: Upper Strike (+Offset)
-    f_fill_bep_row(summaryTable, 2, "Upper (" + str.tostring(st_upper) + ")", ce_upr_ref, pe_upr_ref, bep_static_upper, ce_upr_ltp, pe_upr_ltp, bep_realtime_upper, ce_upr_pdh, ce_upr_pdl, pe_upr_pdh, pe_upr_pdl, color.new(#C62828, 0))
+    f_fill_bep_row(summaryTable, 2, "Upper (" + str.tostring(st_upper) + ")", ce_upr_ref, pe_upr_ref, bep_static_upper, ce_upr_ltp, pe_upr_ltp, bep_realtime_upper, ce_upr_pdh, ce_upr_pdl, pe_upr_pdh, pe_upr_pdl, color.new(#C62828, 0), t_sz)
 
     // Row 3: ATM Strike (Selected)
-    f_fill_bep_row(summaryTable, 3, "ATM (" + str.tostring(st_atm) + ")", ce_atm_ref, pe_atm_ref, bep_static_atm, ce_atm_ltp, pe_atm_ltp, bep_realtime_atm, ce_atm_pdh, ce_atm_pdl, pe_atm_pdh, pe_atm_pdl, color.new(#F57F17, 0))
+    f_fill_bep_row(summaryTable, 3, "ATM (" + str.tostring(st_atm) + ")", ce_atm_ref, pe_atm_ref, bep_static_atm, ce_atm_ltp, pe_atm_ltp, bep_realtime_atm, ce_atm_pdh, ce_atm_pdl, pe_atm_pdh, pe_atm_pdl, color.new(#F57F17, 0), t_sz)
 
     // Row 4: Lower Strike (-Offset)
-    f_fill_bep_row(summaryTable, 4, "Lower (" + str.tostring(st_lower) + ")", ce_lwr_ref, pe_lwr_ref, bep_static_lower, ce_lwr_ltp, pe_lwr_ltp, bep_realtime_lower, ce_lwr_pdh, ce_lwr_pdl, pe_lwr_pdh, pe_lwr_pdl, color.new(#2E7D32, 0))
+    f_fill_bep_row(summaryTable, 4, "Lower (" + str.tostring(st_lower) + ")", ce_lwr_ref, pe_lwr_ref, bep_static_lower, ce_lwr_ltp, pe_lwr_ltp, bep_realtime_lower, ce_lwr_pdh, ce_lwr_pdl, pe_lwr_pdh, pe_lwr_pdl, color.new(#2E7D32, 0), t_sz)
