@@ -19,9 +19,10 @@ enum OptionType
     pe   = "Put (PE)"
 
 enum StrikeMode
-    atm = "ATM (At The Money)"
-    itm = "ITM (In The Money)"
-    otm = "OTM (Out of The Money)"
+    atm  = "ATM (At The Money)"
+    itm  = "ITM (In The Money)"
+    otm  = "OTM (Out of The Money)"
+    both = "Both ITM & OTM"
 
 enum OffsetChoice
     offset50  = "50 Points"
@@ -42,9 +43,9 @@ strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group
 
 // --- Strike & Calculation Basis Settings ---
 strikeModeInput    = input.enum(StrikeMode.atm, "Strike Selection Mode", group="Calculation Settings",
-  tooltip="Choose whether to calculate metrics for ATM, ITM, or OTM strike relative to selected chart option.")
+  tooltip="Choose whether to calculate metrics for ATM, ITM, OTM, or Both ITM & OTM strikes relative to selected chart option.")
 offsetChoiceInput  = input.enum(OffsetChoice.offset100, "Strike Offset Points", group="Calculation Settings",
-  tooltip="Offset points used to determine ITM / OTM strike level (e.g. 50, 100, 150, 200). Offset applies strictly in ITM or OTM mode.")
+  tooltip="Offset points used to determine ITM / OTM strike levels (e.g. 50, 100, 150, 200).")
 staticBasisInput   = input.enum(StaticBasis.dayOpen, "Static Values Calculation Basis", group="Calculation Settings",
   tooltip="Basis for Static Intrinsic, Static Time Value, and Static BEP: Day Open, Previous Day Close, or First 5 Min Close.")
 
@@ -62,10 +63,13 @@ show5D_Static_CE_TV    = input.bool(true, "Show 5-Day Static CE Time Value Lines
 show5D_Static_PE_TV    = input.bool(true, "Show 5-Day Static PE Time Value Lines", group="Time Value Plots (Only Static)")
 show5D_Static_Avg_TV   = input.bool(true, "Show 5-Day Static Avg Time Value Lines", group="Time Value Plots (Only Static)")
 
-// --- Plot Controls: BEP & Overlay ---
-showRealtimeBEPInput   = input.bool(true, "Show Realtime Dynamic BEP Line", group="BEP & Overlay Plots")
-show5D_Static_BEPInput = input.bool(true, "Show 5-Day Static BEP Level Lines", group="BEP & Overlay Plots")
-showOppCandlesInput    = input.bool(true, "Show Opposite Option Candles Overlay", group="BEP & Overlay Plots")
+// --- Plot Controls: BEP & Candle Overlays ---
+showRealtimeBEPInput   = input.bool(true, "Show Realtime Dynamic BEP Line", group="BEP & Candle Overlay Plots")
+show5D_Static_BEPInput = input.bool(true, "Show 5-Day Static BEP Level Lines", group="BEP & Candle Overlay Plots")
+
+showITMCandlesInput    = input.bool(true, "Show ITM Option Candles Overlay", group="BEP & Candle Overlay Plots")
+showOTMCandlesInput    = input.bool(true, "Show OTM Option Candles Overlay", group="BEP & Candle Overlay Plots")
+showOppCandlesInput    = input.bool(true, "Show Opposite Option Candles Overlay", group="BEP & Candle Overlay Plots")
 
 showTableInput         = input.bool(true, "Show Summary Dashboard Table", group="Display Controls")
 tableDisplayMode       = input.string("Today Only", "Table Display Mode", options=["Today Only", "5-Day Matrix"], group="Display Controls")
@@ -120,9 +124,15 @@ colorStaticBEP    = input.color(color.aqua, "Static BEP Color", group="5-Day Sta
 styleStaticBEP    = input.string("Dashed", "Static BEP Line Style", options=["Solid", "Dashed", "Dotted"], group="5-Day Static BEP Formatting")
 widthStaticBEP    = input.int(1, "Static BEP Line Width", minval=1, maxval=4, group="5-Day Static BEP Formatting")
 
-// Opposite Candle Overlay Styling
-colorOppBull      = input.color(color.new(#2962FF, 40), "Opposite Bullish Body", group="Opposite Candle Overlay")
-colorOppBear      = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", group="Opposite Candle Overlay")
+// Candle Overlays Formatting
+colorITMBull      = input.color(color.new(#00E676, 50), "ITM Bullish Body", group="Candle Overlays Formatting")
+colorITMBear      = input.color(color.new(#D50000, 50), "ITM Bearish Body", group="Candle Overlays Formatting")
+
+colorOTMBull      = input.color(color.new(#00B0FF, 50), "OTM Bullish Body", group="Candle Overlays Formatting")
+colorOTMBear      = input.color(color.new(#FF9100, 50), "OTM Bearish Body", group="Candle Overlays Formatting")
+
+colorOppBull      = input.color(color.new(#2962FF, 40), "Opposite Bullish Body", group="Candle Overlays Formatting")
+colorOppBear      = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", group="Candle Overlays Formatting")
 
 // ==========================================
 // HELPER FUNCTIONS (GLOBAL SCOPE ONLY)
@@ -243,10 +253,65 @@ f_build_option_symbol(target_strike, target_is_ce) =>
         syminfo.prefix + ":" + rep_ticker
 
 // ==========================================
-// OPPOSITE OPTION CANDLES OVERLAY
+// TARGET STRIKE SELECTION & CANDLE OVERLAYS
 // ==========================================
 
-string opp_ticker = f_build_option_symbol(int(chartStrikePrice), not isCall)
+int rawOffsetPts = offsetChoiceInput == OffsetChoice.offset50 ? 50 : (offsetChoiceInput == OffsetChoice.offset100 ? 100 : (offsetChoiceInput == OffsetChoice.offset150 ? 150 : 200))
+int offsetPts = (strikeModeInput == StrikeMode.atm) ? 0 : rawOffsetPts
+int base_strike = int(chartStrikePrice)
+
+// Resolve ITM & OTM strikes for Call & Put
+int itm_ce_strike = base_strike - rawOffsetPts
+int itm_pe_strike = base_strike + rawOffsetPts
+
+int otm_ce_strike = base_strike + rawOffsetPts
+int otm_pe_strike = base_strike - rawOffsetPts
+
+int ce_strike = base_strike
+int pe_strike = base_strike
+
+if strikeModeInput == StrikeMode.itm
+    ce_strike := itm_ce_strike
+    pe_strike := itm_pe_strike
+else if strikeModeInput == StrikeMode.otm
+    ce_strike := otm_ce_strike
+    pe_strike := otm_pe_strike
+else if strikeModeInput == StrikeMode.both
+    ce_strike := itm_ce_strike
+    pe_strike := otm_pe_strike
+
+// --- 1. ITM Candle Overlay ---
+int current_itm_strike = isCall ? itm_ce_strike : itm_pe_strike
+string itm_ticker = f_build_option_symbol(current_itm_strike, isCall)
+[itm_o, itm_h, itm_l, itm_c] = request.security(itm_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+bool itm_is_bull   = nz(itm_c) >= nz(itm_o)
+color itm_body_col = itm_is_bull ? colorITMBull : colorITMBear
+color itm_wick_col = itm_is_bull ? color.new(colorITMBull, 30) : color.new(colorITMBear, 30)
+
+plotcandle(showITMCandlesInput ? itm_o : na,
+           showITMCandlesInput ? itm_h : na,
+           showITMCandlesInput ? itm_l : na,
+           showITMCandlesInput ? itm_c : na,
+           title="ITM Option Candle", color=itm_body_col, wickcolor=itm_wick_col, bordercolor=itm_wick_col)
+
+// --- 2. OTM Candle Overlay ---
+int current_otm_strike = isCall ? otm_ce_strike : otm_pe_strike
+string otm_ticker = f_build_option_symbol(current_otm_strike, isCall)
+[otm_o, otm_h, otm_l, otm_c] = request.security(otm_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+bool otm_is_bull   = nz(otm_c) >= nz(otm_o)
+color otm_body_col = otm_is_bull ? colorOTMBull : colorOTMBear
+color otm_wick_col = otm_is_bull ? color.new(colorOTMBull, 30) : color.new(colorOTMBear, 30)
+
+plotcandle(showOTMCandlesInput ? otm_o : na,
+           showOTMCandlesInput ? otm_h : na,
+           showOTMCandlesInput ? otm_l : na,
+           showOTMCandlesInput ? otm_c : na,
+           title="OTM Option Candle", color=otm_body_col, wickcolor=otm_wick_col, bordercolor=otm_wick_col)
+
+// --- 3. Opposite Option Candle Overlay ---
+string opp_ticker = f_build_option_symbol(base_strike, not isCall)
 [opp_o, opp_h, opp_l, opp_c] = request.security(opp_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
 
 bool opp_is_bull   = nz(opp_c) >= nz(opp_o)
@@ -258,24 +323,6 @@ plotcandle(showOppCandlesInput ? opp_o : na,
            showOppCandlesInput ? opp_l : na,
            showOppCandlesInput ? opp_c : na,
            title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
-
-// ==========================================
-// TARGET STRIKE SELECTION (ATM / ITM / OTM)
-// ==========================================
-
-int rawOffsetPts = offsetChoiceInput == OffsetChoice.offset50 ? 50 : (offsetChoiceInput == OffsetChoice.offset100 ? 100 : (offsetChoiceInput == OffsetChoice.offset150 ? 150 : 200))
-int offsetPts = strikeModeInput == StrikeMode.atm ? 0 : rawOffsetPts
-int base_strike = int(chartStrikePrice)
-
-int ce_strike = base_strike
-int pe_strike = base_strike
-
-if strikeModeInput == StrikeMode.itm
-    ce_strike := base_strike - offsetPts
-    pe_strike := base_strike + offsetPts
-else if strikeModeInput == StrikeMode.otm
-    ce_strike := base_strike + offsetPts
-    pe_strike := base_strike - offsetPts
 
 // ==========================================
 // TRACK DAILY BAR BOUNDARIES FOR LAST 5 DAYS
@@ -530,7 +577,7 @@ if showTableInput and barstate.islast
            tableTextSizeInput == "Small" ? size.small :
            tableTextSizeInput == "Normal" ? size.normal : size.large
            
-    modeTitle = strikeModeInput == StrikeMode.atm ? "ATM" : (strikeModeInput == StrikeMode.itm ? "ITM" : "OTM")
+    modeTitle = strikeModeInput == StrikeMode.atm ? "ATM" : (strikeModeInput == StrikeMode.itm ? "ITM" : (strikeModeInput == StrikeMode.otm ? "OTM" : "Both ITM & OTM"))
     basisTag  = staticBasisInput == StaticBasis.prevClose ? "Prev Settlement" : (staticBasisInput == StaticBasis.first5Min ? "First 5Min Close" : "Day Open")
 
     if tableDisplayMode == "Today Only"
