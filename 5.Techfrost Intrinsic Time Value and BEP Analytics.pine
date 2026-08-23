@@ -413,33 +413,33 @@ pe_ltp   = request.security(pe_ticker, timeframe.period, close, ignore_invalid_s
 spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 
 // ==========================================
-// 1. INTRINSIC VALUE CALCULATIONS (CE: Spot - Strike, PE: Strike - Spot)
+// 1. INTRINSIC VALUE CALCULATIONS (CE: max(0, Spot - Strike), PE: max(0, Strike - Spot))
 // ==========================================
 
 // Realtime Intrinsic Value (Live)
-float ce_iv_rt  = spot_ltp - ce_strike
-float pe_iv_rt  = pe_strike - spot_ltp
+float ce_iv_rt  = math.max(0.0, spot_ltp - ce_strike)
+float pe_iv_rt  = math.max(0.0, pe_strike - spot_ltp)
 float avg_iv_rt = (ce_iv_rt + pe_iv_rt) / 2.0
 
 // 5-Day Static Intrinsic Values (Day 0 to Day 4)
-float ce_iv_d0 = spot_r0 - ce_strike
-float pe_iv_d0 = pe_strike - spot_r0
+float ce_iv_d0 = math.max(0.0, spot_r0 - ce_strike)
+float pe_iv_d0 = math.max(0.0, pe_strike - spot_r0)
 float avg_iv_d0 = (ce_iv_d0 + pe_iv_d0) / 2.0
 
-float ce_iv_d1 = spot_r1 - ce_strike
-float pe_iv_d1 = pe_strike - spot_r1
+float ce_iv_d1 = math.max(0.0, spot_r1 - ce_strike)
+float pe_iv_d1 = math.max(0.0, pe_strike - spot_r1)
 float avg_iv_d1 = (ce_iv_d1 + pe_iv_d1) / 2.0
 
-float ce_iv_d2 = spot_r2 - ce_strike
-float pe_iv_d2 = pe_strike - spot_r2
+float ce_iv_d2 = math.max(0.0, spot_r2 - ce_strike)
+float pe_iv_d2 = math.max(0.0, pe_strike - spot_r2)
 float avg_iv_d2 = (ce_iv_d2 + pe_iv_d2) / 2.0
 
-float ce_iv_d3 = spot_r3 - ce_strike
-float pe_iv_d3 = pe_strike - spot_r3
+float ce_iv_d3 = math.max(0.0, spot_r3 - ce_strike)
+float pe_iv_d3 = math.max(0.0, pe_strike - spot_r3)
 float avg_iv_d3 = (ce_iv_d3 + pe_iv_d3) / 2.0
 
-float ce_iv_d4 = spot_r4 - ce_strike
-float pe_iv_d4 = pe_strike - spot_r4
+float ce_iv_d4 = math.max(0.0, spot_r4 - ce_strike)
+float pe_iv_d4 = math.max(0.0, pe_strike - spot_r4)
 float avg_iv_d4 = (ce_iv_d4 + pe_iv_d4) / 2.0
 
 // ==========================================
