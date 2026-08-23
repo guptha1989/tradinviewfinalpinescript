@@ -1,5 +1,5 @@
 //@version=6
-indicator("Techfrost Multi-Strike BEP Analytics", shorttitle="Techfrost BEP Analytics", overlay=true, max_labels_count=500, max_lines_count=500, precision=2)
+indicator("Techfrost Multi-Strike BEP Analytics", shorttitle="Techfrost BEP Analytics", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -35,7 +35,7 @@ strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group
 
 // --- BEP Calculation Settings ---
 offsetChoiceInput  = input.enum(OffsetChoice.offset100, "Strike Offset Points", group="BEP Calculation Settings",
-  tooltip="Choose offset points (50 or 100). For example, if selected strike is 24000 and offset is 100, BEP values for 23900 (ITM) and 24100 (OTM) will be plotted alongside 24000.")
+  tooltip="Choose offset points (50 or 100). Plots BEP for ATM strike, Upper strike (ATM + Offset), and Lower strike (ATM - Offset).")
 bepCalcBasisInput  = input.enum(CalculationBasis.dayOpen, "Static BEP Basis", group="BEP Calculation Settings",
   tooltip="Choose reference price basis for Static BEP: Today's Day Open, Previous Day Close, or First 5 Min Close.")
 
@@ -44,19 +44,34 @@ showRealtimeBEPInput = input.bool(true, "Show Realtime Dynamic BEP Lines", group
   tooltip="Plots real-time dynamic BEP curves: (CE LTP + PE LTP) / 2")
 showStaticBEPInput   = input.bool(true, "Show Static BEP Horizontal Lines", group="Plot Controls",
   tooltip="Plots static horizontal BEP lines based on selected basis: (CE Ref + PE Ref) / 2")
+showPDCInput         = input.bool(true, "Show CE & PE Previous Day Close Lines", group="Plot Controls")
+showPDHPDLInput      = input.bool(true, "Show CE & PE Previous Day High & Low Lines", group="Plot Controls")
+showOppCandlesInput  = input.bool(true, "Show Opposite Option Candles Overlay", group="Plot Controls")
+
 showTableInput       = input.bool(true, "Show BEP Summary Dashboard Table", group="Plot Controls")
 tablePosInput        = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Plot Controls")
 tableTextSizeInput   = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Plot Controls")
 
 // --- Styling & Colors ---
-colorSelectedReal = input.color(#FFD700, "Selected Strike Realtime BEP Color", group="Styling & Colors")
-colorSelectedStat = input.color(color.new(#FFD700, 30), "Selected Strike Static BEP Color", group="Styling & Colors")
+colorATMReal     = input.color(#FFD700, "ATM Strike Realtime BEP Color", group="Styling & Colors")
+colorATMStat     = input.color(color.new(#FFD700, 30), "ATM Strike Static BEP Color", group="Styling & Colors")
 
-colorITMReal      = input.color(#00E676, "ITM Strike Realtime BEP Color", group="Styling & Colors")
-colorITMStat      = input.color(color.new(#00C853, 30), "ITM Strike Static BEP Color", group="Styling & Colors")
+colorLowerReal   = input.color(#00E676, "Lower Strike Realtime BEP Color (-Offset)", group="Styling & Colors")
+colorLowerStat   = input.color(color.new(#00C853, 30), "Lower Strike Static BEP Color (-Offset)", group="Styling & Colors")
 
-colorOTMReal      = input.color(#FF1744, "OTM Strike Realtime BEP Color", group="Styling & Colors")
-colorOTMStat      = input.color(color.new(#D50000, 30), "OTM Strike Static BEP Color", group="Styling & Colors")
+colorUpperReal   = input.color(#FF1744, "Upper Strike Realtime BEP Color (+Offset)", group="Styling & Colors")
+colorUpperStat   = input.color(color.new(#D50000, 30), "Upper Strike Static BEP Color (+Offset)", group="Styling & Colors")
+
+colorCE_PDC      = input.color(color.new(#00E676, 20), "CE Prev Close Color", group="Styling & Colors")
+colorCE_PDH      = input.color(color.new(#00E676, 50), "CE Prev High Color", group="Styling & Colors")
+colorCE_PDL      = input.color(color.new(#00E676, 70), "CE Prev Low Color", group="Styling & Colors")
+
+colorPE_PDC      = input.color(color.new(#FF5252, 20), "PE Prev Close Color", group="Styling & Colors")
+colorPE_PDH      = input.color(color.new(#FF5252, 50), "PE Prev High Color", group=G_COLORS)
+colorPE_PDL      = input.color(color.new(#FF5252, 70), "PE Prev Low Color", group="Styling & Colors")
+
+colorOppBull     = input.color(color.new(#2962FF, 40), "Opposite Bullish Body", group="Styling & Colors")
+colorOppBear     = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", group="Styling & Colors")
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -155,85 +170,108 @@ f_build_pe_ticker(int target_strike) =>
     pe_prefix + str.tostring(target_strike)
 
 // ==========================================
-// STRIKE SELECTION & OFFSET CALCULATION
+// OPPOSITE OPTION CANDLES OVERLAY
+// ==========================================
+
+string opp_prefix = isCall ? pe_prefix : ce_prefix
+string opp_ticker = syminfo.prefix + ":" + opp_prefix + str.tostring(int(chartStrikePrice))
+
+[opp_o, opp_h, opp_l, opp_c] = request.security(opp_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+bool opp_is_bull   = nz(opp_c) >= nz(opp_o)
+color opp_body_col = opp_is_bull ? colorOppBull : colorOppBear
+color opp_wick_col = opp_is_bull ? color.new(colorOppBull, 30) : color.new(colorOppBear, 30)
+
+plotcandle(showOppCandlesInput ? opp_o : na,
+           showOppCandlesInput ? opp_h : na,
+           showOppCandlesInput ? opp_l : na,
+           showOppCandlesInput ? opp_c : na,
+           title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
+
+// ==========================================
+// STRIKE SELECTION: ATM, LOWER (-OFFSET), UPPER (+OFFSET)
 // ==========================================
 
 int offsetPts = offsetChoiceInput == OffsetChoice.offset50 ? 50 : 100
-int selStrike = int(chartStrikePrice)
-
-// ITM & OTM Strike Calculation:
-// For Call (CE): ITM is lower strike (selStrike - offset), OTM is higher strike (selStrike + offset)
-// For Put (PE): ITM is higher strike (selStrike + offset), OTM is lower strike (selStrike - offset)
-int itmStrike = isPut ? (selStrike + offsetPts) : (selStrike - offsetPts)
-int otmStrike = isPut ? (selStrike - offsetPts) : (selStrike + offsetPts)
+int st_atm   = int(chartStrikePrice)
+int st_lower = st_atm - offsetPts
+int st_upper = st_atm + offsetPts
 
 // ==========================================
 // DATA FETCHING & REFERENCE PRICE RESOLUTION
 // ==========================================
 
-f_get_option_prices() =>
-    float d_open = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
-    float d_pdc  = request.security(syminfo.ticker, "D", close[1], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+f_get_option_data() =>
+    float d_open  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    [d_pdc, d_pdh, d_pdl] = request.security(syminfo.ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
     var float d_f5m = na
     if ta.change(time("D")) != 0
         d_f5m := na
     if (hour == 9 and minute >= 19) or hour > 9
         if na(d_f5m)
             d_f5m := close
-    [d_open, d_pdc, na(d_f5m) ? d_open : d_f5m, close]
+    [d_open, d_pdc, d_pdh, d_pdl, na(d_f5m) ? d_open : d_f5m, close]
 
-// Fetch data for ITM, Selected, and OTM strikes
-[ce_op_itm, ce_pdc_itm, ce_f5m_itm, ce_ltp_itm] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(itmStrike), timeframe.period, f_get_option_prices(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_op_itm, pe_pdc_itm, pe_f5m_itm, pe_ltp_itm] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(itmStrike), timeframe.period, f_get_option_prices(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+// Fetch data for ATM, Lower, Upper strikes
+[ce_atm_o, ce_atm_pdc, ce_atm_pdh, ce_atm_pdl, ce_atm_f5m, ce_atm_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(st_atm), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[pe_atm_o, pe_atm_pdc, pe_atm_pdh, pe_atm_pdl, pe_atm_f5m, pe_atm_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(st_atm), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
 
-[ce_op_sel, ce_pdc_sel, ce_f5m_sel, ce_ltp_sel] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(selStrike), timeframe.period, f_get_option_prices(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_op_sel, pe_pdc_sel, pe_f5m_sel, pe_ltp_sel] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(selStrike), timeframe.period, f_get_option_prices(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_lwr_o, ce_lwr_pdc, ce_lwr_pdh, ce_lwr_pdl, ce_lwr_f5m, ce_lwr_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(st_lower), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[pe_lwr_o, pe_lwr_pdc, pe_lwr_pdh, pe_lwr_pdl, pe_lwr_f5m, pe_lwr_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(st_lower), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
 
-[ce_op_otm, ce_pdc_otm, ce_f5m_otm, ce_ltp_otm] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(otmStrike), timeframe.period, f_get_option_prices(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_op_otm, pe_pdc_otm, pe_f5m_otm, pe_ltp_otm] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(otmStrike), timeframe.period, f_get_option_prices(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_upr_o, ce_upr_pdc, ce_upr_pdh, ce_upr_pdl, ce_upr_f5m, ce_upr_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(st_upper), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
+[pe_upr_o, pe_upr_pdc, pe_upr_pdh, pe_upr_pdl, pe_upr_f5m, pe_upr_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(st_upper), timeframe.period, f_get_option_data(), ignore_invalid_symbol=true)
 
 // Helper to extract ref price based on user selection
 f_resolve_ref(float op, float pdc, float f5m, CalculationBasis basis) =>
     basis == CalculationBasis.prevClose ? pdc : (basis == CalculationBasis.first5Min ? f5m : op)
 
-float ce_ref_itm = f_resolve_ref(ce_op_itm, ce_pdc_itm, ce_f5m_itm, bepCalcBasisInput)
-float pe_ref_itm = f_resolve_ref(pe_op_itm, pe_pdc_itm, pe_f5m_itm, bepCalcBasisInput)
+float ce_ref_atm = f_resolve_ref(ce_atm_o, ce_atm_pdc, ce_atm_f5m, bepCalcBasisInput)
+float pe_ref_atm = f_resolve_ref(pe_atm_o, pe_atm_pdc, pe_atm_f5m, bepCalcBasisInput)
 
-float ce_ref_sel = f_resolve_ref(ce_op_sel, ce_pdc_sel, ce_f5m_sel, bepCalcBasisInput)
-float pe_ref_sel = f_resolve_ref(pe_op_sel, pe_pdc_sel, pe_f5m_sel, bepCalcBasisInput)
+float ce_ref_lwr = f_resolve_ref(ce_lwr_o, ce_lwr_pdc, ce_lwr_f5m, bepCalcBasisInput)
+float pe_ref_lwr = f_resolve_ref(pe_lwr_o, pe_lwr_pdc, pe_lwr_f5m, bepCalcBasisInput)
 
-float ce_ref_otm = f_resolve_ref(ce_op_otm, ce_pdc_otm, ce_f5m_otm, bepCalcBasisInput)
-float pe_ref_otm = f_resolve_ref(pe_op_otm, pe_pdc_otm, pe_f5m_otm, bepCalcBasisInput)
-
-// ==========================================
-// STRICT BEP CALCULATIONS: (PE + CE) / 2
-// ==========================================
-
-// Realtime BEP = (CE LTP + PE LTP) / 2
-float bep_realtime_itm = (ce_ltp_itm + pe_ltp_itm) / 2.0
-float bep_realtime_sel = (ce_ltp_sel + pe_ltp_sel) / 2.0
-float bep_realtime_otm = (ce_ltp_otm + pe_ltp_otm) / 2.0
-
-// Static BEP = (CE Ref + PE Ref) / 2
-float bep_static_itm   = (ce_ref_itm + pe_ref_itm) / 2.0
-float bep_static_sel   = (ce_ref_sel + pe_ref_sel) / 2.0
-float bep_static_otm   = (ce_ref_otm + pe_ref_otm) / 2.0
+float ce_ref_upr = f_resolve_ref(ce_upr_o, ce_upr_pdc, ce_upr_f5m, bepCalcBasisInput)
+float pe_ref_upr = f_resolve_ref(pe_upr_o, pe_upr_pdc, pe_upr_f5m, bepCalcBasisInput)
 
 // ==========================================
-// PLOTTING BEP LINES ON CHART
+// STRICT BEP CALCULATIONS: (CE + PE) / 2.0
 // ==========================================
 
-// --- ITM BEP Lines ---
-plot(showRealtimeBEPInput ? bep_realtime_itm : na, "ITM Realtime BEP", color=colorITMReal, linewidth=2)
-plot(showStaticBEPInput ? bep_static_itm : na, "ITM Static BEP", color=colorITMStat, linewidth=1, style=plot.style_linebr)
+// Realtime Dynamic BEP = (CE LTP + PE LTP) / 2.0
+float bep_realtime_atm   = (ce_atm_ltp + pe_atm_ltp) / 2.0
+float bep_realtime_lower = (ce_lwr_ltp + pe_lwr_ltp) / 2.0
+float bep_realtime_upper = (ce_upr_ltp + pe_upr_ltp) / 2.0
 
-// --- Selected Strike BEP Lines ---
-plot(showRealtimeBEPInput ? bep_realtime_sel : na, "Selected Strike Realtime BEP", color=colorSelectedReal, linewidth=2)
-plot(showStaticBEPInput ? bep_static_sel : na, "Selected Strike Static BEP", color=colorSelectedStat, linewidth=1, style=plot.style_linebr)
+// Static Reference BEP = (CE Ref + PE Ref) / 2.0
+float bep_static_atm   = (ce_ref_atm + pe_ref_atm) / 2.0
+float bep_static_lower = (ce_ref_lwr + pe_ref_lwr) / 2.0
+float bep_static_upper = (ce_ref_upr + pe_ref_upr) / 2.0
 
-// --- OTM BEP Lines ---
-plot(showRealtimeBEPInput ? bep_realtime_otm : na, "OTM Realtime BEP", color=colorOTMReal, linewidth=2)
-plot(showStaticBEPInput ? bep_static_otm : na, "OTM Static BEP", color=colorOTMStat, linewidth=1, style=plot.style_linebr)
+// ==========================================
+// PLOTTING BEP & KEY LEVEL LINES ON CHART
+// ==========================================
+
+// --- Realtime Dynamic BEP Lines ---
+plot(showRealtimeBEPInput ? bep_realtime_lower : na, "Realtime Lower BEP (-Offset)", color=colorLowerReal, linewidth=2)
+plot(showRealtimeBEPInput ? bep_realtime_atm   : na, "Realtime ATM BEP (Selected)", color=colorATMReal,   linewidth=2)
+plot(showRealtimeBEPInput ? bep_realtime_upper : na, "Realtime Upper BEP (+Offset)", color=colorUpperReal, linewidth=2)
+
+// --- Static BEP Lines ---
+plot(showStaticBEPInput ? bep_static_lower : na, "Static Lower BEP (-Offset)", color=colorLowerStat, linewidth=1, style=plot.style_linebr)
+plot(showStaticBEPInput ? bep_static_atm   : na, "Static ATM BEP (Selected)", color=colorATMStat,   linewidth=1, style=plot.style_linebr)
+plot(showStaticBEPInput ? bep_static_upper : na, "Static Upper BEP (+Offset)", color=colorUpperStat, linewidth=1, style=plot.style_linebr)
+
+// --- CE & PE Previous Day Close Lines ---
+plot(showPDCInput ? ce_atm_pdc : na, "CE Prev Day Close", color=colorCE_PDC, linewidth=1, style=plot.style_dashed)
+plot(showPDCInput ? pe_atm_pdc : na, "PE Prev Day Close", color=colorPE_PDC, linewidth=1, style=plot.style_dashed)
+
+// --- CE & PE Previous Day High & Low Lines ---
+plot(showPDHPDLInput ? ce_atm_pdh : na, "CE Prev Day High", color=colorCE_PDH, linewidth=1, style=plot.style_dotted)
+plot(showPDHPDLInput ? ce_atm_pdl : na, "CE Prev Day Low", color=colorCE_PDL, linewidth=1, style=plot.style_dotted)
+plot(showPDHPDLInput ? pe_atm_pdh : na, "PE Prev Day High", color=colorPE_PDH, linewidth=1, style=plot.style_dotted)
+plot(showPDHPDLInput ? pe_atm_pdl : na, "PE Prev Day Low", color=colorPE_PDL, linewidth=1, style=plot.style_dotted)
 
 // ==========================================
 // DASHBOARD & SUMMARY TABLE
@@ -252,7 +290,7 @@ if showTableInput and barstate.islast
            tableTextSizeInput == "Normal" ? size.normal :
            tableTextSizeInput == "Large" ? size.large : size.auto
            
-    summaryTable := table.new(position_choice, 8, 4, border_width=1, border_color=color.gray)
+    summaryTable := table.new(position_choice, 9, 5, border_width=1, border_color=color.gray)
     
     basisText = bepCalcBasisInput == CalculationBasis.prevClose ? "Prev Close" : (bepCalcBasisInput == CalculationBasis.first5Min ? "First 5Min Close" : "Day Open")
     underlyingName = actualUnderlying == UnderlyingAsset.banknifty ? "BANKNIFTY" : (actualUnderlying == UnderlyingAsset.nifty ? "NIFTY" : (actualUnderlying == UnderlyingAsset.crudeoil ? "CRUDEOIL" : (actualUnderlying == UnderlyingAsset.gold ? "GOLD" : "Stock")))
@@ -261,41 +299,43 @@ if showTableInput and barstate.islast
     table.cell(summaryTable, 0, 0, "Asset: " + underlyingName, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 1, 0, "Offset: " + str.tostring(offsetPts), bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 2, 0, "Basis: " + basisText, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=t_sz)
-    table.cell(summaryTable, 3, 0, "Selected Strike:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=t_sz)
-    table.cell(summaryTable, 4, 0, str.tostring(selStrike), bgcolor=color.new(#FFEE58, 0), text_color=color.black, text_size=t_sz)
+    table.cell(summaryTable, 3, 0, "ATM Strike:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=t_sz)
+    table.cell(summaryTable, 4, 0, str.tostring(st_atm), bgcolor=color.new(#FFEE58, 0), text_color=color.black, text_size=t_sz)
     table.cell(summaryTable, 5, 0, "BEP Formula:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=t_sz)
     table.cell(summaryTable, 6, 0, "(CE + PE) / 2", bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 7, 0, "", bgcolor=color.new(#1565C0, 0))
+    table.cell(summaryTable, 8, 0, "", bgcolor=color.new(#1565C0, 0))
 
     // Row 1: Column Headers
-    table.cell(summaryTable, 0, 1, "Strike (Type)", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 0, 1, "Strike Level", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 1, 1, "CE Ref", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 2, 1, "PE Ref", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 3, 1, "Static BEP", bgcolor=color.new(#37474F, 0), text_color=color.cyan, text_size=t_sz)
     table.cell(summaryTable, 4, 1, "CE LTP", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 5, 1, "PE LTP", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
     table.cell(summaryTable, 6, 1, "Realtime BEP", bgcolor=color.new(#37474F, 0), text_color=color.yellow, text_size=t_sz)
-    table.cell(summaryTable, 7, 1, "BEP Chg", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 7, 1, "CE Prev High/Low", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
+    table.cell(summaryTable, 8, 1, "PE Prev High/Low", bgcolor=color.new(#37474F, 0), text_color=color.white, text_size=t_sz)
 
-    f_fill_bep_row(table tbl, int r, string lbl, float ce_r, float pe_r, float stat_bep, float ce_l, float pe_l, float rt_bep, color row_bg) =>
+    f_fill_bep_row(table tbl, int r, string lbl, float ce_r, float pe_r, float stat_bep, float ce_l, float pe_l, float rt_bep, float ce_h, float ce_lw, float pe_h, float pe_lw, color row_bg) =>
         table.cell(tbl, 0, r, lbl, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
         table.cell(tbl, 1, r, na(ce_r) ? "N/A" : str.tostring(ce_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
         table.cell(tbl, 2, r, na(pe_r) ? "N/A" : str.tostring(pe_r, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
         table.cell(tbl, 3, r, na(stat_bep) ? "N/A" : str.tostring(stat_bep, "#.##"), bgcolor=color.new(#006064, 0), text_color=color.cyan, text_size=t_sz)
-        table.cell(tbl, 4, r, na(ce_l) ? "N/A" : str.tostring(ce_l, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
-        table.cell(tbl, 5, r, na(pe_l) ? "N/A" : str.tostring(pe_l, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+        table.cell(tbl, 4, r, na(ce_l) ? "N/A" : str.tostring(ce_l, "#.##"), bgcolor=color.black, text_color=color.new(#00E676, 0), text_size=t_sz)
+        table.cell(tbl, 5, r, na(pe_l) ? "N/A" : str.tostring(pe_l, "#.##"), bgcolor=color.black, text_color=color.new(#FF5252, 0), text_size=t_sz)
         table.cell(tbl, 6, r, na(rt_bep) ? "N/A" : str.tostring(rt_bep, "#.##"), bgcolor=color.new(#F57F17, 0), text_color=color.yellow, text_size=t_sz)
         
-        float chg = rt_bep - stat_bep
-        string chg_str = na(chg) ? "N/A" : ((chg >= 0 ? "+" : "") + str.tostring(chg, "#.##"))
-        color chg_bg   = na(chg) ? color.black : (chg > 0 ? color.new(#1B5E20, 0) : (chg < 0 ? color.new(#880E4F, 0) : color.black))
-        table.cell(tbl, 7, r, chg_str, bgcolor=chg_bg, text_color=color.white, text_size=t_sz)
+        string ce_hl_str = (na(ce_h) ? "N/A" : str.tostring(ce_h, "#.#")) + " / " + (na(ce_lw) ? "N/A" : str.tostring(ce_lw, "#.#"))
+        string pe_hl_str = (na(pe_h) ? "N/A" : str.tostring(pe_h, "#.#")) + " / " + (na(pe_lw) ? "N/A" : str.tostring(pe_lw, "#.#"))
+        table.cell(tbl, 7, r, ce_hl_str, bgcolor=color.black, text_color=color.new(#00E676, 20), text_size=t_sz)
+        table.cell(tbl, 8, r, pe_hl_str, bgcolor=color.black, text_color=color.new(#FF5252, 20), text_size=t_sz)
 
-    // Row 2: ITM Strike
-    f_fill_bep_row(summaryTable, 2, str.tostring(itmStrike) + " (ITM)", ce_ref_itm, pe_ref_itm, bep_static_itm, ce_ltp_itm, pe_ltp_itm, bep_realtime_itm, color.new(#2E7D32, 0))
+    // Row 2: Upper Strike (+Offset)
+    f_fill_bep_row(summaryTable, 2, "Upper (" + str.tostring(st_upper) + ")", ce_upr_ref, pe_upr_ref, bep_static_upper, ce_upr_ltp, pe_upr_ltp, bep_realtime_upper, ce_upr_pdh, ce_upr_pdl, pe_upr_pdh, pe_upr_pdl, color.new(#C62828, 0))
 
-    // Row 3: Selected Strike (Gold Highlight)
-    f_fill_bep_row(summaryTable, 3, str.tostring(selStrike) + " (Selected)", ce_ref_sel, pe_ref_sel, bep_static_sel, ce_ltp_sel, pe_ltp_sel, bep_realtime_sel, color.new(#F57F17, 0))
+    // Row 3: ATM Strike (Selected)
+    f_fill_bep_row(summaryTable, 3, "ATM (" + str.tostring(st_atm) + ")", ce_atm_ref, pe_atm_ref, bep_static_atm, ce_atm_ltp, pe_atm_ltp, bep_realtime_atm, ce_atm_pdh, ce_atm_pdl, pe_atm_pdh, pe_atm_pdl, color.new(#F57F17, 0))
 
-    // Row 4: OTM Strike
-    f_fill_bep_row(summaryTable, 4, str.tostring(otmStrike) + " (OTM)", ce_ref_otm, pe_ref_otm, bep_static_otm, ce_ltp_otm, pe_ltp_otm, bep_realtime_otm, color.new(#C62828, 0))
+    // Row 4: Lower Strike (-Offset)
+    f_fill_bep_row(summaryTable, 4, "Lower (" + str.tostring(st_lower) + ")", ce_lwr_ref, pe_lwr_ref, bep_static_lower, ce_lwr_ltp, pe_lwr_ltp, bep_realtime_lower, ce_lwr_pdh, ce_lwr_pdl, pe_lwr_pdh, pe_lwr_pdl, color.new(#2E7D32, 0))
