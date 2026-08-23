@@ -1,0 +1,307 @@
+//@version=6
+indicator("Techfrost CE & PE Option VWAP Analytics", shorttitle="TF CE/PE VWAP", overlay=true, precision=2)
+
+// ==========================================
+// ENUMS & INPUTS
+// ==========================================
+
+enum UnderlyingAsset
+    auto      = "Auto-Detect"
+    nifty     = "NIFTY"
+    banknifty = "BANKNIFTY"
+    crudeoil  = "CRUDEOIL"
+    gold      = "GOLD"
+    stock     = "Stock (Equity)"
+
+enum OptionType
+    auto = "Auto-Detect"
+    ce   = "Call (CE)"
+    pe   = "Put (PE)"
+
+enum StepOverrideChoice
+    auto    = "Auto"
+    step25  = "25"
+    step50  = "50"
+    step100 = "100"
+    step200 = "200"
+    step500 = "500"
+
+// --- Instrument Settings ---
+underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
+optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
+manualStrikeInput  = input.int(0, "Manual Strike Selection (0 = Auto)", minval=0, group="Instrument Settings",
+  tooltip="Enter strike price manually (e.g. 24000). Leave at 0 to auto-detect from chart symbol.")
+spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
+strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
+strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
+  tooltip="Set to Auto for auto-detection based on underlying (50 for Nifty/Crude, 100 for BankNifty/Gold).")
+
+// --- Plot & Display Controls ---
+showCE_VWAP        = input.bool(true, "Show CE Option VWAP Line", group="Plot Controls")
+showPE_VWAP        = input.bool(true, "Show PE Option VWAP Line", group="Plot Controls")
+showCE_Bands       = input.bool(false, "Show CE VWAP StdDev Bands (±1)", group="Plot Controls")
+showPE_Bands       = input.bool(false, "Show PE VWAP StdDev Bands (±1)", group="Plot Controls")
+bandMultiplier     = input.float(1.0, "StdDev Band Multiplier", minval=0.1, maxval=5.0, step=0.1, group="Plot Controls")
+
+showTableInput     = input.bool(true, "Show Summary Dashboard Table", group="Display Controls")
+tablePosInput      = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
+tableTextSizeInput = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls")
+
+// --- Styling & Colors ---
+colorCEVWAP        = input.color(#00E676, "CE VWAP Color", group="Styling & Colors")
+colorPEVWAP        = input.color(#FF1744, "PE VWAP Color", group="Styling & Colors")
+colorCEBands       = input.color(color.new(#00E676, 50), "CE VWAP Bands Color", group="Styling & Colors")
+colorPEBands       = input.color(color.new(#FF1744, 50), "PE VWAP Bands Color", group="Styling & Colors")
+
+// ==========================================
+// TICKER PARSING & AUTO-DETECTION
+// ==========================================
+
+string cleanTicker = syminfo.ticker
+int colonPos = str.pos(cleanTicker, ":")
+if colonPos != -1
+    cleanTicker := str.substring(cleanTicker, colonPos + 1)
+cleanTicker := str.replace_all(cleanTicker, " ", "")
+
+// ----- Detect underlying -----
+UnderlyingAsset actualUnderlying = na
+if underlyingInput == UnderlyingAsset.auto
+    if str.contains(cleanTicker, "BANKNIFTY")
+        actualUnderlying := UnderlyingAsset.banknifty
+    else if str.contains(cleanTicker, "NIFTY")
+        actualUnderlying := UnderlyingAsset.nifty
+    else if str.contains(cleanTicker, "CRUDEOIL")
+        actualUnderlying := UnderlyingAsset.crudeoil
+    else if str.contains(cleanTicker, "GOLD") and not str.contains(cleanTicker, "GOLDM") and not str.contains(cleanTicker, "GOLDPETAL")
+        actualUnderlying := UnderlyingAsset.gold
+    else if str.contains(cleanTicker, "GOLDM")
+        actualUnderlying := UnderlyingAsset.gold
+    else
+        actualUnderlying := UnderlyingAsset.stock
+else
+    actualUnderlying := underlyingInput
+
+// ----- Detect option type -----
+bool isCall = false
+bool isPut  = false
+
+if optionTypeInput == OptionType.ce
+    isCall := true
+else if optionTypeInput == OptionType.pe
+    isPut := true
+else
+    if str.contains(cleanTicker, "CE")
+        isCall := true
+    else if str.contains(cleanTicker, "PE")
+        isPut := true
+    else if str.match(cleanTicker, "C\\d+$") != ""
+        isCall := true
+    else if str.match(cleanTicker, "P\\d+$") != ""
+        isPut := true
+
+// ----- Strike extraction from chart symbol -----
+float detectedStrike = na
+string tickerWithoutCEPE = ""
+
+int tickerLen = str.length(cleanTicker)
+if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+    tickerWithoutCEPE := str.substring(cleanTicker, 0, tickerLen - 2)
+
+string matchC = str.match(cleanTicker, "C\\d+$")
+string matchP = str.match(cleanTicker, "P\\d+$")
+
+if matchC != ""
+    detectedStrike := str.tonumber(str.substring(matchC, 1))
+else if matchP != ""
+    detectedStrike := str.tonumber(str.substring(matchP, 1))
+else if tickerWithoutCEPE != ""
+    string strikeDigits = str.match(tickerWithoutCEPE, "\\d+$")
+    detectedStrike := str.tonumber(strikeDigits)
+
+float chartStrikePrice = manualStrikeInput > 0 ? float(manualStrikeInput) : (strikeOverride > 0.0 ? strikeOverride : (not na(detectedStrike) ? detectedStrike : 24000.0))
+
+// ----- Determine Step Size -----
+int stepVal = 50
+switch strikeStepInput
+    StepOverrideChoice.step25  => stepVal := 25
+    StepOverrideChoice.step50  => stepVal := 50
+    StepOverrideChoice.step100 => stepVal := 100
+    StepOverrideChoice.step200 => stepVal := 200
+    StepOverrideChoice.step500 => stepVal := 500
+    =>
+        switch actualUnderlying
+            UnderlyingAsset.banknifty => stepVal := 100
+            UnderlyingAsset.nifty     => stepVal := 50
+            UnderlyingAsset.crudeoil  => stepVal := 50
+            UnderlyingAsset.gold      => stepVal := 100
+            UnderlyingAsset.stock     => stepVal := 50
+
+// Spot ticker resolution
+string spotTicker = ""
+if str.length(spotTickerOverride) > 0
+    spotTicker := spotTickerOverride
+else
+    switch actualUnderlying
+        UnderlyingAsset.banknifty => spotTicker := "NSE:BANKNIFTY"
+        UnderlyingAsset.nifty     => spotTicker := "NSE:NIFTY"
+        UnderlyingAsset.crudeoil  => spotTicker := "MCX:CRUDEOIL1!"
+        UnderlyingAsset.gold      => spotTicker := "MCX:GOLD1!"
+        UnderlyingAsset.stock     =>
+            string rootGuess = str.match(cleanTicker, "^[A-Z&]+")
+            if rootGuess != ""
+                spotTicker := syminfo.prefix + ":" + rootGuess
+            else
+                spotTicker := syminfo.prefix + ":" + cleanTicker
+
+float spotDayOpen = request.security(spotTicker, "D", open, lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+var int baseCenterStrike = na
+if barstate.isfirst or na(baseCenterStrike)
+    float refPrice = manualStrikeInput > 0 ? float(manualStrikeInput) : (strikeOverride > 0.0 ? strikeOverride : (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen))
+    baseCenterStrike := int(math.round(refPrice / stepVal) * stepVal)
+
+int targetStrike = baseCenterStrike
+
+// Universal Fail-Safe Option Ticker Construction
+string strikeDigitsStr = str.tostring(int(chartStrikePrice))
+int digitsLen = str.length(strikeDigitsStr)
+
+string ce_prefix = ""
+string pe_prefix = ""
+
+if isCall
+    ce_prefix := str.substring(cleanTicker, 0, str.length(cleanTicker) - digitsLen)
+    int cPos = str.length(ce_prefix) - 1
+    pe_prefix := str.substring(ce_prefix, 0, cPos) + "P"
+else if isPut
+    pe_prefix := str.substring(cleanTicker, 0, str.length(cleanTicker) - digitsLen)
+    int pPos = str.length(pe_prefix) - 1
+    ce_prefix := str.substring(pe_prefix, 0, pPos) + "C"
+else
+    ce_prefix := cleanTicker + "CE"
+    pe_prefix := cleanTicker + "PE"
+
+f_build_ce_ticker(int st) =>
+    ce_prefix + str.tostring(st)
+
+f_build_pe_ticker(int st) =>
+    pe_prefix + str.tostring(st)
+
+string ce_ticker = syminfo.prefix + ":" + f_build_ce_ticker(targetStrike)
+string pe_ticker = syminfo.prefix + ":" + f_build_pe_ticker(targetStrike)
+
+// ==========================================
+// INTRADAY VWAP CALCULATION FUNCTION
+// ==========================================
+
+f_calc_option_vwap() =>
+    float h = high
+    float l = low
+    float c = close
+    float v = nz(volume, 1.0)
+    float tp = (h + l + c) / 3.0
+    
+    var float sum_pv  = 0.0
+    var float sum_v   = 0.0
+    var float sum_pv2 = 0.0
+    
+    if ta.change(time("D")) != 0
+        sum_pv  := 0.0
+        sum_v   := 0.0
+        sum_pv2 := 0.0
+        
+    sum_pv  += tp * v
+    sum_v   += v
+    sum_pv2 += tp * tp * v
+    
+    float vwap_val = sum_v > 0 ? (sum_pv / sum_v) : c
+    float variance = sum_v > 0 ? math.max(0.0, (sum_pv2 / sum_v) - (vwap_val * vwap_val)) : 0.0
+    float stdev_val = math.sqrt(variance)
+    
+    [vwap_val, stdev_val, c]
+
+// Fetch Intraday VWAP & Price series for CE and PE contracts
+[ce_vwap_raw, ce_stdev_raw, ce_ltp_raw] = request.security(ce_ticker, timeframe.period, f_calc_option_vwap(), ignore_invalid_symbol=true)
+[pe_vwap_raw, pe_stdev_raw, pe_ltp_raw] = request.security(pe_ticker, timeframe.period, f_calc_option_vwap(), ignore_invalid_symbol=true)
+
+float ce_vwap = ce_vwap_raw
+float ce_upper = ce_vwap + (ce_stdev_raw * bandMultiplier)
+float ce_lower = ce_vwap - (ce_stdev_raw * bandMultiplier)
+float ce_ltp = ce_ltp_raw
+
+float pe_vwap = pe_vwap_raw
+float pe_upper = pe_vwap + (pe_stdev_raw * bandMultiplier)
+float pe_lower = pe_vwap - (pe_stdev_raw * bandMultiplier)
+float pe_ltp = pe_ltp_raw
+
+// ==========================================
+// PLOTTING VWAP LINES & STDEV BANDS (EXPOSED IN TRADINGVIEW STYLE TAB)
+// ==========================================
+
+// CE Option VWAP Plots
+plot(showCE_VWAP and ce_vwap > 0 ? ce_vwap : na, "CE Option VWAP", color=colorCEVWAP, linewidth=2)
+plot(showCE_VWAP and showCE_Bands and ce_upper > 0 ? ce_upper : na, "CE VWAP Upper Band", color=colorCEBands, linewidth=1, style=plot.style_dashed)
+plot(showCE_VWAP and showCE_Bands and ce_lower > 0 ? ce_lower : na, "CE VWAP Lower Band", color=colorCEBands, linewidth=1, style=plot.style_dashed)
+
+// PE Option VWAP Plots
+plot(showPE_VWAP and pe_vwap > 0 ? pe_vwap : na, "PE Option VWAP", color=colorPEVWAP, linewidth=2)
+plot(showPE_VWAP and showPE_Bands and pe_upper > 0 ? pe_upper : na, "PE VWAP Upper Band", color=colorPEBands, linewidth=1, style=plot.style_dashed)
+plot(showPE_VWAP and showPE_Bands and pe_lower > 0 ? pe_lower : na, "PE VWAP Lower Band", color=colorPEBands, linewidth=1, style=plot.style_dashed)
+
+// ==========================================
+// SUMMARY DASHBOARD TABLE
+// ==========================================
+
+f_get_table_pos(string pos_str) =>
+    switch pos_str
+        "Top Right"    => position.top_right
+        "Top Left"     => position.top_left
+        "Bottom Left"  => position.bottom_left
+        => position.bottom_right
+
+f_get_table_text_size(string sz_str) =>
+    switch sz_str
+        "Auto"   => size.auto
+        "Tiny"   => size.tiny
+        "Small"  => size.small
+        "Normal" => size.normal
+        "Large"  => size.large
+        => size.small
+
+var table vwapTable = table.new(f_get_table_pos(tablePosInput), 4, 4, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+
+if barstate.islast
+    if not showTableInput
+        table.delete(vwapTable)
+    else
+        curTextSize = f_get_table_text_size(tableTextSizeInput)
+        
+        // Row 0: Banner Header
+        table.cell(vwapTable, 0, 0, "Asset: " + cleanTicker, bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
+        table.cell(vwapTable, 1, 0, "Strike: " + str.tostring(targetStrike), bgcolor=#FFEE58, text_color=color.black, text_size=curTextSize)
+        table.cell(vwapTable, 2, 0, "CE & PE VWAP Analytics", bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
+        table.cell(vwapTable, 3, 0, "", bgcolor=#1565C0)
+
+        // Row 1: Column Headers
+        table.cell(vwapTable, 0, 1, "Option Contract", bgcolor=#37474F, text_color=color.white, text_size=curTextSize)
+        table.cell(vwapTable, 1, 1, "Realtime LTP", bgcolor=#37474F, text_color=color.yellow, text_size=curTextSize)
+        table.cell(vwapTable, 2, 1, "Option VWAP", bgcolor=#37474F, text_color=color.aqua, text_size=curTextSize)
+        table.cell(vwapTable, 3, 1, "Status vs VWAP", bgcolor=#37474F, text_color=color.white, text_size=curTextSize)
+
+        // Row 2: CE Contract Row
+        bool ceAbove = ce_ltp >= ce_vwap
+        string ceStatusStr = ceAbove ? "ABOVE VWAP (Bullish)" : "BELOW VWAP (Bearish)"
+        color ceStatusBg   = ceAbove ? #1B5E20 : #880E4F
+        table.cell(vwapTable, 0, 2, "CE (" + str.tostring(targetStrike) + " Call)", bgcolor=#212121, text_color=#00E676, text_size=curTextSize)
+        table.cell(vwapTable, 1, 2, str.tostring(ce_ltp, "#.##"), bgcolor=color.black, text_color=color.white, text_size=curTextSize)
+        table.cell(vwapTable, 2, 2, str.tostring(ce_vwap, "#.##"), bgcolor=color.black, text_color=#00E676, text_size=curTextSize)
+        table.cell(vwapTable, 3, 2, ceStatusStr, bgcolor=ceStatusBg, text_color=color.white, text_size=curTextSize)
+
+        // Row 3: PE Contract Row
+        bool peAbove = pe_ltp >= pe_vwap
+        string peStatusStr = peAbove ? "ABOVE VWAP (Bullish)" : "BELOW VWAP (Bearish)"
+        color peStatusBg   = peAbove ? #1B5E20 : #880E4F
+        table.cell(vwapTable, 0, 3, "PE (" + str.tostring(targetStrike) + " Put)", bgcolor=#212121, text_color=#FF1744, text_size=curTextSize)
+        table.cell(vwapTable, 1, 3, str.tostring(pe_ltp, "#.##"), bgcolor=color.black, text_color=color.white, text_size=curTextSize)
+        table.cell(vwapTable, 2, 3, str.tostring(pe_vwap, "#.##"), bgcolor=color.black, text_color=#FF1744, text_size=curTextSize)
+        table.cell(vwapTable, 3, 3, peStatusStr, bgcolor=peStatusBg, text_color=color.white, text_size=curTextSize)
