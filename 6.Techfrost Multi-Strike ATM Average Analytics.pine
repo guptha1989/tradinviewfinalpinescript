@@ -71,6 +71,11 @@ colorPEAvgCur      = input.color(#FF1744, "PE Current Basket Avg Line Color", gr
 colorCurATMHighlight = input.color(#FFEE58, "Current ATM Cell Highlight (Yellow)", group="Styling & Colors")
 colorDayATMHighlight = input.color(#00E5FF, "Day Open ATM Cell Highlight (Cyan)", group="Styling & Colors")
 
+colorSB_CE           = input.color(#00E676, "Strong Buy CE (SB CE) Arrow Color", group="Styling & Colors")
+colorSB_PE           = input.color(#FF1744, "Strong Buy PE (SB PE) Arrow Color", group="Styling & Colors")
+colorSignalTextColor = input.color(color.white, "Signal Label Text Color", group="Styling & Colors",
+  tooltip="Color of signal text labels (SB CE, SB PE, CE CONT, PE CONT). Default is White for dark backgrounds.")
+
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
 // ==========================================
@@ -445,11 +450,11 @@ if ta.crossunder(peAvgCur, peAvgOpen)
     in_sb_pe := false
 
 // Visual Signal Plotshapes (on sub-window chart)
-plotshape(showSignalPlotsInput and plot_sb_ce and not ce_trend_cont_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.small, text="SB CE")
-plotshape(showSignalPlotsInput and plot_sb_pe and not pe_trend_cont_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.small, text="SB PE")
+plotshape(showSignalPlotsInput and plot_sb_ce and not ce_trend_cont_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="SB CE")
+plotshape(showSignalPlotsInput and plot_sb_pe and not pe_trend_cont_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.small, text="SB PE")
 
-plotshape(showSignalPlotsInput and ce_trend_cont_signal, title="CE Continued Trend (Yesterday)", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.black, size=size.tiny, text="CE CONT")
-plotshape(showSignalPlotsInput and pe_trend_cont_signal, title="PE Continued Trend (Yesterday)", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.tiny, text="PE CONT")
+plotshape(showSignalPlotsInput and ce_trend_cont_signal, title="CE Continued Trend (Yesterday)", style=shape.labelup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.tiny, text="CE CONT")
+plotshape(showSignalPlotsInput and pe_trend_cont_signal, title="PE Continued Trend (Yesterday)", style=shape.labeldown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.tiny, text="PE CONT")
 
 // TradingView Alert Conditions
 alertcondition(plot_sb_ce, title="Strong Buy CE (SB CE)", message="STRONG BUY CE Signal: CE Current Avg Crossed Above Day Open Avg on {{ticker}}!")

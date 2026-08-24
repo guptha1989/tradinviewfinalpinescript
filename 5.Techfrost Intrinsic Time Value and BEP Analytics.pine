@@ -106,6 +106,14 @@ colorOTMBear      = input.color(color.new(#FF9100, 50), "OTM Bearish Body", grou
 colorOppBull      = input.color(color.new(#2962FF, 40), "Opposite Bullish Body", group="Candle Overlays Formatting")
 colorOppBear      = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", group="Candle Overlays Formatting")
 
+// Signal Styling & Colors
+colorSB_CE           = input.color(#00E676, "Strong Buy CE (SB CE) Arrow Color", group="Signal Styling & Colors")
+colorSB_PE           = input.color(#FF1744, "Strong Buy PE (SB PE) Arrow Color", group="Signal Styling & Colors")
+colorBuyCE           = input.color(#00E676, "Buy CE Crossover Arrow Color", group="Signal Styling & Colors")
+colorBuyPE           = input.color(#FF1744, "Buy PE Crossover Arrow Color", group="Signal Styling & Colors")
+colorSignalTextColor = input.color(color.white, "Signal Label Text Color", group="Signal Styling & Colors",
+  tooltip="Color of signal text labels (SB CE, SB PE, BUY CE, BUY PE). Default is White for dark backgrounds.")
+
 // ==========================================
 // HELPER FUNCTIONS (GLOBAL SCOPE ONLY)
 // ==========================================
@@ -519,11 +527,11 @@ bool buy_pe_signal = ta.crossover(pe_iv_rt, ce_iv_rt)
 bool buy_ce_signal = ta.crossover(ce_iv_rt, pe_iv_rt)
 
 // Visual Signal Plotshapes
-plotshape(showSignalPlotsInput and sb_ce_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.small, text="SB CE")
-plotshape(showSignalPlotsInput and sb_pe_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.small, text="SB PE")
+plotshape(showSignalPlotsInput and sb_ce_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="SB CE")
+plotshape(showSignalPlotsInput and sb_pe_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.small, text="SB PE")
 
-plotshape(showSignalPlotsInput and buy_ce_signal and not sb_ce_signal, title="Buy CE Signal", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.black, size=size.tiny, text="BUY CE")
-plotshape(showSignalPlotsInput and buy_pe_signal and not sb_pe_signal, title="Buy PE Signal", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.tiny, text="BUY PE")
+plotshape(showSignalPlotsInput and buy_ce_signal and not sb_ce_signal, title="Buy CE Signal", style=shape.labelup, location=location.belowbar, color=colorBuyCE, textcolor=colorSignalTextColor, size=size.tiny, text="BUY CE")
+plotshape(showSignalPlotsInput and buy_pe_signal and not sb_pe_signal, title="Buy PE Signal", style=shape.labeldown, location=location.abovebar, color=colorBuyPE, textcolor=colorSignalTextColor, size=size.tiny, text="BUY PE")
 
 // TradingView Alert Conditions
 alertcondition(sb_ce_signal, title="Strong Buy CE (SB CE)", message="STRONG BUY CE: CE Realtime Intrinsic Value > 0 and PE Realtime Intrinsic Value <= 0 on {{ticker}}!")
