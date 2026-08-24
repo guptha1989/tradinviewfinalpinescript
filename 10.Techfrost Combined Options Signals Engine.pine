@@ -55,6 +55,8 @@ enableMomentumFilter = input.bool(true, "Require Average Change Momentum Filter 
 enableScenario1      = input.bool(true, "Enable Scenario 1 (Current Strike Leads Crossover)", group="Signal Filter Controls")
 enableScenario2      = input.bool(true, "Enable Scenario 2 (Opposite Strike Leads Crossover)", group="Signal Filter Controls")
 enableScenario3      = input.bool(true, "Enable Scenario 3 (Intrinsic Value Formed / Crossover)", group="Signal Filter Controls")
+enableScenario4      = input.bool(true, "Enable Scenario 4 (BEP Line Price Action Triggers)", group="Signal Filter Controls",
+  tooltip="Triggers Buy when price crosses OTM BEP line, crosses ATM BEP line, or rejects at ITM BEP line.")
 
 // --- Plot & Display Controls ---
 showBuySignalsInput  = input.bool(true, "Show Buy Entry Markers (CE SB / PE SB)", group="Display Controls")
@@ -376,6 +378,21 @@ float ceAvgChg = ceAvgCur - ceAvgOpen
 float peAvgChg = peAvgCur - peAvgOpen
 
 // ==========================================
+// SCENARIO 4: BEP LINE PRICE ACTION TRIGGERS
+// ==========================================
+
+// 1. Price crosses above any OTM BEP Line
+bool otm_bep_cross_above = ta.crossover(close, std_bep_otm1) or ta.crossover(close, std_bep_otm2) or ta.crossover(close, std_bep_otm3)
+
+// 2. Price crosses over and closes above or below the ATM BEP Line
+bool atm_bep_cross_event = ta.crossover(close, std_bep_atm) or ta.crossunder(close, std_bep_atm)
+
+// 3. Price rejects at an ITM BEP Line (tests ITM BEP line and closes in favorable direction)
+bool itm_bep_rejection   = (low <= std_bep_itm1 and close > std_bep_itm1 and close > open) or (low <= std_bep_itm2 and close > std_bep_itm2 and close > open) or (low <= std_bep_itm3 and close > std_bep_itm3 and close > open)
+
+bool bep_pa_trigger = otm_bep_cross_above or atm_bep_cross_event or itm_bep_rejection
+
+// ==========================================
 // RAW SIGNAL CONDITIONS
 // ==========================================
 
@@ -388,8 +405,9 @@ bool pe_sb_scen2 = enableScenario2 and ta.crossunder(ceAvgCur, ceAvgOpen) and (p
 bool pe_iv_formed = ta.crossover(pe_iv_rt, 0.0)
 bool pe_iv_crossed = ta.crossover(pe_iv_rt, avg_iv_rt) or ta.crossover(pe_iv_rt, ce_iv_rt)
 bool pe_sb_scen3 = enableScenario3 and (pe_iv_formed or pe_iv_crossed) and pe_momentum_filter
+bool pe_sb_scen4 = enableScenario4 and bep_pa_trigger and pe_momentum_filter
 
-bool pe_raw_buy = pe_sb_scen1 or pe_sb_scen2 or pe_sb_scen3
+bool pe_raw_buy = pe_sb_scen1 or pe_sb_scen2 or pe_sb_scen3 or pe_sb_scen4
 
 bool ce_sb_scen1 = enableScenario1 and ta.crossover(ceAvgCur, ceAvgOpen) and (peAvgCur < peAvgOpen) and ce_momentum_filter
 bool ce_sb_scen2 = enableScenario2 and ta.crossunder(peAvgCur, peAvgOpen) and (ceAvgCur > ceAvgOpen) and ce_momentum_filter
@@ -397,8 +415,9 @@ bool ce_sb_scen2 = enableScenario2 and ta.crossunder(peAvgCur, peAvgOpen) and (c
 bool ce_iv_formed = ta.crossover(ce_iv_rt, 0.0)
 bool ce_iv_crossed = ta.crossover(ce_iv_rt, avg_iv_rt) or ta.crossover(ce_iv_rt, pe_iv_rt)
 bool ce_sb_scen3 = enableScenario3 and (ce_iv_formed or ce_iv_crossed) and ce_momentum_filter
+bool ce_sb_scen4 = enableScenario4 and bep_pa_trigger and ce_momentum_filter
 
-bool ce_raw_buy = ce_sb_scen1 or ce_sb_scen2 or ce_sb_scen3
+bool ce_raw_buy = ce_sb_scen1 or ce_sb_scen2 or ce_sb_scen3 or ce_sb_scen4
 
 bool pe_raw_exit = ta.crossunder(pe_iv_rt, avg_iv_rt) or ta.crossunder(pe_iv_rt, ce_iv_rt) or (pe_iv_rt[1] > 0 and pe_iv_rt == 0) or ta.crossunder(peAvgCur, peAvgOpen)
 bool ce_raw_exit = ta.crossunder(ce_iv_rt, avg_iv_rt) or ta.crossunder(ce_iv_rt, pe_iv_rt) or (ce_iv_rt[1] > 0 and ce_iv_rt == 0) or ta.crossunder(ceAvgCur, ceAvgOpen)
@@ -491,6 +510,9 @@ plotshape(showExitCrosses and plot_pe_exit, title="PE Signal Exit", style=shape.
 alertcondition(plot_pe_buy, title="PE Strong Buy (PE SB)", message="PE Strong Buy Signal Triggered on {{ticker}}")
 alertcondition(plot_ce_buy, title="CE Strong Buy (CE SB)", message="CE Strong Buy Signal Triggered on {{ticker}}")
 
+alertcondition(pe_sb_scen4, title="PE SB - Scenario 4 (BEP Price Action)", message="PE SB Scenario 4: PE BEP Line Price Action Triggered on {{ticker}}!")
+alertcondition(ce_sb_scen4, title="CE SB - Scenario 4 (BEP Price Action)", message="CE SB Scenario 4: CE BEP Line Price Action Triggered on {{ticker}}!")
+
 alertcondition(plot_ce_sl, title="CE SL Hit (3 Points)", message="CE Stop Loss (3 pts) Hit!")
 alertcondition(plot_ce_tp, title="CE Target Hit (Next BEP Line)", message="CE Target (Next BEP Line) Hit!")
 
@@ -532,7 +554,7 @@ if barstate.islast
         table.cell(summaryTable, 0, 0, "Asset: " + cleanTicker, bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 1, 0, "Strike: " + str.tostring(baseStrike), bgcolor=#FFEE58, text_color=color.black, text_size=curTextSize)
         table.cell(summaryTable, 2, 0, "SL: 3 Pts | Target: Next BEP", bgcolor=#1565C0, text_color=color.yellow, text_size=curTextSize)
-        table.cell(summaryTable, 3, 0, "Clean Signals Engine v3", bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 3, 0, "Signals Engine v4", bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 4, 0, "", bgcolor=#1565C0)
 
         // Row 1: Column Headers
