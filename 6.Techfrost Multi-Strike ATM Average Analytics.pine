@@ -372,11 +372,20 @@ float basketAvgChg  = basketAvgCur - basketAvgOpen
 // STRONG BUY SIGNAL EVALUATION & ALERTS
 // ==========================================
 
-// Strong Buy CE (SB CE): CE current avg crosses over CE day open avg, PE current avg is <= PE day open avg, CE avg change > 0 AND PE avg change <= 0 (Images 1 & 2)
-bool sb_ce_cond = ta.crossover(ceAvgCur, ceAvgOpen) and (peAvgCur <= peAvgOpen) and (ceAvgChg > 0) and (peAvgChg <= 0)
+// Day Open Detection
+bool isNewDaySession = ta.change(time("D")) != 0 or bar_index == 0
 
-// Strong Buy PE (SB PE): PE current avg crosses over PE day open avg, CE current avg is <= CE day open avg, PE avg change > 0 AND CE avg change <= 0 (Image 3)
-bool sb_pe_cond = ta.crossover(peAvgCur, peAvgOpen) and (ceAvgCur <= ceAvgOpen) and (peAvgChg > 0) and (ceAvgChg <= 0)
+// Maintained Trend Conditions at Day Open (Crossover occurred yesterday and trend is maintained at session open)
+bool ce_trend_maintained = (ceAvgCur > ceAvgOpen) and (peAvgCur <= peAvgOpen) and (ceAvgChg > 0) and (peAvgChg <= 0)
+bool pe_trend_maintained = (peAvgCur > peAvgOpen) and (ceAvgCur <= ceAvgOpen) and (peAvgChg > 0) and (ceAvgChg <= 0)
+
+// Trend Continuation Signal at Day Open
+bool ce_trend_cont_signal = isNewDaySession and ce_trend_maintained
+bool pe_trend_cont_signal = isNewDaySession and pe_trend_maintained
+
+// Fresh Crossover OR Continued Trend Signal
+bool sb_ce_cond = (ta.crossover(ceAvgCur, ceAvgOpen) or ce_trend_cont_signal) and (peAvgCur <= peAvgOpen) and (ceAvgChg > 0) and (peAvgChg <= 0)
+bool sb_pe_cond = (ta.crossover(peAvgCur, peAvgOpen) or pe_trend_cont_signal) and (ceAvgCur <= ceAvgOpen) and (peAvgChg > 0) and (ceAvgChg <= 0)
 
 var bool in_sb_ce = false
 var bool in_sb_pe = false
@@ -401,12 +410,18 @@ if ta.crossunder(peAvgCur, peAvgOpen)
     in_sb_pe := false
 
 // Visual Signal Plotshapes (on sub-window chart)
-plotshape(showSignalPlotsInput and plot_sb_ce, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.small, text="SB CE")
-plotshape(showSignalPlotsInput and plot_sb_pe, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.small, text="SB PE")
+plotshape(showSignalPlotsInput and plot_sb_ce and not ce_trend_cont_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.small, text="SB CE")
+plotshape(showSignalPlotsInput and plot_sb_pe and not pe_trend_cont_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.small, text="SB PE")
+
+plotshape(showSignalPlotsInput and ce_trend_cont_signal, title="CE Continued Trend (Yesterday)", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.black, size=size.tiny, text="CE CONT")
+plotshape(showSignalPlotsInput and pe_trend_cont_signal, title="PE Continued Trend (Yesterday)", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.tiny, text="PE CONT")
 
 // TradingView Alert Conditions
-alertcondition(plot_sb_ce, title="Strong Buy CE (SB CE)", message="STRONG BUY CE Signal: CE Current Avg Crossed Above Day Open Avg while PE Avg is Below Day Open Avg on {{ticker}}!")
-alertcondition(plot_sb_pe, title="Strong Buy PE (SB PE)", message="STRONG BUY PE Signal: PE Current Avg Crossed Above Day Open Avg while CE Avg is Below Day Open Avg on {{ticker}}!")
+alertcondition(plot_sb_ce, title="Strong Buy CE (SB CE)", message="STRONG BUY CE Signal: CE Current Avg Crossed Above Day Open Avg on {{ticker}}!")
+alertcondition(plot_sb_pe, title="Strong Buy PE (SB PE)", message="STRONG BUY PE Signal: PE Current Avg Crossed Above Day Open Avg on {{ticker}}!")
+
+alertcondition(ce_trend_cont_signal, title="CE Continued Strong Trend from Yesterday", message="CE Continued Strong Trend from Yesterday Active at Market Open on {{ticker}}!")
+alertcondition(pe_trend_cont_signal, title="PE Continued Strong Trend from Yesterday", message="PE Continued Strong Trend from Yesterday Active at Market Open on {{ticker}}!")
 
 // ==========================================
 // AVERAGE PLOTS (SUB-WINDOW BOTTOM INDICATOR)
