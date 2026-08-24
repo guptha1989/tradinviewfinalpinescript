@@ -90,6 +90,7 @@ showITMCandlesInput    = input.bool(true, "Show ITM Option Candles Overlay", gro
 showOTMCandlesInput    = input.bool(true, "Show OTM Option Candles Overlay", group="Candle Overlay Plots")
 showOppCandlesInput    = input.bool(true, "Show Opposite Option Candles Overlay", group="Candle Overlay Plots")
 
+showSignalPlotsInput   = input.bool(true, "Show Buy / Sell Signal Shapes", group="Display Controls")
 showTableInput         = input.bool(true, "Show Summary Dashboard Table", group="Display Controls")
 tableDisplayMode       = input.string("Today Only", "Table Display Mode", options=["Today Only", "5-Day Matrix"], group="Display Controls")
 tablePosInput          = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
@@ -482,6 +483,54 @@ plot(show5D_Static_BEPInput and bar_bep_stat > 0 ? bar_bep_stat : na, "Static BE
 
 plot(showPD_CE_CloseInput and bar_ce_pdc > 0 ? bar_ce_pdc : na, "CE Prev Day Close", color=#00E676, style=plot.style_linebr)
 plot(showPD_PE_CloseInput and bar_pe_pdc > 0 ? bar_pe_pdc : na, "PE Prev Day Close", color=#FF5252, style=plot.style_linebr)
+
+// ==========================================
+// BUY / SELL SIGNALS & ALERTS LOGIC
+// ==========================================
+
+// 1. Strong Buy Conditions
+bool sb_pe_cond = (pe_iv_rt > 0.0) and (ce_iv_rt <= 0.0)
+bool sb_ce_cond = (ce_iv_rt > 0.0) and (pe_iv_rt <= 0.0)
+
+var bool in_sb_pe = false
+var bool in_sb_ce = false
+
+bool sb_pe_signal = false
+bool sb_ce_signal = false
+
+if sb_pe_cond and not in_sb_pe
+    in_sb_pe     := true
+    in_sb_ce     := false
+    sb_pe_signal := true
+
+if pe_iv_rt <= 0.0
+    in_sb_pe := false
+
+if sb_ce_cond and not in_sb_ce
+    in_sb_ce     := true
+    in_sb_pe     := false
+    sb_ce_signal := true
+
+if ce_iv_rt <= 0.0
+    in_sb_ce := false
+
+// 2. Crossover Buy Conditions
+bool buy_pe_signal = ta.crossover(pe_iv_rt, ce_iv_rt)
+bool buy_ce_signal = ta.crossover(ce_iv_rt, pe_iv_rt)
+
+// Visual Signal Plotshapes
+plotshape(showSignalPlotsInput and sb_ce_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.small, text="SB CE")
+plotshape(showSignalPlotsInput and sb_pe_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.small, text="SB PE")
+
+plotshape(showSignalPlotsInput and buy_ce_signal and not sb_ce_signal, title="Buy CE Signal", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.black, size=size.tiny, text="BUY CE")
+plotshape(showSignalPlotsInput and buy_pe_signal and not sb_pe_signal, title="Buy PE Signal", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.tiny, text="BUY PE")
+
+// TradingView Alert Conditions
+alertcondition(sb_ce_signal, title="Strong Buy CE (SB CE)", message="STRONG BUY CE: CE Realtime Intrinsic Value > 0 and PE Realtime Intrinsic Value <= 0 on {{ticker}}!")
+alertcondition(sb_pe_signal, title="Strong Buy PE (SB PE)", message="STRONG BUY PE: PE Realtime Intrinsic Value > 0 and CE Realtime Intrinsic Value <= 0 on {{ticker}}!")
+
+alertcondition(buy_ce_signal, title="Buy CE (Crossover)", message="BUY CE Signal: CE Realtime Intrinsic Value Crossed Above PE Realtime Intrinsic Value on {{ticker}}!")
+alertcondition(buy_pe_signal, title="Buy PE (Crossover)", message="BUY PE Signal: PE Realtime Intrinsic Value Crossed Above CE Realtime Intrinsic Value on {{ticker}}!")
 
 // ==========================================
 // SUMMARY DASHBOARD TABLE
