@@ -455,12 +455,18 @@ if barstate.islast
     if not showSubBiasLabel
         table.delete(biasSubPaneTable)
     else
-        string biasText = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? "BULLISH BIAS" :
-                          (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? "BEARISH BIAS" : "NEUTRAL"
-        color biasBg    = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? #1B5E20 :
-                          (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? #880E4F : #212121
-        color biasTextCol = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? #00E676 :
-                            (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? #FF1744 : #9E9E9E
+        string biasText = "NEUTRAL"
+        color biasBg = #212121
+        color biasTextCol = #9E9E9E
+        
+        if ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen
+            biasText := "BULLISH BIAS"
+            biasBg := #1B5E20
+            biasTextCol := #00E676
+        else if peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen
+            biasText := "BEARISH BIAS"
+            biasBg := #880E4F
+            biasTextCol := #FF1744
         
         table.cell(biasSubPaneTable, 0, 0, biasText, bgcolor=biasBg, text_color=biasTextCol, text_size=size.small)
 
