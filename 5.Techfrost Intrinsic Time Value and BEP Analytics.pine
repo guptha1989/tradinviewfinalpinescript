@@ -25,6 +25,12 @@ enum StrikeMode
     both = "Both ITM & OTM"
 
 enum OffsetChoice
+    offset5   = "5 Points"
+    offset10  = "10 Points"
+    offset15  = "15 Points"
+    offset20  = "20 Points"
+    offset25  = "25 Points"
+    offset40  = "40 Points"
     offset50  = "50 Points"
     offset100 = "100 Points"
     offset150 = "150 Points"
@@ -215,7 +221,18 @@ f_build_option_symbol(target_strike, target_is_ce) =>
 // TARGET STRIKE SELECTION & CANDLE OVERLAYS
 // ==========================================
 
-int rawOffsetPts = offsetChoiceInput == OffsetChoice.offset50 ? 50 : (offsetChoiceInput == OffsetChoice.offset100 ? 100 : (offsetChoiceInput == OffsetChoice.offset150 ? 150 : 200))
+int rawOffsetPts = switch offsetChoiceInput
+    OffsetChoice.offset5   => 5
+    OffsetChoice.offset10  => 10
+    OffsetChoice.offset15  => 15
+    OffsetChoice.offset20  => 20
+    OffsetChoice.offset25  => 25
+    OffsetChoice.offset40  => 40
+    OffsetChoice.offset50  => 50
+    OffsetChoice.offset100 => 100
+    OffsetChoice.offset150 => 150
+    OffsetChoice.offset200 => 200
+    => 100
 int offsetPts = (strikeModeInput == StrikeMode.atm) ? 0 : rawOffsetPts
 int base_strike = int(chartStrikePrice)
 

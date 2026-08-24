@@ -27,8 +27,16 @@ enum BEPBasis
     first5Min = "First 5 Min Close"
 
 enum OffsetChoice
+    offset5   = "5 Points"
+    offset10  = "10 Points"
+    offset15  = "15 Points"
+    offset20  = "20 Points"
+    offset25  = "25 Points"
+    offset40  = "40 Points"
     offset50  = "50 Points"
     offset100 = "100 Points"
+    offset150 = "150 Points"
+    offset200 = "200 Points"
 
 // --- Settings Groups ---
 G_INST  = "Instrument & Strike Selection"
@@ -47,7 +55,7 @@ suffixStyle        = input.string("CE/PE", "Option Suffix Format", options=["C/P
 strike_step_input  = input.int(50, "Custom Strike Step", group=G_INST)
 
 // 2. BEP Calculation Settings
-offset_choice_str  = input.string("100 Points", "Strike Offset Points", options=["50 Points", "100 Points"], group=G_CALC)
+offset_choice_str  = input.string("50 Points", "Strike Offset Points", options=["5 Points", "10 Points", "15 Points", "20 Points", "25 Points", "40 Points", "50 Points", "100 Points", "150 Points", "200 Points"], group=G_CALC)
 standard_bep_basis = input.string("Day Open Price", "Static BEP Calculation Basis", options=["Day Open Price", "Previous Day Close", "Previous Day Settlement", "First 5 Min Close"], group=G_CALC)
 
 // 3. Plot Controls
@@ -203,7 +211,18 @@ plotcandle(show_opp_candles and is_option ? opp_o : na,
 // =========================================================================
 // STRIKES SELECTION (3 ITM, 1 ATM, 3 OTM STRIKES)
 // =========================================================================
-int offsetPts = str.contains(offset_choice_str, "50") ? 50 : 100
+int offsetPts = switch offset_choice_str
+    "5 Points"   => 5
+    "10 Points"  => 10
+    "15 Points"  => 15
+    "20 Points"  => 20
+    "25 Points"  => 25
+    "40 Points"  => 40
+    "50 Points"  => 50
+    "100 Points" => 100
+    "150 Points" => 150
+    "200 Points" => 200
+    => 50
 
 int st_m3  = final_strike - 3 * offsetPts
 int st_m2  = final_strike - 2 * offsetPts
