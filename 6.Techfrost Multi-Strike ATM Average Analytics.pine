@@ -49,8 +49,8 @@ showHistogramsInput  = input.bool(true, "Show Average Change Plots", group="Disp
   tooltip="Enable or disable the average change from Day Open plots.")
 changePlotStyleInput = input.string("Line", "Avg Change Plot Style", options=["Line", "Histogram"], group="Display Controls",
   tooltip="Choose whether to plot average change series as continuous Lines or Histograms.")
-showSignalPlotsInput = input.bool(true, "Show Signal Markers", group="Display Controls",
-  tooltip="Enable or disable visual Buy CE / Buy PE & Strong Buy signal markers on chart.")
+showSignalPlotsInput = input.bool(true, "Show Strong Buy Signal Shapes", group="Display Controls",
+  tooltip="Enable or disable visual Strong Buy CE / PE signal markers on chart.")
 showSubBiasLabel     = input.bool(true, "Show Bias Badge in Indicator Area", group="Display Controls",
   tooltip="Displays 'BULLISH BIAS' or 'BEARISH BIAS' badge directly inside the sub-window indicator pane.")
 
@@ -371,22 +371,6 @@ float basketAvgCur  = (ceAvgCur + peAvgCur) / 2.0
 float basketAvgChg  = basketAvgCur - basketAvgOpen
 
 // ==========================================
-// DIRECT CE / PE CURRENT BASKET AVERAGE CROSSOVER SIGNALS & ALERTS
-// ==========================================
-
-// Direct Crossover between CE Current Avg and PE Current Avg
-bool buy_ce_crossover = ta.crossover(ceAvgCur, peAvgCur)
-bool buy_pe_crossover = ta.crossover(peAvgCur, ceAvgCur)
-
-// Visual Plotshapes for CE/PE Basket Average Crossover (Buy CE / Buy PE)
-plotshape(showSignalPlotsInput and buy_ce_crossover, title="Buy CE (CE/PE Crossover)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.small, text="BUY CE")
-plotshape(showSignalPlotsInput and buy_pe_crossover, title="Buy PE (PE/CE Crossover)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.small, text="BUY PE")
-
-// TradingView Alerts for CE/PE Crossover
-alertcondition(buy_ce_crossover, title="Buy CE (CE/PE Basket Crossover)", message="BUY CE Signal: CE Current Basket Avg Crossed Above PE Current Basket Avg on {{ticker}}!")
-alertcondition(buy_pe_crossover, title="Buy PE (PE/CE Basket Crossover)", message="BUY PE Signal: PE Current Basket Avg Crossed Above CE Current Basket Avg on {{ticker}}!")
-
-// ==========================================
 // STRONG BUY SIGNAL EVALUATION & ALERTS
 // ==========================================
 
@@ -427,14 +411,14 @@ if sb_pe_cond and not in_sb_pe
 if ta.crossunder(peAvgCur, peAvgOpen)
     in_sb_pe := false
 
-// Visual Signal Plotshapes for Strong Buy (on sub-window chart)
+// Visual Signal Plotshapes (on sub-window chart)
 plotshape(showSignalPlotsInput and plot_sb_ce and not ce_trend_cont_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.small, text="SB CE")
 plotshape(showSignalPlotsInput and plot_sb_pe and not pe_trend_cont_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.small, text="SB PE")
 
 plotshape(showSignalPlotsInput and ce_trend_cont_signal, title="CE Continued Trend (Yesterday)", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.black, size=size.tiny, text="CE CONT")
 plotshape(showSignalPlotsInput and pe_trend_cont_signal, title="PE Continued Trend (Yesterday)", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.tiny, text="PE CONT")
 
-// TradingView Alert Conditions for Strong Buy
+// TradingView Alert Conditions
 alertcondition(plot_sb_ce, title="Strong Buy CE (SB CE)", message="STRONG BUY CE Signal: CE Current Avg Crossed Above Day Open Avg on {{ticker}}!")
 alertcondition(plot_sb_pe, title="Strong Buy PE (SB PE)", message="STRONG BUY PE Signal: PE Current Avg Crossed Above Day Open Avg on {{ticker}}!")
 
