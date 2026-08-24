@@ -53,6 +53,8 @@ showSignalPlotsInput = input.bool(true, "Show Strong Buy Signal Shapes", group="
   tooltip="Enable or disable visual Strong Buy CE / PE signal markers on chart.")
 showSubBiasLabel     = input.bool(true, "Show Bias Badge in Indicator Area", group="Display Controls",
   tooltip="Displays 'Bullish Bias' or 'Bearish Bias' badge directly inside the sub-window indicator pane.")
+biasBadgePosInput    = input.string("Bottom Left", "Bias Badge Position", options=["Bottom Left", "Bottom Right", "Top Right", "Top Left"], group="Display Controls",
+  tooltip="Position of the Bullish / Bearish Bias badge in the sub-window indicator pane.")
 
 // --- Styling & Colors ---
 colorCEAvgOpen     = input.color(color.new(#00C853, 50), "CE Day Open Basket Avg Line Color", group="Styling & Colors")
@@ -446,18 +448,22 @@ plot(showHistogramsInput and changePlotStyleInput == "Line" ? ceAvgChg : na, tit
 plot(showHistogramsInput and changePlotStyleInput == "Line" ? peAvgChg : na, title="PE Basket Avg Change from Open", color=col_peAvgChg, linewidth=2, style=plot.style_line)
 
 // ==========================================
-// SUB-WINDOW MARKET BIAS BADGE (DIRECTLY IN INDICATOR PANE)
+// SUB-WINDOW MARKET BIAS BADGE (UNOBSTRUCTED BOTTOM-LEFT POSITION)
 // ==========================================
 
-var table biasSubPaneTable = table.new(position.top_left, 1, 1, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=false)
-var label lineBiasLabel = na
+f_get_table_pos(string pos_str) =>
+    switch pos_str
+        "Top Right"    => position.top_right
+        "Top Left"     => position.top_left
+        "Bottom Left"  => position.bottom_left
+        => position.bottom_right
+
+var table biasSubPaneTable = table.new(f_get_table_pos(biasBadgePosInput), 1, 1, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=false)
 
 if barstate.islast
     if not showSubBiasLabel
         table.delete(biasSubPaneTable)
-        label.delete(lineBiasLabel)
     else
-        label.delete(lineBiasLabel)
         string biasText = "Neutral"
         color biasBg = #212121
         color biasTextCol = #9E9E9E
@@ -474,20 +480,10 @@ if barstate.islast
             biasTextCol := #00B0FF
         
         table.cell(biasSubPaneTable, 0, 0, biasText, bgcolor=biasBg, text_color=biasTextCol, text_size=size.small)
-        
-        // Small text label directly on lines inside indicator area
-        lineBiasLabel := label.new(bar_index, (ceAvgChg + peAvgChg) / 2.0, text="▶ " + biasText, color=color.new(color.black, 100), textcolor=biasTextCol, style=label.style_label_left, size=size.small)
 
 // ==========================================
 // DASHBOARD & STRIKE TABLE
 // ==========================================
-
-f_get_table_pos(string pos_str) =>
-    switch pos_str
-        "Top Right"    => position.top_right
-        "Top Left"     => position.top_left
-        "Bottom Left"  => position.bottom_left
-        => position.bottom_right
 
 f_get_table_text_size(string sz_str) =>
     switch sz_str
