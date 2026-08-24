@@ -26,6 +26,11 @@ enum StepOverrideChoice
     step200 = "200"
     step500 = "500"
 
+enum StaticBasis
+    dayOpen   = "Day Open Price (9:15 AM Open)"
+    prevClose = "Previous Day Close / Settlement Price"
+    first5Min = "First 5 Min Candle Close"
+
 // --- Instrument Settings ---
 underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
@@ -37,6 +42,12 @@ spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)"
 strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
 strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
   tooltip="Set to Auto for auto-detection based on underlying (50 for Nifty/Crude, 100 for BankNifty/Gold).")
+
+// --- Risk & Target Settings (SL 3 Points & Next BEP Line Target) ---
+slPtsInput           = input.float(3.0, "Stop Loss Points (Default = 3)", minval=0.5, step=0.5, group="Risk & Target Settings",
+  tooltip="Fixed Stop Loss of 3 points for every entry.")
+offsetChoiceInput    = input.int(100, "BEP Line Strike Offset Points", options=[50, 100], group="Risk & Target Settings")
+staticBasisInput     = input.enum(StaticBasis.dayOpen, "Static BEP Calculation Basis", group="Risk & Target Settings")
 
 // --- Signal & Filter Controls ---
 enableMomentumFilter = input.bool(true, "Require Average Change Momentum Filter (Open > 0)", group="Signal Filter Controls",
@@ -54,8 +65,8 @@ tableTextSizeInput = input.string("Small", "Table Text Size", options=["Auto", "
 // --- Styling & Colors ---
 colorCESB          = input.color(#00E676, "CE Strong Buy Signal Color", group="Styling & Colors")
 colorPESB          = input.color(#FF1744, "PE Strong Buy Signal Color", group="Styling & Colors")
-colorCEExit        = input.color(#00E5FF, "CE Sell / Exit Color", group="Styling & Colors")
-colorPEExit        = input.color(#FF9100, "PE Sell / Exit Color", group="Styling & Colors")
+colorCEExit        = input.color(#00E5FF, "CE Exit Color", group="Styling & Colors")
+colorPEExit        = input.color(#FF9100, "PE Exit Color", group="Styling & Colors")
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -212,34 +223,100 @@ int k_m4 = baseStrike - 4 * stepVal
 
 f_get_strike_open_and_close() =>
     float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
-    [d_op, close]
+    [d_pdc] = request.security(syminfo.tickerid, "D", [close[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+    var float d_f5m = na
+    if ta.change(time("D")) != 0
+        d_f5m := na
+    if (hour == 9 and minute >= 19) or hour > 9
+        if na(d_f5m)
+            d_f5m := close
+    [d_op, d_pdc, na(d_f5m) ? d_op : d_f5m, close]
 
-[ce_o_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p4, ce_pdc_p4, ce_f5m_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p4, pe_pdc_p4, pe_f5m_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p3, ce_pdc_p3, ce_f5m_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p3, pe_pdc_p3, pe_f5m_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p2, ce_pdc_p2, ce_f5m_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p2, pe_pdc_p2, pe_f5m_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p1, ce_pdc_p1, ce_f5m_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p1, pe_pdc_p1, pe_f5m_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_0,  ce_pdc_0,  ce_f5m_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_0,  pe_pdc_0,  pe_f5m_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m1, ce_pdc_m1, ce_f5m_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m1, pe_pdc_m1, pe_f5m_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m2, ce_pdc_m2, ce_f5m_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m2, pe_pdc_m2, pe_f5m_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m3, ce_pdc_m3, ce_f5m_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m3, pe_pdc_m3, pe_f5m_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m4, ce_pdc_m4, ce_f5m_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m4, pe_pdc_m4, pe_f5m_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+// ==========================================
+// 7 BEP LEVELS (FROM INDICATOR 4.Techfrost Multi Strike BEP Lines)
+// ==========================================
+
+f_resolve_basis(dop, pdc, f5m) =>
+    staticBasisInput == StaticBasis.prevClose ? pdc : (staticBasisInput == StaticBasis.first5Min ? f5m : dop)
+
+float ce_m3_ref = f_resolve_basis(ce_o_m3, ce_pdc_m3, ce_f5m_m3)
+float pe_m3_ref = f_resolve_basis(pe_o_m3, pe_pdc_m3, pe_f5m_m3)
+
+float ce_m2_ref = f_resolve_basis(ce_o_m2, ce_pdc_m2, ce_f5m_m2)
+float pe_m2_ref = f_resolve_basis(pe_o_m2, pe_pdc_m2, pe_f5m_m2)
+
+float ce_m1_ref = f_resolve_basis(ce_o_m1, ce_pdc_m1, ce_f5m_m1)
+float pe_m1_ref = f_resolve_basis(pe_o_m1, pe_pdc_m1, pe_f5m_m1)
+
+float ce_atm_ref = f_resolve_basis(ce_o_0, ce_pdc_0, ce_f5m_0)
+float pe_atm_ref = f_resolve_basis(pe_o_0, pe_pdc_0, pe_f5m_0)
+
+float ce_p1_ref = f_resolve_basis(ce_o_p1, ce_pdc_p1, ce_f5m_p1)
+float pe_p1_ref = f_resolve_basis(pe_o_p1, pe_pdc_p1, pe_f5m_p1)
+
+float ce_p2_ref = f_resolve_basis(ce_o_p2, ce_pdc_p2, ce_f5m_p2)
+float pe_p2_ref = f_resolve_basis(pe_o_p2, pe_pdc_p2, pe_f5m_p2)
+
+float ce_p3_ref = f_resolve_basis(ce_o_p3, ce_pdc_p3, ce_f5m_p3)
+float pe_p3_ref = f_resolve_basis(pe_o_p3, pe_pdc_p3, pe_f5m_p3)
+
+// Static Reference BEP Values
+float std_bep_itm3 = (ce_m3_ref + pe_p3_ref) / 2.0
+float std_bep_itm2 = (ce_m2_ref + pe_p2_ref) / 2.0
+float std_bep_itm1 = (ce_m1_ref + pe_p1_ref) / 2.0
+float std_bep_atm  = (ce_atm_ref + pe_atm_ref) / 2.0
+float std_bep_otm1 = (ce_p1_ref + pe_m1_ref) / 2.0
+float std_bep_otm2 = (ce_p2_ref + pe_m2_ref) / 2.0
+float std_bep_otm3 = (ce_p3_ref + pe_m3_ref) / 2.0
+
+// Target Resolution Helper: Find immediate next BEP line strictly above entry price
+f_get_next_target_bep(float cur_price) =>
+    float target_bep = na
+    if not na(std_bep_itm3) and std_bep_itm3 > cur_price
+        target_bep := na(target_bep) ? std_bep_itm3 : math.min(target_bep, std_bep_itm3)
+    if not na(std_bep_itm2) and std_bep_itm2 > cur_price
+        target_bep := na(target_bep) ? std_bep_itm2 : math.min(target_bep, std_bep_itm2)
+    if not na(std_bep_itm1) and std_bep_itm1 > cur_price
+        target_bep := na(target_bep) ? std_bep_itm1 : math.min(target_bep, std_bep_itm1)
+    if not na(std_bep_atm) and std_bep_atm > cur_price
+        target_bep := na(target_bep) ? std_bep_atm : math.min(target_bep, std_bep_atm)
+    if not na(std_bep_otm1) and std_bep_otm1 > cur_price
+        target_bep := na(target_bep) ? std_bep_otm1 : math.min(target_bep, std_bep_otm1)
+    if not na(std_bep_otm2) and std_bep_otm2 > cur_price
+        target_bep := na(target_bep) ? std_bep_otm2 : math.min(target_bep, std_bep_otm2)
+    if not na(std_bep_otm3) and std_bep_otm3 > cur_price
+        target_bep := na(target_bep) ? std_bep_otm3 : math.min(target_bep, std_bep_otm3)
+    
+    if na(target_bep)
+        target_bep := cur_price + 50.0
+    target_bep
 
 // ==========================================
 // INTRINSIC VALUE CALCULATIONS (INDICATOR 5 ANALYTICS)
@@ -304,13 +381,9 @@ bool pe_momentum_filter = enableMomentumFilter ? (peAvgChg > 0) : true
 bool ce_momentum_filter = enableMomentumFilter ? (ceAvgChg > 0) : true
 
 // --- PE Strong Buy (PE SB) Conditions ---
-// Scenario 1: PE current avg crosses above PE day open avg while CE current avg is already below CE day open avg
 bool pe_sb_scen1 = enableScenario1 and ta.crossover(peAvgCur, peAvgOpen) and (ceAvgCur < ceAvgOpen) and pe_momentum_filter
-
-// Scenario 2: CE current avg crosses below CE day open avg while PE current avg is already above PE day open avg
 bool pe_sb_scen2 = enableScenario2 and ta.crossunder(ceAvgCur, ceAvgOpen) and (peAvgCur > peAvgOpen) and pe_momentum_filter
 
-// Scenario 3: PE Intrinsic Value forms (>0) OR crosses over PE Intrinsic Signal Line / CE Intrinsic Value
 bool pe_iv_formed = ta.crossover(pe_iv_rt, 0.0)
 bool pe_iv_crossed = ta.crossover(pe_iv_rt, avg_iv_rt) or ta.crossover(pe_iv_rt, ce_iv_rt)
 bool pe_sb_scen3 = enableScenario3 and (pe_iv_formed or pe_iv_crossed) and pe_momentum_filter
@@ -318,22 +391,66 @@ bool pe_sb_scen3 = enableScenario3 and (pe_iv_formed or pe_iv_crossed) and pe_mo
 bool pe_sb_signal = pe_sb_scen1 or pe_sb_scen2 or pe_sb_scen3
 
 // --- CE Strong Buy (CE SB) Conditions ---
-// Scenario 1: CE current avg crosses above CE day open avg while PE current avg is already below PE day open avg
 bool ce_sb_scen1 = enableScenario1 and ta.crossover(ceAvgCur, ceAvgOpen) and (peAvgCur < peAvgOpen) and ce_momentum_filter
-
-// Scenario 2: PE current avg crosses below PE day open avg while CE current avg is already above CE day open avg
 bool ce_sb_scen2 = enableScenario2 and ta.crossunder(peAvgCur, peAvgOpen) and (ceAvgCur > ceAvgOpen) and ce_momentum_filter
 
-// Scenario 3: CE Intrinsic Value forms (>0) OR crosses over CE Intrinsic Signal Line / PE Intrinsic Value
 bool ce_iv_formed = ta.crossover(ce_iv_rt, 0.0)
 bool ce_iv_crossed = ta.crossover(ce_iv_rt, avg_iv_rt) or ta.crossover(ce_iv_rt, pe_iv_rt)
 bool ce_sb_scen3 = enableScenario3 and (ce_iv_formed or ce_iv_crossed) and ce_momentum_filter
 
 bool ce_sb_signal = ce_sb_scen1 or ce_sb_scen2 or ce_sb_scen3
 
-// --- Sell / Exit Indications ---
-bool pe_sell_signal = ta.crossunder(pe_iv_rt, avg_iv_rt) or ta.crossunder(pe_iv_rt, ce_iv_rt) or (pe_iv_rt[1] > 0 and pe_iv_rt == 0) or ta.crossunder(peAvgCur, peAvgOpen)
-bool ce_sell_signal = ta.crossunder(ce_iv_rt, avg_iv_rt) or ta.crossunder(ce_iv_rt, pe_iv_rt) or (ce_iv_rt[1] > 0 and ce_iv_rt == 0) or ta.crossunder(ceAvgCur, ceAvgOpen)
+// --- Standard Signal Exit Indications ---
+bool pe_signal_exit = ta.crossunder(pe_iv_rt, avg_iv_rt) or ta.crossunder(pe_iv_rt, ce_iv_rt) or (pe_iv_rt[1] > 0 and pe_iv_rt == 0) or ta.crossunder(peAvgCur, peAvgOpen)
+bool ce_signal_exit = ta.crossunder(ce_iv_rt, avg_iv_rt) or ta.crossunder(ce_iv_rt, pe_iv_rt) or (ce_iv_rt[1] > 0 and ce_iv_rt == 0) or ta.crossunder(ceAvgCur, ceAvgOpen)
+
+// ==========================================
+// TRADE STATE, SL (3 PTS) & TARGET (BEP LINE) ENGINE
+// ==========================================
+
+var bool active_ce_trade = false
+var float ce_entry_price = na
+var float ce_sl_price    = na
+var float ce_tp_price    = na
+
+var bool active_pe_trade = false
+var float pe_entry_price = na
+var float pe_sl_price    = na
+var float pe_tp_price    = na
+
+// 1. CE Buy Entry
+if ce_sb_signal and not active_ce_trade
+    active_ce_trade := true
+    ce_entry_price  := close
+    ce_sl_price     := ce_entry_price - slPtsInput
+    ce_tp_price     := f_get_next_target_bep(ce_entry_price)
+
+// 2. PE Buy Entry
+if pe_sb_signal and not active_pe_trade
+    active_pe_trade := true
+    pe_entry_price  := close
+    pe_sl_price     := pe_entry_price - slPtsInput
+    pe_tp_price     := f_get_next_target_bep(pe_entry_price)
+
+// Check CE SL / Target / Signal Exit
+bool ce_sl_hit     = active_ce_trade and (low <= ce_sl_price or close <= ce_sl_price)
+bool ce_tp_hit     = active_ce_trade and (high >= ce_tp_price or close >= ce_tp_price)
+bool ce_exit_final = ce_signal_exit or ce_sl_hit or ce_tp_hit
+
+if ce_exit_final
+    active_ce_trade := false
+
+// Check PE SL / Target / Signal Exit
+bool pe_sl_hit     = active_pe_trade and (low <= pe_sl_price or close <= pe_sl_price)
+bool pe_tp_hit     = active_pe_trade and (high >= pe_tp_price or close >= pe_tp_price)
+bool pe_exit_final = pe_signal_exit or pe_sl_hit or pe_tp_hit
+
+if pe_exit_final
+    active_pe_trade := false
+
+// Final Exits
+bool ce_sell_signal = ce_exit_final
+bool pe_sell_signal = pe_exit_final
 
 // ==========================================
 // VISUAL SIGNAL MARKERS ON CHART
@@ -342,8 +459,14 @@ bool ce_sell_signal = ta.crossunder(ce_iv_rt, avg_iv_rt) or ta.crossunder(ce_iv_
 plotshape(showSignalsInput and ce_sb_signal, title="CE Strong Buy Signal", style=shape.triangleup, location=location.belowbar, color=colorCESB, size=size.normal, text="CE SB")
 plotshape(showSignalsInput and pe_sb_signal, title="PE Strong Buy Signal", style=shape.triangledown, location=location.abovebar, color=colorPESB, size=size.normal, text="PE SB")
 
-plotshape(showSignalsInput and ce_sell_signal and not ce_sb_signal, title="CE Sell / Exit Signal", style=shape.xcross, location=location.abovebar, color=colorCEExit, size=size.small, text="CE EXIT")
-plotshape(showSignalsInput and pe_sell_signal and not pe_sb_signal, title="PE Sell / Exit Signal", style=shape.xcross, location=location.belowbar, color=colorPEExit, size=size.small, text="PE EXIT")
+plotshape(showSignalsInput and ce_tp_hit, title="CE Target Hit (BEP)", style=shape.labeldown, location=location.abovebar, color=#00E676, textcolor=color.black, size=size.small, text="CE TP HIT")
+plotshape(showSignalsInput and ce_sl_hit and not ce_tp_hit, title="CE SL Hit (3 Pts)", style=shape.labelup, location=location.belowbar, color=#FF1744, textcolor=color.white, size=size.small, text="CE SL HIT")
+
+plotshape(showSignalsInput and pe_tp_hit, title="PE Target Hit (BEP)", style=shape.labelup, location=location.belowbar, color=#FF1744, textcolor=color.white, size=size.small, text="PE TP HIT")
+plotshape(showSignalsInput and pe_sl_hit and not pe_tp_hit, title="PE SL Hit (3 Pts)", style=shape.labeldown, location=location.abovebar, color=#00E676, textcolor=color.black, size=size.small, text="PE SL HIT")
+
+plotshape(showSignalsInput and ce_sell_signal and not ce_sb_signal and not ce_sl_hit and not ce_tp_hit, title="CE Signal Exit", style=shape.xcross, location=location.abovebar, color=colorCEExit, size=size.small, text="CE EXIT")
+plotshape(showSignalsInput and pe_sell_signal and not pe_sb_signal and not pe_sl_hit and not pe_tp_hit, title="PE Signal Exit", style=shape.xcross, location=location.belowbar, color=colorPEExit, size=size.small, text="PE EXIT")
 
 // ==========================================
 // TRADINGVIEW ALERT NOTIFICATIONS
@@ -352,16 +475,14 @@ plotshape(showSignalsInput and pe_sell_signal and not pe_sb_signal, title="PE Se
 alertcondition(pe_sb_signal, title="PE Strong Buy (PE SB)", message="PE Strong Buy Signal Triggered! PE Avg Change is Positive & PE Momentum Active on {{ticker}}")
 alertcondition(ce_sb_signal, title="CE Strong Buy (CE SB)", message="CE Strong Buy Signal Triggered! CE Avg Change is Positive & CE Momentum Active on {{ticker}}")
 
+alertcondition(ce_sl_hit, title="CE SL Hit (3 Points)", message="CE Stop Loss (3 pts) Hit!")
+alertcondition(ce_tp_hit, title="CE Target Hit (Next BEP Line)", message="CE Target (Next BEP Line) Hit!")
+
+alertcondition(pe_sl_hit, title="PE SL Hit (3 Points)", message="PE Stop Loss (3 pts) Hit!")
+alertcondition(pe_tp_hit, title="PE Target Hit (Next BEP Line)", message="PE Target (Next BEP Line) Hit!")
+
 alertcondition(pe_sell_signal, title="PE Sell / Exit", message="PE Sell / Exit Signal Triggered for {{ticker}}!")
 alertcondition(ce_sell_signal, title="CE Sell / Exit", message="CE Sell / Exit Signal Triggered for {{ticker}}!")
-
-alertcondition(pe_sb_scen1, title="PE SB - Scenario 1 (PE Leads)", message="PE SB Scenario 1: PE Avg Crossed Above Day Open Avg while CE is Below Day Open Avg!")
-alertcondition(pe_sb_scen2, title="PE SB - Scenario 2 (CE Leads)", message="PE SB Scenario 2: CE Avg Crossed Below Day Open Avg while PE is Above Day Open Avg!")
-alertcondition(pe_sb_scen3, title="PE SB - Scenario 3 (PE IV Trigger)", message="PE SB Scenario 3: PE Intrinsic Value Formed or Crossed Signal Line!")
-
-alertcondition(ce_sb_scen1, title="CE SB - Scenario 1 (CE Leads)", message="CE SB Scenario 1: CE Avg Crossed Above Day Open Avg while PE is Below Day Open Avg!")
-alertcondition(ce_sb_scen2, title="CE SB - Scenario 2 (PE Leads)", message="CE SB Scenario 2: PE Avg Crossed Below Day Open Avg while CE is Above Day Open Avg!")
-alertcondition(ce_sb_scen3, title="CE SB - Scenario 3 (CE IV Trigger)", message="CE SB Scenario 3: CE Intrinsic Value Formed or Crossed Signal Line!")
 
 // ==========================================
 // SUMMARY DASHBOARD TABLE
@@ -383,7 +504,7 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
-var table summaryTable = table.new(f_get_table_pos(tablePosInput), 4, 6, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTable = table.new(f_get_table_pos(tablePosInput), 5, 6, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 
 if barstate.islast
     if not showTableInput
@@ -394,38 +515,44 @@ if barstate.islast
         // Row 0: Banner Header
         table.cell(summaryTable, 0, 0, "Asset: " + cleanTicker, bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 1, 0, "Strike: " + str.tostring(baseStrike), bgcolor=#FFEE58, text_color=color.black, text_size=curTextSize)
-        table.cell(summaryTable, 2, 0, "Options Signals Engine", bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 3, 0, "", bgcolor=#1565C0)
+        table.cell(summaryTable, 2, 0, "SL: 3 Pts | Target: Next BEP", bgcolor=#1565C0, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTable, 3, 0, "Signals Engine v2", bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 4, 0, "", bgcolor=#1565C0)
 
         // Row 1: Column Headers
         table.cell(summaryTable, 0, 1, "Side Metric", bgcolor=#37474F, text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 1, 1, "Basket Avg / Day Open", bgcolor=#37474F, text_color=color.yellow, text_size=curTextSize)
         table.cell(summaryTable, 2, 1, "Intrinsic Value", bgcolor=#37474F, text_color=color.aqua, text_size=curTextSize)
-        table.cell(summaryTable, 3, 1, "Active Signal Status", bgcolor=#37474F, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 3, 1, "Active Trade SL / Target", bgcolor=#37474F, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 4, 1, "Active Signal Status", bgcolor=#37474F, text_color=color.white, text_size=curTextSize)
 
         // Row 2: CE Metric Row
         string ceAvgStatusStr = "CE Cur: " + str.tostring(ceAvgCur, "#.##") + " / Open: " + str.tostring(ceAvgOpen, "#.##") + " (" + (ceAvgChg >= 0 ? "+" : "") + str.tostring(ceAvgChg, "#.##") + ")"
         color ceAvgBg = ceAvgCur >= ceAvgOpen ? #1B5E20 : #880E4F
-        string ceSigStatusStr = ce_sb_signal ? "CE STRONG BUY" : (ce_sell_signal ? "CE EXIT / SELL" : (ceAvgCur >= ceAvgOpen ? "BULLISH BIAS" : "NEUTRAL"))
-        color ceSigBg = ce_sb_signal ? colorCESB : (ce_sell_signal ? colorCEExit : ceAvgBg)
-        color ceSigText = ce_sb_signal or ce_sell_signal ? color.black : color.white
+        string ceTradeStr = active_ce_trade ? ("SL: " + str.tostring(ce_sl_price, "#.#") + " | TP: " + str.tostring(ce_tp_price, "#.#")) : "No Trade"
+        string ceSigStatusStr = ce_tp_hit ? "CE TARGET HIT" : (ce_sl_hit ? "CE SL HIT" : (ce_sb_signal ? "CE STRONG BUY" : (ce_sell_signal ? "CE EXIT" : (ceAvgCur >= ceAvgOpen ? "BULLISH BIAS" : "NEUTRAL"))))
+        color ceSigBg = ce_tp_hit ? #00E676 : (ce_sl_hit ? #FF1744 : (ce_sb_signal ? colorCESB : (ce_sell_signal ? colorCEExit : ceAvgBg)))
+        color ceSigText = ce_tp_hit or ce_sb_signal or ce_sell_signal ? color.black : color.white
 
         table.cell(summaryTable, 0, 2, "Call (CE)", bgcolor=#212121, text_color=#00E676, text_size=curTextSize)
         table.cell(summaryTable, 1, 2, ceAvgStatusStr, bgcolor=ceAvgBg, text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 2, 2, str.tostring(ce_iv_rt, "#.##"), bgcolor=color.black, text_color=#00E676, text_size=curTextSize)
-        table.cell(summaryTable, 3, 2, ceSigStatusStr, bgcolor=ceSigBg, text_color=ceSigText, text_size=curTextSize)
+        table.cell(summaryTable, 3, 2, ceTradeStr, bgcolor=color.black, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTable, 4, 2, ceSigStatusStr, bgcolor=ceSigBg, text_color=ceSigText, text_size=curTextSize)
 
         // Row 3: PE Metric Row
         string peAvgStatusStr = "PE Cur: " + str.tostring(peAvgCur, "#.##") + " / Open: " + str.tostring(peAvgOpen, "#.##") + " (" + (peAvgChg >= 0 ? "+" : "") + str.tostring(peAvgChg, "#.##") + ")"
         color peAvgBg = peAvgCur >= peAvgOpen ? #1B5E20 : #880E4F
-        string peSigStatusStr = pe_sb_signal ? "PE STRONG BUY" : (pe_sell_signal ? "PE EXIT / SELL" : (peAvgCur >= peAvgOpen ? "BEARISH BIAS" : "NEUTRAL"))
-        color peSigBg = pe_sb_signal ? colorPESB : (pe_sell_signal ? colorPEExit : peAvgBg)
-        color peSigText = pe_sb_signal or pe_sell_signal ? color.black : color.white
+        string peTradeStr = active_pe_trade ? ("SL: " + str.tostring(pe_sl_price, "#.#") + " | TP: " + str.tostring(pe_tp_price, "#.#")) : "No Trade"
+        string peSigStatusStr = pe_tp_hit ? "PE TARGET HIT" : (pe_sl_hit ? "PE SL HIT" : (pe_sb_signal ? "PE STRONG BUY" : (pe_sell_signal ? "PE EXIT" : (peAvgCur >= peAvgOpen ? "BEARISH BIAS" : "NEUTRAL"))))
+        color peSigBg = pe_tp_hit ? #FF1744 : (pe_sl_hit ? #00E676 : (pe_sb_signal ? colorPESB : (pe_sell_signal ? colorPEExit : peAvgBg)))
+        color peSigText = pe_tp_hit or pe_sb_signal or pe_sell_signal ? color.white : color.white
 
         table.cell(summaryTable, 0, 3, "Put (PE)", bgcolor=#212121, text_color=#FF1744, text_size=curTextSize)
         table.cell(summaryTable, 1, 3, peAvgStatusStr, bgcolor=peAvgBg, text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 2, 3, str.tostring(pe_iv_rt, "#.##"), bgcolor=color.black, text_color=#FF1744, text_size=curTextSize)
-        table.cell(summaryTable, 3, 3, peSigStatusStr, bgcolor=peSigBg, text_color=peSigText, text_size=curTextSize)
+        table.cell(summaryTable, 3, 3, peTradeStr, bgcolor=color.black, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTable, 4, 3, peSigStatusStr, bgcolor=peSigBg, text_color=peSigText, text_size=curTextSize)
 
         // Row 4: Summary Overall Market Bias
         string overallBiasStr = (pe_sb_signal ? "PE STRONG BUY TRIGGERED" : (ce_sb_signal ? "CE STRONG BUY TRIGGERED" : (peAvgCur > peAvgOpen and ceAvgCur < ceAvgOpen ? "BEARISH MARKET BIAS" : (ceAvgCur > ceAvgOpen and peAvgCur < peAvgOpen ? "BULLISH MARKET BIAS" : "NEUTRAL / RANGEBOUND"))))
@@ -435,3 +562,4 @@ if barstate.islast
         table.cell(summaryTable, 1, 4, overallBiasStr, bgcolor=overallBiasBg, text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 2, 4, "", bgcolor=#1565C0)
         table.cell(summaryTable, 3, 4, "", bgcolor=#1565C0)
+        table.cell(summaryTable, 4, 4, "", bgcolor=#1565C0)
