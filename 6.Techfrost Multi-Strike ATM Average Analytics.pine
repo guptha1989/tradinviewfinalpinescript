@@ -56,6 +56,8 @@ changePlotStyleInput = input.string("Line", "Avg Change Plot Style", options=["L
   tooltip="Choose whether to plot average change series as continuous Lines or Histograms.")
 showSignalPlotsInput = input.bool(true, "Show Strong Buy Signal Shapes", group="Display Controls",
   tooltip="Enable or disable visual Strong Buy CE / PE signal markers on chart.")
+showZeroLineInput    = input.bool(true, "Show Zero Baseline for Avg Change", group="Display Controls",
+  tooltip="Plots a zero reference baseline (0.00) in the Basket Avg Change indicator block.")
 showSubBiasLabel     = input.bool(true, "Show Bias Badge in Indicator Area", group="Display Controls",
   tooltip="Displays 'Bullish Bias' or 'Bearish Bias' badge directly inside the sub-window indicator pane.")
 biasBadgePosInput    = input.string("Bottom Left", "Bias Badge Position", options=["Bottom Left", "Bottom Right", "Top Right", "Top Left"], group="Display Controls",
@@ -67,6 +69,8 @@ colorCEAvgCur      = input.color(#00E676, "CE Current Basket Avg Line Color", gr
 
 colorPEAvgOpen     = input.color(color.new(#D50000, 50), "PE Day Open Basket Avg Line Color", group="Styling & Colors")
 colorPEAvgCur      = input.color(#FF1744, "PE Current Basket Avg Line Color", group="Styling & Colors")
+
+colorZeroLine      = input.color(color.new(color.gray, 30), "Zero Baseline Color", group="Styling & Colors")
 
 colorCurATMHighlight = input.color(#FFEE58, "Current ATM Cell Highlight (Yellow)", group="Styling & Colors")
 colorDayATMHighlight = input.color(#00E5FF, "Day Open ATM Cell Highlight (Cyan)", group="Styling & Colors")
@@ -482,6 +486,9 @@ plot(showHistogramsInput and changePlotStyleInput == "Histogram" ? peAvgChg : na
 
 plot(showHistogramsInput and changePlotStyleInput == "Line" ? ceAvgChg : na, title="CE Basket Avg Change from Open", color=col_ceAvgChg, linewidth=2, style=plot.style_line)
 plot(showHistogramsInput and changePlotStyleInput == "Line" ? peAvgChg : na, title="PE Basket Avg Change from Open", color=col_peAvgChg, linewidth=2, style=plot.style_line)
+
+// Zero Reference Baseline (0.00) for Basket Avg Change block
+plot(showZeroLineInput and showHistogramsInput ? 0.0 : na, title="Zero Reference Line (0.00)", color=colorZeroLine, linewidth=1, style=plot.style_line)
 
 // ==========================================
 // SUB-WINDOW MARKET BIAS BADGE (UNOBSTRUCTED BOTTOM-LEFT POSITION)
