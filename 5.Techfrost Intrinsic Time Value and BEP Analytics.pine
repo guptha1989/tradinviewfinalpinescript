@@ -206,54 +206,56 @@ else if tickerWithoutCEPE != ""
 float chartStrikePrice = manualStrikeInput > 0 ? float(manualStrikeInput) : (strikeOverride > 0.0 ? strikeOverride : (not na(detectedStrike) ? detectedStrike : 24000.0))
 
 // Universal Fail-Safe Option Ticker Construction
-f_build_option_symbol(target_strike, target_is_ce) =>
-    string st_digits = str.tostring(int(chartStrikePrice))
+f_build_option_symbol(float target_strike, bool target_is_ce) =>
+    string st_digits = chartStrikePrice == math.floor(chartStrikePrice) ? str.tostring(int(chartStrikePrice)) : str.tostring(chartStrikePrice)
     int st_len = str.length(st_digits)
+    string target_st_str = target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike)
     
     if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
         int end_trim = 2
         string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
         string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
         string sfx = target_is_ce ? "CE" : "PE"
-        syminfo.prefix + ":" + pfx + str.tostring(target_strike) + sfx
+        syminfo.prefix + ":" + pfx + target_st_str + sfx
     else if str.match(cleanTicker, "[CP]\\d+$") != ""
         string matchCP = str.match(cleanTicker, "[CP]\\d+$")
         int matchPos = str.pos(cleanTicker, matchCP)
         string pfx = str.substring(cleanTicker, 0, matchPos)
         string cp_letter = target_is_ce ? "C" : "P"
-        syminfo.prefix + ":" + pfx + cp_letter + str.tostring(target_strike)
+        syminfo.prefix + ":" + pfx + cp_letter + target_st_str
     else
-        string rep_ticker = str.replace(cleanTicker, st_digits, str.tostring(target_strike))
+        string rep_ticker = str.replace(cleanTicker, st_digits, target_st_str)
         syminfo.prefix + ":" + rep_ticker
 
 // ==========================================
 // TARGET STRIKE SELECTION & CANDLE OVERLAYS
 // ==========================================
 
-int rawOffsetPts = switch offsetChoiceInput
-    OffsetChoice.offset5   => 5
-    OffsetChoice.offset10  => 10
-    OffsetChoice.offset15  => 15
-    OffsetChoice.offset20  => 20
-    OffsetChoice.offset25  => 25
-    OffsetChoice.offset40  => 40
-    OffsetChoice.offset50  => 50
-    OffsetChoice.offset100 => 100
-    OffsetChoice.offset150 => 150
-    OffsetChoice.offset200 => 200
-    => 100
-int offsetPts = (strikeModeInput == StrikeMode.atm) ? 0 : rawOffsetPts
-int base_strike = int(chartStrikePrice)
+float rawOffsetPts = switch offsetChoiceInput
+    OffsetChoice.offset5   => 5.0
+    OffsetChoice.offset10  => 10.0
+    OffsetChoice.offset15  => 15.0
+    OffsetChoice.offset20  => 20.0
+    OffsetChoice.offset25  => 25.0
+    OffsetChoice.offset40  => 40.0
+    OffsetChoice.offset50  => 50.0
+    OffsetChoice.offset100 => 100.0
+    OffsetChoice.offset150 => 150.0
+    OffsetChoice.offset200 => 200.0
+    => 100.0
+
+float offsetPts = (strikeModeInput == StrikeMode.atm) ? 0.0 : rawOffsetPts
+float base_strike = chartStrikePrice
 
 // Resolve ITM & OTM strikes for Call & Put
-int itm_ce_strike = base_strike - rawOffsetPts
-int itm_pe_strike = base_strike + rawOffsetPts
+float itm_ce_strike = base_strike - rawOffsetPts
+float itm_pe_strike = base_strike + rawOffsetPts
 
-int otm_ce_strike = base_strike + rawOffsetPts
-int otm_pe_strike = base_strike - rawOffsetPts
+float otm_ce_strike = base_strike + rawOffsetPts
+float otm_pe_strike = base_strike - rawOffsetPts
 
-int ce_strike = base_strike
-int pe_strike = base_strike
+float ce_strike = base_strike
+float pe_strike = base_strike
 
 if strikeModeInput == StrikeMode.itm
     ce_strike := itm_ce_strike
@@ -266,7 +268,7 @@ else if strikeModeInput == StrikeMode.both
     pe_strike := otm_pe_strike
 
 // --- 1. ITM Candle Overlay ---
-int current_itm_strike = isCall ? itm_ce_strike : itm_pe_strike
+float current_itm_strike = isCall ? itm_ce_strike : itm_pe_strike
 string itm_ticker = f_build_option_symbol(current_itm_strike, isCall)
 [itm_o, itm_h, itm_l, itm_c] = request.security(itm_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
 
@@ -281,7 +283,7 @@ plotcandle(showITMCandlesInput ? itm_o : na,
            title="ITM Option Candle", color=itm_body_col, wickcolor=itm_wick_col, bordercolor=itm_wick_col)
 
 // --- 2. OTM Candle Overlay ---
-int current_otm_strike = isCall ? otm_ce_strike : otm_pe_strike
+float current_otm_strike = isCall ? otm_ce_strike : otm_pe_strike
 string otm_ticker = f_build_option_symbol(current_otm_strike, isCall)
 [otm_o, otm_h, otm_l, otm_c] = request.security(otm_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
 
