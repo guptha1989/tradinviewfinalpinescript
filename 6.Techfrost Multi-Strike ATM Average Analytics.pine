@@ -52,7 +52,7 @@ changePlotStyleInput = input.string("Line", "Avg Change Plot Style", options=["L
 showSignalPlotsInput = input.bool(true, "Show Strong Buy Signal Shapes", group="Display Controls",
   tooltip="Enable or disable visual Strong Buy CE / PE signal markers on chart.")
 showSubBiasLabel     = input.bool(true, "Show Bias Badge in Indicator Area", group="Display Controls",
-  tooltip="Displays 'BULLISH BIAS' or 'BEARISH BIAS' badge directly inside the sub-window indicator pane.")
+  tooltip="Displays 'Bullish Bias' or 'Bearish Bias' badge directly inside the sub-window indicator pane.")
 
 // --- Styling & Colors ---
 colorCEAvgOpen     = input.color(color.new(#00C853, 50), "CE Day Open Basket Avg Line Color", group="Styling & Colors")
@@ -450,25 +450,33 @@ plot(showHistogramsInput and changePlotStyleInput == "Line" ? peAvgChg : na, tit
 // ==========================================
 
 var table biasSubPaneTable = table.new(position.top_left, 1, 1, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=false)
+var label lineBiasLabel = na
 
 if barstate.islast
     if not showSubBiasLabel
         table.delete(biasSubPaneTable)
+        label.delete(lineBiasLabel)
     else
-        string biasText = "NEUTRAL"
+        label.delete(lineBiasLabel)
+        string biasText = "Neutral"
         color biasBg = #212121
         color biasTextCol = #9E9E9E
         
-        if ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen
-            biasText := "BULLISH BIAS"
+        // Green on top (ceAvgChg > 0) and Orange below (peAvgChg < 0) = Bullish Bias
+        // Blue/Cyan on top (peAvgChg > 0) and Dark Red below (ceAvgChg < 0) = Bearish Bias
+        if ceAvgChg > peAvgChg and ceAvgChg > 0
+            biasText := "Bullish Bias"
             biasBg := #1B5E20
             biasTextCol := #00E676
-        else if peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen
-            biasText := "BEARISH BIAS"
+        else if peAvgChg > ceAvgChg and peAvgChg > 0
+            biasText := "Bearish Bias"
             biasBg := #880E4F
-            biasTextCol := #FF1744
+            biasTextCol := #00B0FF
         
         table.cell(biasSubPaneTable, 0, 0, biasText, bgcolor=biasBg, text_color=biasTextCol, text_size=size.small)
+        
+        // Small text label directly on lines inside indicator area
+        lineBiasLabel := label.new(bar_index, (ceAvgChg + peAvgChg) / 2.0, text="▶ " + biasText, color=color.new(color.black, 100), textcolor=biasTextCol, style=label.style_label_left, size=size.small)
 
 // ==========================================
 // DASHBOARD & STRIKE TABLE
