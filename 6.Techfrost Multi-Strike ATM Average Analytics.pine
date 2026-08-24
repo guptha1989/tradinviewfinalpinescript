@@ -20,6 +20,11 @@ enum OptionType
 
 enum StepOverrideChoice
     auto    = "Auto"
+    step1   = "1"
+    step2_5 = "2.5"
+    step5   = "5"
+    step10  = "10"
+    step20  = "20"
     step25  = "25"
     step50  = "50"
     step100 = "100"
@@ -34,7 +39,7 @@ numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side", minval=
 spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
 strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
 strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
-  tooltip="Set to Auto for auto-detection based on underlying (50 for Nifty/Crude, 100 for BankNifty/Gold).")
+  tooltip="Set to Auto for auto-detection based on underlying stock/index (Auto-detects 1, 2.5, 5, 10, 20, 50, 100).")
 
 // --- Display Controls ---
 showTableInput       = input.bool(true, "Show Summary & Strike Table", group="Display Controls",
@@ -133,22 +138,6 @@ else if tickerWithoutCEPE != ""
 
 float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : detectedStrike
 
-// ----- Determine Step Size -----
-int stepVal = 50
-switch strikeStepInput
-    StepOverrideChoice.step25  => stepVal := 25
-    StepOverrideChoice.step50  => stepVal := 50
-    StepOverrideChoice.step100 => stepVal := 100
-    StepOverrideChoice.step200 => stepVal := 200
-    StepOverrideChoice.step500 => stepVal := 500
-    =>
-        switch actualUnderlying
-            UnderlyingAsset.banknifty => stepVal := 100
-            UnderlyingAsset.nifty     => stepVal := 50
-            UnderlyingAsset.crudeoil  => stepVal := 50
-            UnderlyingAsset.gold      => stepVal := 100
-            UnderlyingAsset.stock     => stepVal := 50
-
 // ==========================================
 // SPOT TICKER RESOLUTION & STRICT DAY OPEN ATM CENTER ANCHORING
 // ==========================================
@@ -172,50 +161,92 @@ else
 // Fetch Day Open Spot Price for the underlying
 float spotDayOpen = request.security(spotTicker, "D", open, lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
+// Dynamic Smart Strike Step Auto-Detection (Works for Stocks & Indices)
+f_auto_detect_step(float ref_p) =>
+    float s_res = 50.0
+    if na(ref_p) or ref_p <= 0
+        s_res := 50.0
+    else if ref_p < 100
+        s_res := 1.0
+    else if ref_p < 250
+        s_res := 2.5
+    else if ref_p < 500
+        s_res := 5.0
+    else if ref_p < 1200
+        s_res := 10.0
+    else if ref_p < 2500
+        s_res := 20.0
+    else
+        s_res := 50.0
+    s_res
+
+float stepVal = 50.0
+switch strikeStepInput
+    StepOverrideChoice.step1   => stepVal := 1.0
+    StepOverrideChoice.step2_5 => stepVal := 2.5
+    StepOverrideChoice.step5   => stepVal := 5.0
+    StepOverrideChoice.step10  => stepVal := 10.0
+    StepOverrideChoice.step20  => stepVal := 20.0
+    StepOverrideChoice.step25  => stepVal := 25.0
+    StepOverrideChoice.step50  => stepVal := 50.0
+    StepOverrideChoice.step100 => stepVal := 100.0
+    StepOverrideChoice.step200 => stepVal := 200.0
+    StepOverrideChoice.step500 => stepVal := 500.0
+    =>
+        switch actualUnderlying
+            UnderlyingAsset.banknifty => stepVal := 100.0
+            UnderlyingAsset.nifty     => stepVal := 50.0
+            UnderlyingAsset.crudeoil  => stepVal := 50.0
+            UnderlyingAsset.gold      => stepVal := 100.0
+            UnderlyingAsset.stock     => stepVal := f_auto_detect_step(not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
+
 // Base Center Strike is fixed statically on barstate.isfirst to keep security requests 100% constant across all bars
-var int baseCenterStrike = na
+var float baseCenterStrike = na
 if barstate.isfirst or na(baseCenterStrike)
     float refPrice = strikeOverride > 0.0 ? strikeOverride : (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
-    baseCenterStrike := int(math.round(refPrice / stepVal) * stepVal)
+    baseCenterStrike := math.round(refPrice / stepVal) * stepVal
 
-int baseStrike = baseCenterStrike
+float baseStrike = baseCenterStrike
 
 // ==========================================
-// FAIL-SAFE CE & PE TICKER PREFIX CONSTRUCTION
+// UNIVERSAL FAIL-SAFE CE & PE TICKER CONSTRUCTION
 // ==========================================
 
-string strikeDigitsStr = str.tostring(int(chartStrikePrice))
-int digitsLen = str.length(strikeDigitsStr)
+f_build_option_symbol(float target_strike, bool target_is_ce) =>
+    string st_digits = not na(chartStrikePrice) and chartStrikePrice > 0 ? (chartStrikePrice == math.floor(chartStrikePrice) ? str.tostring(int(chartStrikePrice)) : str.tostring(chartStrikePrice)) : (target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike))
+    int st_len = str.length(st_digits)
+    string target_st_str = target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike)
+    
+    if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+        int end_trim = 2
+        string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
+        string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
+        string sfx = target_is_ce ? "CE" : "PE"
+        pfx + target_st_str + sfx
+    else if str.match(cleanTicker, "[CP]\\d+$") != ""
+        string matchCP = str.match(cleanTicker, "[CP]\\d+$")
+        int matchPos = str.pos(cleanTicker, matchCP)
+        string pfx = str.substring(cleanTicker, 0, matchPos)
+        string cp_letter = target_is_ce ? "C" : "P"
+        pfx + cp_letter + target_st_str
+    else
+        string rep_ticker = str.replace(cleanTicker, st_digits, target_st_str)
+        rep_ticker
 
-string ce_prefix = ""
-string pe_prefix = ""
-
-if isCall
-    ce_prefix := str.substring(cleanTicker, 0, str.length(cleanTicker) - digitsLen)
-    int cPos = str.length(ce_prefix) - 1
-    pe_prefix := str.substring(ce_prefix, 0, cPos) + "P"
-else
-    pe_prefix := str.substring(cleanTicker, 0, str.length(cleanTicker) - digitsLen)
-    int pPos = str.length(pe_prefix) - 1
-    ce_prefix := str.substring(pe_prefix, 0, pPos) + "C"
-
-f_build_ce_ticker(int target_strike) =>
-    ce_prefix + str.tostring(target_strike)
-
-f_build_pe_ticker(int target_strike) =>
-    pe_prefix + str.tostring(target_strike)
+f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
+f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
 
 // 9 Strikes centered strictly around Day Open ATM (baseStrike is always middle row)
-int k_0  = baseStrike
-int k_p1 = baseStrike + 1 * stepVal
-int k_p2 = baseStrike + 2 * stepVal
-int k_p3 = baseStrike + 3 * stepVal
-int k_p4 = baseStrike + 4 * stepVal
+float k_0  = baseStrike
+float k_p1 = baseStrike + 1.0 * stepVal
+float k_p2 = baseStrike + 2.0 * stepVal
+float k_p3 = baseStrike + 3.0 * stepVal
+float k_p4 = baseStrike + 4.0 * stepVal
 
-int k_m1 = baseStrike - 1 * stepVal
-int k_m2 = baseStrike - 2 * stepVal
-int k_m3 = baseStrike - 3 * stepVal
-int k_m4 = baseStrike - 4 * stepVal
+float k_m1 = baseStrike - 1.0 * stepVal
+float k_m2 = baseStrike - 2.0 * stepVal
+float k_m3 = baseStrike - 3.0 * stepVal
+float k_m4 = baseStrike - 4.0 * stepVal
 
 // ==========================================
 // DATA FETCHING FOR STRIKES (STATIC 18 CALLS TOTAL)
@@ -256,19 +287,19 @@ f_get_strike_open_and_close() =>
 // DAY OPEN ATM CALCULATION (MIN |CE OPEN - PE OPEN|)
 // ==========================================
 
-float diff_open_p4 = math.abs(ce_o_p4 - pe_o_p4)
-float diff_open_p3 = math.abs(ce_o_p3 - pe_o_p3)
-float diff_open_p2 = math.abs(ce_o_p2 - pe_o_p2)
-float diff_open_p1 = math.abs(ce_o_p1 - pe_o_p1)
-float diff_open_0  = math.abs(ce_o_0  - pe_o_0)
-float diff_open_m1 = math.abs(ce_o_m1 - pe_o_m1)
-float diff_open_m2 = math.abs(ce_o_m2 - pe_o_m2)
-float diff_open_m3 = math.abs(ce_o_m3 - pe_o_m3)
-float diff_open_m4 = math.abs(ce_o_m4 - pe_o_m4)
+float diff_open_p4 = math.abs(nz(ce_o_p4) - nz(pe_o_p4))
+float diff_open_p3 = math.abs(nz(ce_o_p3) - nz(pe_o_p3))
+float diff_open_p2 = math.abs(nz(ce_o_p2) - nz(pe_o_p2))
+float diff_open_p1 = math.abs(nz(ce_o_p1) - nz(pe_o_p1))
+float diff_open_0  = math.abs(nz(ce_o_0)  - nz(pe_o_0))
+float diff_open_m1 = math.abs(nz(ce_o_m1) - nz(pe_o_m1))
+float diff_open_m2 = math.abs(nz(ce_o_m2) - nz(pe_o_m2))
+float diff_open_m3 = math.abs(nz(ce_o_m3) - nz(pe_o_m3))
+float diff_open_m4 = math.abs(nz(ce_o_m4) - nz(pe_o_m4))
 
 float minDiffOpen = math.min(diff_open_p4, math.min(diff_open_p3, math.min(diff_open_p2, math.min(diff_open_p1, math.min(diff_open_0, math.min(diff_open_m1, math.min(diff_open_m2, math.min(diff_open_m3, diff_open_m4))))))))
 
-int dayOpenATMStrike = k_0
+float dayOpenATMStrike = k_0
 if minDiffOpen == diff_open_p4
     dayOpenATMStrike := k_p4
 else if minDiffOpen == diff_open_p3
@@ -292,19 +323,19 @@ else if minDiffOpen == diff_open_m4
 // CURRENT REALTIME ATM CALCULATION (MIN |CE LTP - PE LTP|)
 // ==========================================
 
-float diff_cur_p4 = math.abs(ce_c_p4 - pe_c_p4)
-float diff_cur_p3 = math.abs(ce_c_p3 - pe_c_p3)
-float diff_cur_p2 = math.abs(ce_c_p2 - pe_c_p2)
-float diff_cur_p1 = math.abs(ce_c_p1 - pe_c_p1)
-float diff_cur_0  = math.abs(ce_c_0  - pe_c_0)
-float diff_cur_m1 = math.abs(ce_c_m1 - pe_c_m1)
-float diff_cur_m2 = math.abs(ce_c_m2 - pe_c_m2)
-float diff_cur_m3 = math.abs(ce_c_m3 - pe_c_m3)
-float diff_cur_m4 = math.abs(ce_c_m4 - pe_c_m4)
+float diff_cur_p4 = math.abs(nz(ce_c_p4) - nz(pe_c_p4))
+float diff_cur_p3 = math.abs(nz(ce_c_p3) - nz(pe_c_p3))
+float diff_cur_p2 = math.abs(nz(ce_c_p2) - nz(pe_c_p2))
+float diff_cur_p1 = math.abs(nz(ce_c_p1) - nz(pe_c_p1))
+float diff_cur_0  = math.abs(nz(ce_c_0)  - nz(pe_c_0))
+float diff_cur_m1 = math.abs(nz(ce_c_m1) - nz(pe_c_m1))
+float diff_cur_m2 = math.abs(nz(ce_c_m2) - nz(pe_c_m2))
+float diff_cur_m3 = math.abs(nz(ce_c_m3) - nz(pe_c_m3))
+float diff_cur_m4 = math.abs(nz(ce_c_m4) - nz(pe_c_m4))
 
 float minDiffCur = math.min(diff_cur_p4, math.min(diff_cur_p3, math.min(diff_cur_p2, math.min(diff_cur_p1, math.min(diff_cur_0, math.min(diff_cur_m1, math.min(diff_cur_m2, math.min(diff_cur_m3, diff_cur_m4))))))))
 
-int curATMStrike = k_0
+float curATMStrike = k_0
 if minDiffCur == diff_cur_p4
     curATMStrike := k_p4
 else if minDiffCur == diff_cur_p3
@@ -328,35 +359,35 @@ else if minDiffCur == diff_cur_m4
 // BASKET AVERAGE CALCULATIONS (BASED ON numStrikesInput)
 // ==========================================
 
-float sum_ce_open = ce_o_0
-float sum_pe_open = pe_o_0
-float sum_ce_cur  = ce_c_0
-float sum_pe_cur  = pe_c_0
+float sum_ce_open = nz(ce_o_0)
+float sum_pe_open = nz(pe_o_0)
+float sum_ce_cur  = nz(ce_c_0)
+float sum_pe_cur  = nz(pe_c_0)
 int total_count   = 1 + 2 * numStrikesInput
 
 if numStrikesInput >= 1
-    sum_ce_open += ce_o_p1 + ce_o_m1
-    sum_pe_open += pe_o_p1 + pe_o_m1
-    sum_ce_cur  += ce_c_p1 + ce_c_m1
-    sum_pe_cur  += pe_c_p1 + pe_c_m1
+    sum_ce_open += nz(ce_o_p1) + nz(ce_o_m1)
+    sum_pe_open += nz(pe_o_p1) + nz(pe_o_m1)
+    sum_ce_cur  += nz(ce_c_p1) + nz(ce_c_m1)
+    sum_pe_cur  += nz(pe_c_p1) + nz(pe_c_m1)
 
 if numStrikesInput >= 2
-    sum_ce_open += ce_o_p2 + ce_o_m2
-    sum_pe_open += pe_o_p2 + pe_o_m2
-    sum_ce_cur  += ce_c_p2 + ce_c_m2
-    sum_pe_cur  += pe_c_p2 + pe_c_m2
+    sum_ce_open += nz(ce_o_p2) + nz(ce_o_m2)
+    sum_pe_open += nz(pe_o_p2) + nz(pe_o_m2)
+    sum_ce_cur  += nz(ce_c_p2) + nz(ce_c_m2)
+    sum_pe_cur  += nz(pe_c_p2) + nz(pe_c_m2)
 
 if numStrikesInput >= 3
-    sum_ce_open += ce_o_p3 + ce_o_m3
-    sum_pe_open += pe_o_p3 + pe_o_m3
-    sum_ce_cur  += ce_c_p3 + ce_c_m3
-    sum_pe_cur  += pe_c_p3 + pe_c_m3
+    sum_ce_open += nz(ce_o_p3) + nz(ce_o_m3)
+    sum_pe_open += nz(pe_o_p3) + nz(pe_o_m3)
+    sum_ce_cur  += nz(ce_c_p3) + nz(ce_c_m3)
+    sum_pe_cur  += nz(pe_c_p3) + nz(pe_c_m3)
 
 if numStrikesInput >= 4
-    sum_ce_open += ce_o_p4 + ce_o_m4
-    sum_pe_open += pe_o_p4 + pe_o_m4
-    sum_ce_cur  += ce_c_p4 + ce_c_m4
-    sum_pe_cur  += pe_c_p4 + pe_c_m4
+    sum_ce_open += nz(ce_o_p4) + nz(ce_o_m4)
+    sum_pe_open += nz(pe_o_p4) + nz(pe_o_m4)
+    sum_ce_cur  += nz(ce_c_p4) + nz(ce_c_m4)
+    sum_pe_cur  += nz(pe_c_p4) + nz(pe_c_m4)
 
 float ceAvgOpen = sum_ce_open / float(total_count)
 float peAvgOpen = sum_pe_open / float(total_count)
@@ -506,8 +537,9 @@ string underlyingName = switch actualUnderlying
 
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
-f_fill_grid_row(table tbl, int r, int st_val, bool is_cur_atm, bool is_day_atm, float ce_op, float ce_ltp, float pe_op, float pe_ltp, string t_sz) =>
-    string st_label = str.tostring(st_val) + (is_cur_atm and is_day_atm ? " (Cur & Day ATM)" : (is_cur_atm ? " (Cur ATM)" : (is_day_atm ? " (Day ATM)" : "")))
+f_fill_grid_row(table tbl, int r, float st_val, bool is_cur_atm, bool is_day_atm, float ce_op, float ce_ltp, float pe_op, float pe_ltp, string t_sz) =>
+    string st_fmt = st_val == math.floor(st_val) ? str.tostring(int(st_val)) : str.tostring(st_val, "#.##")
+    string st_label = st_fmt + (is_cur_atm and is_day_atm ? " (Cur & Day ATM)" : (is_cur_atm ? " (Cur ATM)" : (is_day_atm ? " (Day ATM)" : "")))
     color st_bg = (is_cur_atm and is_day_atm) ? color.new(#76FF03, 0) : (is_cur_atm ? colorCurATMHighlight : (is_day_atm ? colorDayATMHighlight : color.black))
     color st_tc = (is_cur_atm or is_day_atm) ? color.black : color.white
     table.cell(tbl, 0, r, st_label, bgcolor=st_bg, text_color=st_tc, text_size=t_sz)
@@ -539,15 +571,18 @@ if barstate.islast
         table.delete(summaryTable)
     else
         string strikeTag = str.tostring(total_count) + "-Strike Basket (" + str.tostring(numStrikesInput) + " ITM + ATM + " + str.tostring(numStrikesInput) + " OTM)"
+        string stepFmt = stepVal == math.floor(stepVal) ? str.tostring(int(stepVal)) : str.tostring(stepVal, "#.##")
+        string dayOpenFmt = dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")
+        string curAtmFmt = curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")
 
         // Row 0: Top Header Banner
         table.cell(summaryTable, 0, 0, "Asset: " + underlyingName, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 1, 0, "Step: " + str.tostring(stepVal), bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 1, 0, "Step: " + stepFmt, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 2, 0, strikeTag, bgcolor=color.new(#1565C0, 0), text_color=color.yellow, text_size=curTextSize)
         table.cell(summaryTable, 3, 0, "Day Open ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 4, 0, str.tostring(dayOpenATMStrike), bgcolor=colorDayATMHighlight, text_color=color.black, text_size=curTextSize)
+        table.cell(summaryTable, 4, 0, dayOpenFmt, bgcolor=colorDayATMHighlight, text_color=color.black, text_size=curTextSize)
         table.cell(summaryTable, 5, 0, "Current ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 6, 0, str.tostring(curATMStrike), bgcolor=colorCurATMHighlight, text_color=color.black, text_size=curTextSize)
+        table.cell(summaryTable, 6, 0, curAtmFmt, bgcolor=colorCurATMHighlight, text_color=color.black, text_size=curTextSize)
         table.cell(summaryTable, 7, 0, "", bgcolor=color.new(#1565C0, 0))
 
         // Row 1: Day Open Averages (CE & PE)
