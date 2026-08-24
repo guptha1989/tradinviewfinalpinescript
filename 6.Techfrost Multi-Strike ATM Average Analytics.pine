@@ -37,16 +37,18 @@ strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override",
   tooltip="Set to Auto for auto-detection based on underlying (50 for Nifty/Crude, 100 for BankNifty/Gold).")
 
 // --- Display Controls ---
-showTableInput     = input.bool(true, "Show Summary & Strike Table", group="Display Controls",
+showTableInput       = input.bool(true, "Show Summary & Strike Table", group="Display Controls",
   tooltip="Enable or disable the summary & strike analytics table.")
-tablePosInput      = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
-tableTextSizeInput = input.string("Small", "Table Text Size / Resizing", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls",
+tablePosInput        = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
+tableTextSizeInput   = input.string("Small", "Table Text Size / Resizing", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls",
   tooltip="Adjust the table font and cell size (Auto, Tiny, Small, Normal, Large).")
 
 showPlotsInput       = input.bool(true, "Show Basket Average Lines", group="Display Controls",
   tooltip="Enable or disable the CE and PE average line charts.")
-showHistogramsInput  = input.bool(true, "Show Average Change Histograms", group="Display Controls",
-  tooltip="Enable or disable the average change from Day Open histograms.")
+showHistogramsInput  = input.bool(true, "Show Average Change Plots", group="Display Controls",
+  tooltip="Enable or disable the average change from Day Open plots.")
+changePlotStyleInput = input.string("Line", "Avg Change Plot Style", options=["Line", "Histogram"], group="Display Controls",
+  tooltip="Choose whether to plot average change series as continuous Lines or Histograms.")
 showSignalPlotsInput = input.bool(true, "Show Strong Buy Signal Shapes", group="Display Controls",
   tooltip="Enable or disable visual Strong Buy CE / PE signal markers on chart.")
 
@@ -370,11 +372,11 @@ float basketAvgChg  = basketAvgCur - basketAvgOpen
 // STRONG BUY SIGNAL EVALUATION & ALERTS
 // ==========================================
 
-// Strong Buy CE (SB CE): CE current avg crosses over CE day open avg, & PE current avg crosses below or already below PE day open avg line. + average change supports CE buy.
-bool sb_ce_cond = ta.crossover(ceAvgCur, ceAvgOpen) and (peAvgCur <= peAvgOpen) and (ceAvgChg > 0)
+// Strong Buy CE (SB CE): CE current avg crosses over CE day open avg, PE current avg is <= PE day open avg, CE avg change > 0 AND PE avg change <= 0 (Images 1 & 2)
+bool sb_ce_cond = ta.crossover(ceAvgCur, ceAvgOpen) and (peAvgCur <= peAvgOpen) and (ceAvgChg > 0) and (peAvgChg <= 0)
 
-// Strong Buy PE (SB PE): PE current avg crosses over PE day open avg, & CE current avg crosses below or already below CE day open avg line. + average change supports PE buy.
-bool sb_pe_cond = ta.crossover(peAvgCur, peAvgOpen) and (ceAvgCur <= ceAvgOpen) and (peAvgChg > 0)
+// Strong Buy PE (SB PE): PE current avg crosses over PE day open avg, CE current avg is <= CE day open avg, PE avg change > 0 AND CE avg change <= 0 (Image 3)
+bool sb_pe_cond = ta.crossover(peAvgCur, peAvgOpen) and (ceAvgCur <= ceAvgOpen) and (peAvgChg > 0) and (ceAvgChg <= 0)
 
 var bool in_sb_ce = false
 var bool in_sb_pe = false
@@ -416,8 +418,15 @@ plot(showPlotsInput ? ceAvgCur  : na, title="CE Basket Current Avg",  color=colo
 plot(showPlotsInput ? peAvgOpen : na, title="PE Basket Day Open Avg", color=colorPEAvgOpen, linewidth=1, style=plot.style_stepline)
 plot(showPlotsInput ? peAvgCur  : na, title="PE Basket Current Avg",  color=colorPEAvgCur,  linewidth=2)
 
-plot(showHistogramsInput ? ceAvgChg : na, title="CE Basket Avg Change from Open", color=ceAvgChg >= 0 ? color.new(#00E676, 30) : color.new(#FF5252, 30), linewidth=2, style=plot.style_histogram)
-plot(showHistogramsInput ? peAvgChg : na, title="PE Basket Avg Change from Open", color=peAvgChg >= 0 ? color.new(#00E676, 50) : color.new(#FF5252, 50), linewidth=1, style=plot.style_histogram)
+// Average Change Series Plot (Lines or Histograms based on input choice with exact Image 2 styling)
+color col_ceAvgChg = ceAvgChg >= 0 ? #00E676 : #FF1744
+color col_peAvgChg = peAvgChg >= 0 ? #00B0FF : #FF9100
+
+plot(showHistogramsInput and changePlotStyleInput == "Histogram" ? ceAvgChg : na, title="CE Basket Avg Change (Histogram)", color=color.new(col_ceAvgChg, 30), linewidth=2, style=plot.style_histogram)
+plot(showHistogramsInput and changePlotStyleInput == "Histogram" ? peAvgChg : na, title="PE Basket Avg Change (Histogram)", color=color.new(col_peAvgChg, 30), linewidth=2, style=plot.style_histogram)
+
+plot(showHistogramsInput and changePlotStyleInput == "Line" ? ceAvgChg : na, title="CE Basket Avg Change from Open", color=col_ceAvgChg, linewidth=2, style=plot.style_line)
+plot(showHistogramsInput and changePlotStyleInput == "Line" ? peAvgChg : na, title="PE Basket Avg Change from Open", color=col_peAvgChg, linewidth=2, style=plot.style_line)
 
 // ==========================================
 // DASHBOARD & STRIKE TABLE
