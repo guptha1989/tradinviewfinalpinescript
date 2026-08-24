@@ -51,8 +51,8 @@ changePlotStyleInput = input.string("Line", "Avg Change Plot Style", options=["L
   tooltip="Choose whether to plot average change series as continuous Lines or Histograms.")
 showSignalPlotsInput = input.bool(true, "Show Strong Buy Signal Shapes", group="Display Controls",
   tooltip="Enable or disable visual Strong Buy CE / PE signal markers on chart.")
-showSubBiasLabel     = input.bool(true, "Show Bias Label in Indicator Area", group="Display Controls",
-  tooltip="Displays small 'BULLISH BIAS' or 'BEARISH BIAS' text directly inside the indicator pane.")
+showSubBiasLabel     = input.bool(true, "Show Bias Badge in Indicator Area", group="Display Controls",
+  tooltip="Displays 'BULLISH BIAS' or 'BEARISH BIAS' badge directly inside the sub-window indicator pane.")
 
 // --- Styling & Colors ---
 colorCEAvgOpen     = input.color(color.new(#00C853, 50), "CE Day Open Basket Avg Line Color", group="Styling & Colors")
@@ -446,19 +446,23 @@ plot(showHistogramsInput and changePlotStyleInput == "Line" ? ceAvgChg : na, tit
 plot(showHistogramsInput and changePlotStyleInput == "Line" ? peAvgChg : na, title="PE Basket Avg Change from Open", color=col_peAvgChg, linewidth=2, style=plot.style_line)
 
 // ==========================================
-// SUB-WINDOW MARKET BIAS LABEL (SMALL TEXT IN INDICATOR PANE)
+// SUB-WINDOW MARKET BIAS BADGE (DIRECTLY IN INDICATOR PANE)
 // ==========================================
 
-var label biasSubLabel = na
-if barstate.islast and showSubBiasLabel
-    label.delete(biasSubLabel)
-    string biasText = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? "BULLISH BIAS" :
-                      (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? "BEARISH BIAS" : "NEUTRAL BIAS"
-    color biasColor = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? #00E676 :
-                      (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? #FF1744 : #9E9E9E
-    
-    float midY = (ceAvgCur + peAvgCur) / 2.0
-    biasSubLabel := label.new(bar_index + 3, midY, text="▶ " + biasText, color=color.new(color.black, 100), textcolor=biasColor, style=label.style_label_left, size=size.small)
+var table biasSubPaneTable = table.new(position.top_left, 1, 1, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=false)
+
+if barstate.islast
+    if not showSubBiasLabel
+        table.delete(biasSubPaneTable)
+    else
+        string biasText = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? "BULLISH BIAS" :
+                          (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? "BEARISH BIAS" : "NEUTRAL"
+        color biasBg    = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? #1B5E20 :
+                          (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? #880E4F : #212121
+        color biasTextCol = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? #00E676 :
+                            (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? #FF1744 : #9E9E9E
+        
+        table.cell(biasSubPaneTable, 0, 0, biasText, bgcolor=biasBg, text_color=biasTextCol, text_size=size.small)
 
 // ==========================================
 // DASHBOARD & STRIKE TABLE
