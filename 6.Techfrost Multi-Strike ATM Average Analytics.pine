@@ -51,6 +51,8 @@ changePlotStyleInput = input.string("Line", "Avg Change Plot Style", options=["L
   tooltip="Choose whether to plot average change series as continuous Lines or Histograms.")
 showSignalPlotsInput = input.bool(true, "Show Strong Buy Signal Shapes", group="Display Controls",
   tooltip="Enable or disable visual Strong Buy CE / PE signal markers on chart.")
+showSubBiasLabel     = input.bool(true, "Show Bias Label in Indicator Area", group="Display Controls",
+  tooltip="Displays small 'BULLISH BIAS' or 'BEARISH BIAS' text directly inside the indicator pane.")
 
 // --- Styling & Colors ---
 colorCEAvgOpen     = input.color(color.new(#00C853, 50), "CE Day Open Basket Avg Line Color", group="Styling & Colors")
@@ -442,6 +444,21 @@ plot(showHistogramsInput and changePlotStyleInput == "Histogram" ? peAvgChg : na
 
 plot(showHistogramsInput and changePlotStyleInput == "Line" ? ceAvgChg : na, title="CE Basket Avg Change from Open", color=col_ceAvgChg, linewidth=2, style=plot.style_line)
 plot(showHistogramsInput and changePlotStyleInput == "Line" ? peAvgChg : na, title="PE Basket Avg Change from Open", color=col_peAvgChg, linewidth=2, style=plot.style_line)
+
+// ==========================================
+// SUB-WINDOW MARKET BIAS LABEL (SMALL TEXT IN INDICATOR PANE)
+// ==========================================
+
+var label biasSubLabel = na
+if barstate.islast and showSubBiasLabel
+    label.delete(biasSubLabel)
+    string biasText = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? "BULLISH BIAS" :
+                      (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? "BEARISH BIAS" : "NEUTRAL BIAS"
+    color biasColor = (ceAvgCur > ceAvgOpen and peAvgCur <= peAvgOpen) ? #00E676 :
+                      (peAvgCur > peAvgOpen and ceAvgCur <= ceAvgOpen) ? #FF1744 : #9E9E9E
+    
+    float midY = (ceAvgCur + peAvgCur) / 2.0
+    biasSubLabel := label.new(bar_index + 3, midY, text="▶ " + biasText, color=color.new(color.black, 100), textcolor=biasColor, style=label.style_label_left, size=size.small)
 
 // ==========================================
 // DASHBOARD & STRIKE TABLE
