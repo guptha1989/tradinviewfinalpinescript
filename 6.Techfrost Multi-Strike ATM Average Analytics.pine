@@ -56,6 +56,8 @@ changePlotStyleInput = input.string("Line", "Avg Change Plot Style", options=["L
   tooltip="Choose whether to plot average change series as continuous Lines or Histograms.")
 showSignalPlotsInput = input.bool(true, "Show Strong Buy Signal Shapes", group="Display Controls",
   tooltip="Enable or disable visual Strong Buy CE / PE signal markers on chart.")
+requireCandleConfirm = input.bool(true, "Require Next Candle Open Above Confirmation", group="Display Controls",
+  tooltip="When enabled, signals fire ONLY after the crossover candle closes AND the next candle opens above the crossover candle.")
 showZeroLineInput    = input.bool(true, "Show Zero Baseline for Avg Change", group="Display Controls",
   tooltip="Plots a zero reference baseline (0.00) in the Basket Avg Change indicator block.")
 showSubBiasLabel     = input.bool(true, "Show Bias Badge in Indicator Area", group="Display Controls",
@@ -427,9 +429,47 @@ bool pe_trend_maintained = (peAvgCur > peAvgOpen) and (ceAvgCur <= ceAvgOpen) an
 bool ce_trend_cont_signal = isNewDaySession and ce_trend_maintained
 bool pe_trend_cont_signal = isNewDaySession and pe_trend_maintained
 
-// Fresh Crossover OR Continued Trend Signal
-bool sb_ce_cond = (ta.crossover(ceAvgCur, ceAvgOpen) or ce_trend_cont_signal) and (peAvgCur <= peAvgOpen) and (ceAvgChg > 0) and (peAvgChg <= 0)
-bool sb_pe_cond = (ta.crossover(peAvgCur, peAvgOpen) or pe_trend_cont_signal) and (ceAvgCur <= ceAvgOpen) and (peAvgChg > 0) and (ceAvgChg <= 0)
+// Raw Crossover Conditions (Candidate Crossover Candle N)
+bool raw_ce_cross = ta.crossover(ceAvgCur, ceAvgOpen) and (peAvgCur <= peAvgOpen) and (ceAvgChg > 0) and (peAvgChg <= 0)
+bool raw_pe_cross = ta.crossover(peAvgCur, peAvgOpen) and (ceAvgCur <= ceAvgOpen) and (peAvgChg > 0) and (ceAvgChg <= 0)
+
+// Track Pending Crossover Candle State & Price Levels
+var bool pending_ce_cross = false
+var bool pending_pe_cross = false
+var float ce_cross_high = na
+var float pe_cross_high = na
+
+if raw_ce_cross
+    pending_ce_cross := true
+    pending_pe_cross := false
+    ce_cross_high    := math.max(open, close)
+
+if raw_pe_cross
+    pending_pe_cross := true
+    pending_ce_cross := false
+    pe_cross_high    := math.max(open, close)
+
+// Confirmation Check: Candle N Closes & Next Candle (N+1) Opens Above Crossover Candle
+bool ce_confirmed = false
+bool pe_confirmed = false
+
+if requireCandleConfirm
+    if pending_ce_cross and not raw_ce_cross
+        if open > ce_cross_high or open > close[1] or open > open[1]
+            ce_confirmed := true
+            pending_ce_cross := false
+            
+    if pending_pe_cross and not raw_pe_cross
+        if open > pe_cross_high or open > close[1] or open > open[1]
+            pe_confirmed := true
+            pending_pe_cross := false
+else
+    ce_confirmed := raw_ce_cross
+    pe_confirmed := raw_pe_cross
+
+// Final Signal Conditions (Confirmed Crossover OR Continued Trend at Session Open)
+bool sb_ce_cond = (ce_confirmed or ce_trend_cont_signal) and (peAvgCur <= peAvgOpen) and (ceAvgChg > 0) and (peAvgChg <= 0)
+bool sb_pe_cond = (pe_confirmed or pe_trend_cont_signal) and (peAvgCur > peAvgOpen) and (ceAvgCur <= ceAvgOpen) and (peAvgChg > 0) and (ceAvgChg <= 0)
 
 var bool in_sb_ce = false
 var bool in_sb_pe = false
@@ -441,17 +481,21 @@ if sb_ce_cond and not in_sb_ce
     in_sb_ce   := true
     in_sb_pe   := false
     plot_sb_ce := true
+    pending_ce_cross := false
 
-if ta.crossunder(ceAvgCur, ceAvgOpen)
+if ta.crossunder(ceAvgCur, ceAvgOpen) or peAvgCur > peAvgOpen
     in_sb_ce := false
+    pending_ce_cross := false
 
 if sb_pe_cond and not in_sb_pe
     in_sb_pe   := true
     in_sb_ce   := false
     plot_sb_pe := true
+    pending_pe_cross := false
 
-if ta.crossunder(peAvgCur, peAvgOpen)
+if ta.crossunder(peAvgCur, peAvgOpen) or ceAvgCur > ceAvgOpen
     in_sb_pe := false
+    pending_pe_cross := false
 
 // Visual Signal Plotshapes (on sub-window chart)
 plotshape(showSignalPlotsInput and plot_sb_ce and not ce_trend_cont_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="SB CE")
