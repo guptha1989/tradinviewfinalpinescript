@@ -1,0 +1,472 @@
+//@version=6
+indicator("Techfrost Option Swing Level Analytics", overlay=true, precision=2)
+
+// ==========================================
+// ENUMS & INPUTS
+// ==========================================
+
+enum UnderlyingAsset
+    auto      = "Auto-Detect"
+    nifty     = "NIFTY"
+    banknifty = "BANKNIFTY"
+    finnifty  = "FINNIFTY"
+    midcp     = "MIDCPNIFTY"
+    crudeoil  = "CRUDEOIL"
+    gold      = "GOLD"
+    stock     = "Stock (Equity)"
+
+enum OptionType
+    auto = "Auto-Detect"
+    ce   = "Call (CE)"
+    pe   = "Put (PE)"
+
+enum SpotPriceBasis
+    dayOpen   = "Day Open Price"
+    prevClose = "Previous Day Close"
+    prevHigh  = "Previous Day High"
+    prevLow   = "Previous Day Low"
+    first5Min = "First 5 Min Close Price"
+
+enum StepOverrideChoice
+    auto    = "Auto"
+    step1   = "1"
+    step2_5 = "2.5"
+    step5   = "5"
+    step10  = "10"
+    step20  = "20"
+    step25  = "25"
+    step40  = "40"
+    step50  = "50"
+    step100 = "100"
+    step200 = "200"
+    step500 = "500"
+
+enum TableFilterMode
+    matchingOnly = "Only Matching Strikes"
+    allStrikes   = "All Strikes (Matching & Non-Matching)"
+
+// --- Instrument Settings ---
+underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
+optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
+spotBasisInput     = input.enum(SpotPriceBasis.dayOpen, "Spot Price Basis for Strike Selection", group="Instrument Settings",
+  tooltip="Select reference spot price basis (Day Open, Prev Close, Prev High, Prev Low, First 5-Min Close).")
+spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
+strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
+strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
+  tooltip="Set to Auto for auto-detection based on underlying stock/index (Auto-detects 1, 2.5, 5, 10, 20, 25, 40, 50, 100).")
+
+// --- Swing Analysis Settings ---
+swingLeftInput     = input.int(2, "5-Min Swing Pivot Left Bars", minval=1, maxval=10, group="Swing Analysis Settings",
+  tooltip="Left bar count for detecting 5-minute swing highs and lows.")
+swingRightInput    = input.int(2, "5-Min Swing Pivot Right Bars", minval=1, maxval=10, group="Swing Analysis Settings",
+  tooltip="Right bar count for detecting 5-minute swing highs and lows.")
+
+// --- Display & Table Controls ---
+tableFilterInput   = input.enum(TableFilterMode.matchingOnly, "Table Strike Selection Mode", group="Display Controls",
+  tooltip="Select 'Only Matching Strikes' to show matching rows only, or 'All Strikes' to view all ITM/OTM strike pairs.")
+showTableInput     = input.bool(true, "Show Summary & Swing Matching Table", group="Display Controls")
+tablePosInput      = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
+tableTextSizeInput = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls")
+
+// --- Styling & Colors ---
+colorMatchHeader   = input.color(#1565C0, "Header Banner Color", group="Styling & Colors")
+colorMatchRowBg    = input.color(color.new(#1B5E20, 20), "Matched Row Background Color", group="Styling & Colors")
+colorMatchText     = input.color(#00E676, "Matched Text Color", group="Styling & Colors")
+colorNoMatchText   = input.color(#9E9E9E, "No Match Text Color", group="Styling & Colors")
+
+// ==========================================
+// TICKER PARSING & AUTO-DETECTION
+// ==========================================
+
+string cleanTicker = syminfo.ticker
+int colonPos = str.pos(cleanTicker, ":")
+if colonPos != -1
+    cleanTicker := str.substring(cleanTicker, colonPos + 1)
+cleanTicker := str.replace_all(cleanTicker, " ", "")
+
+// ----- Detect underlying -----
+UnderlyingAsset actualUnderlying = na
+if underlyingInput == UnderlyingAsset.auto
+    if str.contains(cleanTicker, "BANKNIFTY")
+        actualUnderlying := UnderlyingAsset.banknifty
+    else if str.contains(cleanTicker, "FINNIFTY")
+        actualUnderlying := UnderlyingAsset.finnifty
+    else if str.contains(cleanTicker, "MIDCPNIFTY")
+        actualUnderlying := UnderlyingAsset.midcp
+    else if str.contains(cleanTicker, "NIFTY")
+        actualUnderlying := UnderlyingAsset.nifty
+    else if str.contains(cleanTicker, "CRUDEOIL")
+        actualUnderlying := UnderlyingAsset.crudeoil
+    else if str.contains(cleanTicker, "GOLD") and not str.contains(cleanTicker, "GOLDM") and not str.contains(cleanTicker, "GOLDPETAL")
+        actualUnderlying := UnderlyingAsset.gold
+    else if str.contains(cleanTicker, "GOLDM")
+        actualUnderlying := UnderlyingAsset.gold
+    else
+        actualUnderlying := UnderlyingAsset.stock
+else
+    actualUnderlying := underlyingInput
+
+// ----- Detect option type -----
+bool isCall = false
+bool isPut  = false
+
+if optionTypeInput == OptionType.ce
+    isCall := true
+else if optionTypeInput == OptionType.pe
+    isPut := true
+else
+    if str.contains(cleanTicker, "CE")
+        isCall := true
+    else if str.contains(cleanTicker, "PE")
+        isPut := true
+    else if str.match(cleanTicker, "C\\d+$") != ""
+        isCall := true
+    else if str.match(cleanTicker, "P\\d+$") != ""
+        isPut := true
+
+// ----- Strike extraction from chart symbol -----
+float detectedStrike = na
+string tickerWithoutCEPE = ""
+
+int tickerLen = str.length(cleanTicker)
+if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+    tickerWithoutCEPE := str.substring(cleanTicker, 0, tickerLen - 2)
+
+string matchC = str.match(cleanTicker, "C\\d+$")
+string matchP = str.match(cleanTicker, "P\\d+$")
+
+if matchC != ""
+    detectedStrike := str.tonumber(str.substring(matchC, 1))
+else if matchP != ""
+    detectedStrike := str.tonumber(str.substring(matchP, 1))
+else if tickerWithoutCEPE != ""
+    string strikeDigits = str.match(tickerWithoutCEPE, "\\d+$")
+    detectedStrike := str.tonumber(strikeDigits)
+
+float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : detectedStrike
+
+// ==========================================
+// SPOT TICKER & SPOT PRICE BASIS RESOLUTION
+// ==========================================
+
+string spotTicker = ""
+if str.length(spotTickerOverride) > 0
+    spotTicker := spotTickerOverride
+else
+    switch actualUnderlying
+        UnderlyingAsset.banknifty => spotTicker := "NSE:BANKNIFTY"
+        UnderlyingAsset.finnifty  => spotTicker := "NSE:FINNIFTY"
+        UnderlyingAsset.midcp     => spotTicker := "NSE:MIDCPNIFTY"
+        UnderlyingAsset.nifty     => spotTicker := "NSE:NIFTY"
+        UnderlyingAsset.crudeoil  => spotTicker := "MCX:CRUDEOIL1!"
+        UnderlyingAsset.gold      => spotTicker := "MCX:GOLD1!"
+        UnderlyingAsset.stock     =>
+            string rootGuess = str.match(cleanTicker, "^[A-Z&]+")
+            if rootGuess != ""
+                spotTicker := syminfo.prefix + ":" + rootGuess
+            else
+                spotTicker := syminfo.prefix + ":" + cleanTicker
+
+// Fetch 5 Spot Price Basis Options
+f_get_spot_basis() =>
+    float d_open  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    float d_close = close[1]
+    float d_high  = high[1]
+    float d_low   = low[1]
+    [d_open, d_close, d_high, d_low]
+
+[spot_d_open, spot_d_close, spot_d_high, spot_d_low] = request.security(spotTicker, "D", f_get_spot_basis(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float spot_f5m = request.security(spotTicker, "5", ta.valuewhen(ta.change(time("D")) != 0, close, 0), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+float spotRefPrice = na
+switch spotBasisInput
+    SpotPriceBasis.dayOpen   => spotRefPrice := spot_d_open
+    SpotPriceBasis.prevClose => spotRefPrice := spot_d_close
+    SpotPriceBasis.prevHigh  => spotRefPrice := spot_d_high
+    SpotPriceBasis.prevLow   => spotRefPrice := spot_d_low
+    SpotPriceBasis.first5Min => spotRefPrice := spot_f5m
+    => spotRefPrice := spot_d_open
+
+spotRefPrice := na(spotRefPrice) or spotRefPrice <= 0 ? (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : close) : spotRefPrice
+
+// Dynamic Smart Strike Step Auto-Detection (Works for Stocks & Indices)
+f_auto_detect_step(float ref_p) =>
+    float s_res = 50.0
+    if na(ref_p) or ref_p <= 0
+        s_res := 50.0
+    else if ref_p < 100
+        s_res := 1.0
+    else if ref_p < 250
+        s_res := 2.5
+    else if ref_p < 500
+        s_res := 5.0
+    else if ref_p < 1200
+        s_res := 10.0
+    else if ref_p < 2500
+        s_res := 20.0
+    else
+        s_res := 50.0
+    s_res
+
+float stepVal = 50.0
+switch strikeStepInput
+    StepOverrideChoice.step1   => stepVal := 1.0
+    StepOverrideChoice.step2_5 => stepVal := 2.5
+    StepOverrideChoice.step5   => stepVal := 5.0
+    StepOverrideChoice.step10  => stepVal := 10.0
+    StepOverrideChoice.step20  => stepVal := 20.0
+    StepOverrideChoice.step25  => stepVal := 25.0
+    StepOverrideChoice.step40  => stepVal := 40.0
+    StepOverrideChoice.step50  => stepVal := 50.0
+    StepOverrideChoice.step100 => stepVal := 100.0
+    StepOverrideChoice.step200 => stepVal := 200.0
+    StepOverrideChoice.step500 => stepVal := 500.0
+    =>
+        switch actualUnderlying
+            UnderlyingAsset.banknifty => stepVal := 100.0
+            UnderlyingAsset.nifty     => stepVal := 50.0
+            UnderlyingAsset.finnifty  => stepVal := 50.0
+            UnderlyingAsset.midcp     => stepVal := 25.0
+            UnderlyingAsset.crudeoil  => stepVal := 50.0
+            UnderlyingAsset.gold      => stepVal := 100.0
+            UnderlyingAsset.stock     => stepVal := f_auto_detect_step(spotRefPrice)
+
+// Center Strike Anchored to Spot Basis
+var float baseCenterStrike = na
+if barstate.isfirst or na(baseCenterStrike)
+    baseCenterStrike := math.round(spotRefPrice / stepVal) * stepVal
+
+float baseStrike = baseCenterStrike
+
+// ==========================================
+// UNIVERSAL FAIL-SAFE CE & PE TICKER CONSTRUCTION
+// ==========================================
+
+f_build_option_symbol(float target_strike, bool target_is_ce) =>
+    string st_digits = not na(chartStrikePrice) and chartStrikePrice > 0 ? (chartStrikePrice == math.floor(chartStrikePrice) ? str.tostring(int(chartStrikePrice)) : str.tostring(chartStrikePrice)) : (target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike))
+    int st_len = str.length(st_digits)
+    string target_st_str = target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike)
+    
+    if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+        int end_trim = 2
+        string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
+        string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
+        string sfx = target_is_ce ? "CE" : "PE"
+        pfx + target_st_str + sfx
+    else if str.match(cleanTicker, "[CP]\\d+$") != ""
+        string matchCP = str.match(cleanTicker, "[CP]\\d+$")
+        int matchPos = str.pos(cleanTicker, matchCP)
+        string pfx = str.substring(cleanTicker, 0, matchPos)
+        string cp_letter = target_is_ce ? "C" : "P"
+        pfx + cp_letter + target_st_str
+    else
+        string rep_ticker = str.replace(cleanTicker, st_digits, target_st_str)
+        rep_ticker
+
+f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
+f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
+
+// 9 Strikes centered around Spot Basis (ATM, 4 ITM, 4 OTM each side)
+float k_0  = baseStrike
+float k_p1 = baseStrike + 1.0 * stepVal
+float k_p2 = baseStrike + 2.0 * stepVal
+float k_p3 = baseStrike + 3.0 * stepVal
+float k_p4 = baseStrike + 4.0 * stepVal
+
+float k_m1 = baseStrike - 1.0 * stepVal
+float k_m2 = baseStrike - 2.0 * stepVal
+float k_m3 = baseStrike - 3.0 * stepVal
+float k_m4 = baseStrike - 4.0 * stepVal
+
+// ==========================================
+// 5-MINUTE SWING HIGH & SWING LOW FETCHING FUNCTION
+// ==========================================
+
+f_get_5m_swing_hl(int l_bars, int r_bars) =>
+    float ph = ta.pivothigh(high, l_bars, r_bars)
+    float pl = ta.pivotlow(low, l_bars, r_bars)
+    float last_ph = ta.valuewhen(not na(ph), ph, 0)
+    float last_pl = ta.valuewhen(not na(pl), pl, 0)
+    last_ph := na(last_ph) ? ta.highest(high, 20) : last_ph
+    last_pl := na(last_pl) ? ta.lowest(low, 20) : last_pl
+    [last_ph, last_pl]
+
+// Security Requests for 9 CE & 9 PE Strikes on 5-Min Timeframe
+[ce_ch_p4, ce_cl_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_ph_p4, pe_pl_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_ch_p3, ce_cl_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_ph_p3, pe_pl_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_ch_p2, ce_cl_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_ph_p2, pe_pl_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_ch_p1, ce_cl_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_ph_p1, pe_pl_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_ch_0,  ce_cl_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_ph_0,  pe_pl_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_ch_m1, ce_cl_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_ph_m1, pe_pl_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_ch_m2, ce_cl_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_ph_m2, pe_pl_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_ch_m3, ce_cl_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_ph_m3, pe_pl_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_ch_m4, ce_cl_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_ph_m4, pe_pl_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), "5", f_get_5m_swing_hl(swingLeftInput, swingRightInput), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+// ==========================================
+// SWING LEVEL ASCENDING ORDER EVALUATION FUNCTION
+// ==========================================
+
+f_verify_swing_order(float cl, float ch, float pl, float ph) =>
+    bool isValid = not na(cl) and not na(ch) and not na(pl) and not na(ph)
+    
+    // Pattern Rule: CE Low (CL) & PE High (PH) OR PE Low (PL) & CE High (CH) simultaneously in ascending sequence
+    bool rule1 = isValid and (cl < ph) and (ph < pl) and (pl < ch)  // CL < PH < PL < CH
+    bool rule2 = isValid and (pl < ch) and (ch < cl) and (cl < ph)  // PL < CH < CL < PH
+    bool rule3 = isValid and (cl < ph) and (pl < ch)               // Simultaneous CL < PH & PL < CH
+    
+    bool isMatched = isValid and (rule1 or rule2 or rule3)
+    
+    // Format Ascending Level Sequence String
+    string seqStr = "N/A"
+    if isValid
+        if rule1
+            seqStr := "CL (" + str.tostring(cl, "#.#") + ") < PH (" + str.tostring(ph, "#.#") + ") < PL (" + str.tostring(pl, "#.#") + ") < CH (" + str.tostring(ch, "#.#") + ")"
+        else if rule2
+            seqStr := "PL (" + str.tostring(pl, "#.#") + ") < CH (" + str.tostring(ch, "#.#") + ") < CL (" + str.tostring(cl, "#.#") + ") < PH (" + str.tostring(ph, "#.#") + ")"
+        else
+            seqStr := "CL (" + str.tostring(cl, "#.#") + ") | PH (" + str.tostring(ph, "#.#") + ") | PL (" + str.tostring(pl, "#.#") + ") | CH (" + str.tostring(ch, "#.#") + ")"
+            
+    [isMatched, seqStr]
+
+// Evaluate Pattern for all 9 Strike Pairs
+[m_p4, s_p4] = f_verify_swing_order(ce_cl_p4, ce_ch_p4, pe_pl_p4, pe_ph_p4)
+[m_p3, s_p3] = f_verify_swing_order(ce_cl_p3, ce_ch_p3, pe_pl_p3, pe_ph_p3)
+[m_p2, s_p2] = f_verify_swing_order(ce_cl_p2, ce_ch_p2, pe_pl_p2, pe_ph_p2)
+[m_p1, s_p1] = f_verify_swing_order(ce_cl_p1, ce_ch_p1, pe_pl_p1, pe_ph_p1)
+[m_0,  s_0]  = f_verify_swing_order(ce_cl_0,  ce_ch_0,  pe_pl_0,  pe_ph_0)
+[m_m1, s_m1] = f_verify_swing_order(ce_cl_m1, ce_ch_m1, pe_pl_m1, pe_ph_m1)
+[m_m2, s_m2] = f_verify_swing_order(ce_cl_m2, ce_ch_m2, pe_pl_m2, pe_ph_m2)
+[m_m3, s_m3] = f_verify_swing_order(ce_cl_m3, ce_ch_m3, pe_pl_m3, pe_ph_m3)
+[m_m4, s_m4] = f_verify_swing_order(ce_cl_m4, ce_ch_m4, pe_pl_m4, pe_ph_m4)
+
+// Count total matching strikes
+int matchCount = (m_p4 ? 1 : 0) + (m_p3 ? 1 : 0) + (m_p2 ? 1 : 0) + (m_p1 ? 1 : 0) + (m_0 ? 1 : 0) + (m_m1 ? 1 : 0) + (m_m2 ? 1 : 0) + (m_m3 ? 1 : 0) + (m_m4 ? 1 : 0)
+
+// ==========================================
+// SUMMARY & SWING MATCHING TABLE
+// ==========================================
+
+f_get_table_pos(string pos_str) =>
+    switch pos_str
+        "Top Right"    => position.top_right
+        "Top Left"     => position.top_left
+        "Bottom Right" => position.bottom_right
+        => position.bottom_left
+
+f_get_table_text_size(string sz_str) =>
+    switch sz_str
+        "Auto"   => size.auto
+        "Tiny"   => size.tiny
+        "Small"  => size.small
+        "Normal" => size.normal
+        "Large"  => size.large
+        => size.small
+
+var table mainTable = table.new(f_get_table_pos(tablePosInput), 8, 15, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+
+string curTextSize = f_get_table_text_size(tableTextSizeInput)
+
+string spotBasisName = switch spotBasisInput
+    SpotPriceBasis.dayOpen   => "Day Open"
+    SpotPriceBasis.prevClose => "Prev Close"
+    SpotPriceBasis.prevHigh  => "Prev High"
+    SpotPriceBasis.prevLow   => "Prev Low"
+    SpotPriceBasis.first5Min => "First 5-Min Close"
+    => "Day Open"
+
+f_add_table_row(table tbl, int r, float st_val, float cl, float ch, float pl, float ph, bool is_match, string seq_str, string t_sz) =>
+    string st_fmt = st_val == math.floor(st_val) ? str.tostring(int(st_val)) : str.tostring(st_val, "#.##")
+    color row_bg  = is_match ? colorMatchRowBg : color.black
+    color status_col = is_match ? colorMatchText : colorNoMatchText
+    string status_txt = is_match ? "MATCHED" : "NO MATCH"
+    
+    table.cell(tbl, 0, r, st_fmt, bgcolor=row_bg, text_color=color.white, text_size=t_sz)
+    table.cell(tbl, 1, r, na(cl) ? "N/A" : str.tostring(cl, "#.##"), bgcolor=row_bg, text_color=#00E676, text_size=t_sz)
+    table.cell(tbl, 2, r, na(ch) ? "N/A" : str.tostring(ch, "#.##"), bgcolor=row_bg, text_color=#00E676, text_size=t_sz)
+    table.cell(tbl, 3, r, na(pl) ? "N/A" : str.tostring(pl, "#.##"), bgcolor=row_bg, text_color=#FF1744, text_size=t_sz)
+    table.cell(tbl, 4, r, na(ph) ? "N/A" : str.tostring(ph, "#.##"), bgcolor=row_bg, text_color=#FF1744, text_size=t_sz)
+    table.cell(tbl, 5, r, seq_str, bgcolor=row_bg, text_color=color.silver, text_size=t_sz)
+    table.cell(tbl, 6, r, status_txt, bgcolor=row_bg, text_color=status_col, text_size=t_sz)
+
+if barstate.islast
+    if not showTableInput
+        table.delete(mainTable)
+    else
+        // Row 0: Header Banner
+        string headerMsg = "Spot Basis: " + spotBasisName + " (" + str.tostring(spotRefPrice, "#.##") + ") | Step: " + str.tostring(stepVal) + " | Matched: " + str.tostring(matchCount) + "/9"
+        table.cell(mainTable, 0, 0, "Techfrost Option Swing Level Analytics", bgcolor=colorMatchHeader, text_color=color.white, text_size=curTextSize)
+        table.cell(mainTable, 1, 0, headerMsg, bgcolor=colorMatchHeader, text_color=color.yellow, text_size=curTextSize)
+        table.cell(mainTable, 2, 0, "", bgcolor=colorMatchHeader)
+        table.cell(mainTable, 3, 0, "", bgcolor=colorMatchHeader)
+        table.cell(mainTable, 4, 0, "", bgcolor=colorMatchHeader)
+        table.cell(mainTable, 5, 0, "", bgcolor=colorMatchHeader)
+        table.cell(mainTable, 6, 0, "", bgcolor=colorMatchHeader)
+
+        // Row 1: Grid Column Headers
+        table.cell(mainTable, 0, 1, "Strike",           bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(mainTable, 1, 1, "CE Low (CL)",      bgcolor=color.new(#333333, 0), text_color=#00E676, text_size=curTextSize)
+        table.cell(mainTable, 2, 1, "CE High (CH)",     bgcolor=color.new(#333333, 0), text_color=#00E676, text_size=curTextSize)
+        table.cell(mainTable, 3, 1, "PE Low (PL)",      bgcolor=color.new(#333333, 0), text_color=#FF1744, text_size=curTextSize)
+        table.cell(mainTable, 4, 1, "PE High (PH)",     bgcolor=color.new(#333333, 0), text_color=#FF1744, text_size=curTextSize)
+        table.cell(mainTable, 5, 1, "Ascending Level Sequence", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(mainTable, 6, 1, "Match Status",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+
+        int rIdx = 2
+        bool showOnlyMatch = tableFilterInput == TableFilterMode.matchingOnly
+
+        // Check & Add 9 Strikes
+        if not showOnlyMatch or m_p4
+            f_add_table_row(mainTable, rIdx, k_p4, ce_cl_p4, ce_ch_p4, pe_pl_p4, pe_ph_p4, m_p4, s_p4, curTextSize)
+            rIdx += 1
+
+        if not showOnlyMatch or m_p3
+            f_add_table_row(mainTable, rIdx, k_p3, ce_cl_p3, ce_ch_p3, pe_pl_p3, pe_ph_p3, m_p3, s_p3, curTextSize)
+            rIdx += 1
+
+        if not showOnlyMatch or m_p2
+            f_add_table_row(mainTable, rIdx, k_p2, ce_cl_p2, ce_ch_p2, pe_pl_p2, pe_ph_p2, m_p2, s_p2, curTextSize)
+            rIdx += 1
+
+        if not showOnlyMatch or m_p1
+            f_add_table_row(mainTable, rIdx, k_p1, ce_cl_p1, ce_ch_p1, pe_pl_p1, pe_ph_p1, m_p1, s_p1, curTextSize)
+            rIdx += 1
+
+        if not showOnlyMatch or m_0
+            f_add_table_row(mainTable, rIdx, k_0, ce_cl_0, ce_ch_0, pe_pl_0, pe_ph_0, m_0, s_0, curTextSize)
+            rIdx += 1
+
+        if not showOnlyMatch or m_m1
+            f_add_table_row(mainTable, rIdx, k_m1, ce_cl_m1, ce_ch_m1, pe_pl_m1, pe_ph_m1, m_m1, s_m1, curTextSize)
+            rIdx += 1
+
+        if not showOnlyMatch or m_m2
+            f_add_table_row(mainTable, rIdx, k_m2, ce_cl_m2, ce_ch_m2, pe_pl_m2, pe_ph_m2, m_m2, s_m2, curTextSize)
+            rIdx += 1
+
+        if not showOnlyMatch or m_m3
+            f_add_table_row(mainTable, rIdx, k_m3, ce_cl_m3, ce_ch_m3, pe_pl_m3, pe_ph_m3, m_m3, s_m3, curTextSize)
+            rIdx += 1
+
+        if not showOnlyMatch or m_m4
+            f_add_table_row(mainTable, rIdx, k_m4, ce_cl_m4, ce_ch_m4, pe_pl_m4, pe_ph_m4, m_m4, s_m4, curTextSize)
+            rIdx += 1
+
+        if showOnlyMatch and rIdx == 2
+            table.cell(mainTable, 0, 2, "No matching strikes found for selected spot basis.", bgcolor=color.black, text_color=color.yellow, text_size=curTextSize)
