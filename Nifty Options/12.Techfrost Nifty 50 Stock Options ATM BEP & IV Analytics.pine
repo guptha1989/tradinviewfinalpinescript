@@ -36,7 +36,6 @@ enable_ICICIBANK  = input.bool(false, "ICICIBANK",  group="Custom Stock Selectio
 
 // --- Display Controls ---
 showSummaryTable   = input.bool(true, "Show Dashboard Summary Table", group="Display Controls")
-showStockBreakdown = input.bool(true, "Show Individual Stock Breakdown Table", group="Display Controls")
 tablePosInput      = input.enum(TablePos.topRight, "Table Position", group="Display Controls")
 tableTextSizeInput = input.enum(TableSize.small, "Table Text Size", group="Display Controls")
 
@@ -301,7 +300,7 @@ if count_total_stocks > 0
             count_ce_iv_just_fmt += 1
 
 // ==========================================
-// RENDER DASHBOARD & BREAKDOWN TABLES
+// RENDER SUMMARY DASHBOARD TABLE ONLY
 // ==========================================
 
 f_get_table_pos(TablePos pos) =>
@@ -319,7 +318,7 @@ f_get_table_text_size(TableSize sz) =>
         TableSize.normal => size.normal
         TableSize.large  => size.large
 
-var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 18, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 10, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
@@ -386,43 +385,3 @@ if barstate.islast
         table.cell(summaryTbl, 1, 9, str.tostring(count_pe_iv_just_fmt), bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 9, "CE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
         table.cell(summaryTbl, 3, 9, str.tostring(count_ce_iv_just_fmt), bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-
-        // Stock Breakdown Table Rows (If Enabled)
-        if showStockBreakdown and count_total_stocks > 0
-            // Row 10: Section Banner - INDIVIDUAL STOCK BREAKDOWN
-            table.cell(summaryTbl, 0, 10, "--- INDIVIDUAL STOCK BREAKDOWN TABLE ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
-            table.cell(summaryTbl, 1, 10, "", bgcolor=colorSectionBg)
-            table.cell(summaryTbl, 2, 10, "", bgcolor=colorSectionBg)
-            table.cell(summaryTbl, 3, 10, "", bgcolor=colorSectionBg)
-            
-            // Row 11: Column Headers
-            table.cell(summaryTbl, 0, 11, "Stock (ATM)", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-            table.cell(summaryTbl, 1, 11, "CE / PE Price (Real BEP)", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-            table.cell(summaryTbl, 2, 11, "BEP Status / Cross", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-            table.cell(summaryTbl, 3, 11, "IV Segregation / Just Formed", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-            
-            for k = 0 to count_total_stocks - 1
-                StockAnalytics item = array.get(stockList, k)
-                int r = 12 + k
-                
-                string stk_info = item.symbol + " (" + f_format_strike(item.atm_strike) + ")"
-                string pr_info  = "CE:" + str.tostring(item.ce_c, "#.#") + " PE:" + str.tostring(item.pe_c, "#.#") + " [BEP:" + str.tostring(item.real_bep, "#.#") + "]"
-                
-                string bep_st = item.ce_above_real_bep ? "CE > BEP" : (item.pe_above_real_bep ? "PE > BEP" : "Below BEP")
-                if item.ce_cross_above_real_bep
-                    bep_st += " (CE Cross Up)"
-                if item.pe_cross_above_real_bep
-                    bep_st += " (PE Cross Up)"
-                    
-                string iv_st = item.is_pe_iv_only ? "PE IV Only" : (item.is_ce_iv_only ? "CE IV Only" : "Neutral IV")
-                if item.pe_iv_just_formed
-                    iv_st += " [PE IV Formed]"
-                if item.ce_iv_just_formed
-                    iv_st += " [CE IV Formed]"
-                    
-                color bg_col = k % 2 == 0 ? color.black : color.new(#1A1A1A, 0)
-                
-                table.cell(summaryTbl, 0, r, stk_info, bgcolor=bg_col, text_color=color.white, text_size=curTextSize)
-                table.cell(summaryTbl, 1, r, pr_info,  bgcolor=bg_col, text_color=color.silver, text_size=curTextSize)
-                table.cell(summaryTbl, 2, r, bep_st,   bgcolor=bg_col, text_color=item.ce_above_real_bep ? colorCEColor : (item.pe_above_real_bep ? colorPEColor : colorNeutralColor), text_size=curTextSize)
-                table.cell(summaryTbl, 3, r, iv_st,    bgcolor=bg_col, text_color=item.is_pe_iv_only ? colorPEColor : (item.is_ce_iv_only ? colorCEColor : colorNeutralColor), text_size=curTextSize)
