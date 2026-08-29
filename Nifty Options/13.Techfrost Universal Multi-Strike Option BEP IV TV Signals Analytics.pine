@@ -46,7 +46,9 @@ showSummaryTable     = input.bool(true, "Show Top Analytics Dashboard Table", gr
 showStrikeInHeader   = input.bool(true, "Show Strike Prices in Column Headers", group="Display Controls")
 showDetailedValues   = input.bool(true, "Show Exact Numeric Values (vs Just 'Above / Below')", group="Display Controls",
   tooltip="When checked, shows numeric values e.g. '24250.00 (Above)'. When unchecked, shows concise status e.g. 'Above'.")
-showSignalsOnChart   = input.bool(true, "Plot Buy / Sell Signal Arrows on Chart", group="Display Controls")
+showSignalsOnChart   = input.bool(true, "Plot Buy / Sell Signal Markers on Chart", group="Display Controls")
+signalLookbackDays   = input.int(5, "Signal Marker Chart Lookback Days", minval=1, maxval=30, group="Display Controls",
+  tooltip="Number of recent trading days to plot Buy/Sell signal markers on the chart.")
 tablePosInput        = input.enum(TablePos.topRight, "Top Dashboard Position", group="Display Controls")
 
 // --- Performance Table Controls ---
@@ -166,6 +168,11 @@ if na(first_5m_close_val)
 
 // 5-Min High & Low
 [high_5m, low_5m] = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "5", [high, low], ignore_invalid_symbol=true)
+
+// Fetch start timestamp of N days ago for chart signal gating
+int lookback_idx = math.max(0, signalLookbackDays - 1)
+float start_lookback_time = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "D", time[lookback_idx], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+bool is_within_last_5d = na(start_lookback_time) or time >= start_lookback_time
 
 // Determine Static Reference Spot Price (Anchor: Day Open, Prev Close, or First 5m Close)
 float ref_static_spot = switch staticAnchorInput
@@ -324,9 +331,14 @@ else if buy_pe_cond
     signalBg      := #FF1744
     signalTxtColor:= color.white
 
-// Chart Plot Shapes
-plotshape(showSignalsOnChart and (strong_buy_ce_cond or buy_ce_cond), title="Buy CE Signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
-plotshape(showSignalsOnChart and (strong_buy_pe_cond or buy_pe_cond), title="Buy PE Signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+// Chart Signal Plot Shapes (Gated to Last 5 Days & Display Controls)
+bool plot_signal_gate = showSignalsOnChart and is_within_last_5d
+
+plotshape(plot_signal_gate and signal_strong_buy_ce, title="Strong Buy CE Signal", style=shape.arrowup, location=location.belowbar, color=#00C853, text="STRONG CE 🚀", textcolor=color.white, size=size.normal)
+plotshape(plot_signal_gate and signal_std_buy_ce,    title="Buy CE Signal",        style=shape.triangleup, location=location.belowbar, color=#00E676, text="BUY CE 🟢", textcolor=color.white, size=size.small)
+
+plotshape(plot_signal_gate and signal_strong_buy_pe, title="Strong Buy PE Signal", style=shape.arrowdown, location=location.abovebar, color=#D50000, text="STRONG PE 💥", textcolor=color.white, size=size.normal)
+plotshape(plot_signal_gate and signal_std_buy_pe,    title="Buy PE Signal",        style=shape.triangledown, location=location.abovebar, color=#FF1744, text="BUY PE 🔴", textcolor=color.white, size=size.small)
 
 // ==========================================
 // LAST 5 DAYS SWING PERFORMANCE TRACKER
