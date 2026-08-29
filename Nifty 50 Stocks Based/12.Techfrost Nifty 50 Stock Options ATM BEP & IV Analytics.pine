@@ -219,18 +219,30 @@ StockAnalytics s_TATAMOTORS = f_eval_stock("TATAMOTORS", use_TATAMOTORS)
 
 // Array of evaluated Stock Analytics Objects
 array<StockAnalytics> stockList = array.new<StockAnalytics>()
-if use_RELIANCE   => array.push(stockList, s_RELIANCE)
-if use_TCS        => array.push(stockList, s_TCS)
-if use_INFY       => array.push(stockList, s_INFY)
-if use_HDFCBANK   => array.push(stockList, s_HDFCBANK)
-if use_ICICIBANK  => array.push(stockList, s_ICICIBANK)
-if use_SBIN       => array.push(stockList, s_SBIN)
-if use_BHARTIARTL => array.push(stockList, s_BHARTIARTL)
-if use_ITC        => array.push(stockList, s_ITC)
-if use_KOTAKBANK  => array.push(stockList, s_KOTAKBANK)
-if use_LT         => array.push(stockList, s_LT)
-if use_AXISBANK   => array.push(stockList, s_AXISBANK)
-if use_TATAMOTORS => array.push(stockList, s_TATAMOTORS)
+if use_RELIANCE
+    array.push(stockList, s_RELIANCE)
+if use_TCS
+    array.push(stockList, s_TCS)
+if use_INFY
+    array.push(stockList, s_INFY)
+if use_HDFCBANK
+    array.push(stockList, s_HDFCBANK)
+if use_ICICIBANK
+    array.push(stockList, s_ICICIBANK)
+if use_SBIN
+    array.push(stockList, s_SBIN)
+if use_BHARTIARTL
+    array.push(stockList, s_BHARTIARTL)
+if use_ITC
+    array.push(stockList, s_ITC)
+if use_KOTAKBANK
+    array.push(stockList, s_KOTAKBANK)
+if use_LT
+    array.push(stockList, s_LT)
+if use_AXISBANK
+    array.push(stockList, s_AXISBANK)
+if use_TATAMOTORS
+    array.push(stockList, s_TATAMOTORS)
 
 // ==========================================
 // AGGREGATE SUMMARY COUNTS ACROSS ALL STOCKS
