@@ -307,7 +307,7 @@ string opp_ticker = f_build_option_symbol(base_strike, not isCall)
 
 bool opp_is_bull   = nz(opp_c) >= nz(opp_o)
 color opp_body_col = opp_is_bull ? colorOppBull : colorOppBear
-color opp_wick_col = opp_is_bull ? color.new(colorOppBull, 30) : color.new(colorOppBear, 30)
+color opp_wick_col = opp_is_bull ? color.new(colorOppBull, 40) : color.new(colorOppBear, 40)
 
 plotcandle(showOppCandlesInput ? opp_o : na,
            showOppCandlesInput ? opp_h : na,
