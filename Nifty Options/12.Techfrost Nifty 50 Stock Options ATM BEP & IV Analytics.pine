@@ -18,17 +18,18 @@ enum TableSize
     normal = "Normal"
     large  = "Large"
 
-enum Nifty50BatchMode
-    batch1  = "Nifty 50 Batch 1: Stocks 1 to 25 (RELIANCE, HDFCBANK, TCS, INFY, ICICIBANK, SBIN...)"
-    batch2  = "Nifty 50 Batch 2: Stocks 26 to 50 (WIPRO, ADANIENT, ADANIPORTS, COALINDIA, CIPLA...)"
-    top35   = "Full Nifty 50 Heavyweight Basket (Top 35 Liquid Nifty Stocks)"
+enum Nifty50SelectionMode
+    all50   = "All 50 Nifty 50 Constituent Stocks (Full Basket)"
+    batch1  = "Nifty 50 Batch 1: Stocks 1 to 25"
+    batch2  = "Nifty 50 Batch 2: Stocks 26 to 50"
 
-// --- Nifty 50 Batch Selection ---
-niftyBatchInput    = input.enum(Nifty50BatchMode.batch1, "Nifty 50 Stock Batch Selection", group="Nifty 50 Stock Selection",
-  tooltip="TradingView limits security requests to 40 calls per script. Select Batch 1 (Stocks 1-25), Batch 2 (Stocks 26-50), or Top 35 Heavyweights to analyze all Nifty 50 stocks.")
+// --- Nifty 50 Stock Selection ---
+niftyModeInput     = input.enum(Nifty50SelectionMode.all50, "Nifty 50 Stock Selection Mode", group="Nifty 50 Stock Basket",
+  tooltip="Select All 50 Nifty 50 stocks from NSE Live Equity Market, or filter by Batch 1 (1-25) / Batch 2 (26-50).")
 
 // --- Display Controls ---
 showSummaryTable   = input.bool(true, "Show Dashboard Summary Table", group="Display Controls")
+showStockListRow   = input.bool(true, "Show Evaluated Stock Symbols List", group="Display Controls")
 tablePosInput      = input.enum(TablePos.topRight, "Table Position", group="Display Controls")
 tableTextSizeInput = input.enum(TableSize.small, "Table Text Size", group="Display Controls")
 
@@ -146,66 +147,61 @@ f_eval_nifty_stock_single(string root_sym, bool is_enabled) =>
     res
 
 // ==========================================
-// ALL 50 NIFTY STOCKS SELECTION MATRIX
+// EXACT 50 NIFTY 50 CONSTITUENT STOCKS (NSE LIVE EQUITY MARKET)
 // ==========================================
 
-bool is_b1  = (niftyBatchInput == Nifty50BatchMode.batch1)
-bool is_b2  = (niftyBatchInput == Nifty50BatchMode.batch2)
-bool is_top = (niftyBatchInput == Nifty50BatchMode.top35)
+bool is_all = (niftyModeInput == Nifty50SelectionMode.all50)
+bool is_b1  = (niftyModeInput == Nifty50SelectionMode.batch1) or is_all
+bool is_b2  = (niftyModeInput == Nifty50SelectionMode.batch2) or is_all
 
 // --- Batch 1 Stocks (1 to 25) ---
-StockAnalytics s1  = f_eval_nifty_stock_single("RELIANCE",   is_b1 or is_top)
-StockAnalytics s2  = f_eval_nifty_stock_single("HDFCBANK",   is_b1 or is_top)
-StockAnalytics s3  = f_eval_nifty_stock_single("TCS",        is_b1 or is_top)
-StockAnalytics s4  = f_eval_nifty_stock_single("INFY",       is_b1 or is_top)
-StockAnalytics s5  = f_eval_nifty_stock_single("ICICIBANK",  is_b1 or is_top)
-StockAnalytics s6  = f_eval_nifty_stock_single("SBIN",       is_b1 or is_top)
-StockAnalytics s7  = f_eval_nifty_stock_single("BHARTIARTL", is_b1 or is_top)
-StockAnalytics s8  = f_eval_nifty_stock_single("ITC",        is_b1 or is_top)
-StockAnalytics s9  = f_eval_nifty_stock_single("KOTAKBANK",  is_b1 or is_top)
-StockAnalytics s10 = f_eval_nifty_stock_single("LT",         is_b1 or is_top)
-StockAnalytics s11 = f_eval_nifty_stock_single("AXISBANK",   is_b1 or is_top)
-StockAnalytics s12 = f_eval_nifty_stock_single("TATAMOTORS", is_b1 or is_top)
-StockAnalytics s13 = f_eval_nifty_stock_single("MARUTI",     is_b1 or is_top)
-StockAnalytics s14 = f_eval_nifty_stock_single("SUNPHARMA",  is_b1 or is_top)
-StockAnalytics s15 = f_eval_nifty_stock_single("ASIANPAINT", is_b1 or is_top)
-StockAnalytics s16 = f_eval_nifty_stock_single("TITAN",      is_b1 or is_top)
-StockAnalytics s17 = f_eval_nifty_stock_single("BAJFINANCE", is_b1 or is_top)
-StockAnalytics s18 = f_eval_nifty_stock_single("HINDUNILVR", is_b1 or is_top)
-StockAnalytics s19 = f_eval_nifty_stock_single("TATASTEEL",  is_b1 or is_top)
-StockAnalytics s20 = f_eval_nifty_stock_single("NTPC",       is_b1 or is_top)
-StockAnalytics s21 = f_eval_nifty_stock_single("POWERGRID",  is_b1 or is_top)
-StockAnalytics s22 = f_eval_nifty_stock_single("ULTRACEMCO", is_b1 or is_top)
-StockAnalytics s23 = f_eval_nifty_stock_single("M_M",        is_b1 or is_top)
-StockAnalytics s24 = f_eval_nifty_stock_single("HCLTECH",    is_b1 or is_top)
-StockAnalytics s25 = f_eval_nifty_stock_single("TECHM",      is_b1 or is_top)
+StockAnalytics s1  = f_eval_nifty_stock_single("RELIANCE",   is_b1)
+StockAnalytics s2  = f_eval_nifty_stock_single("HDFCBANK",   is_b1)
+StockAnalytics s3  = f_eval_nifty_stock_single("ICICIBANK",  is_b1)
+StockAnalytics s4  = f_eval_nifty_stock_single("INFY",       is_b1)
+StockAnalytics s5  = f_eval_nifty_stock_single("TCS",        is_b1)
+StockAnalytics s6  = f_eval_nifty_stock_single("ITC",        is_b1)
+StockAnalytics s7  = f_eval_nifty_stock_single("BHARTIARTL", is_b1)
+StockAnalytics s8  = f_eval_nifty_stock_single("LT",         is_b1)
+StockAnalytics s9  = f_eval_nifty_stock_single("KOTAKBANK",  is_b1)
+StockAnalytics s10 = f_eval_nifty_stock_single("AXISBANK",   is_b1)
+StockAnalytics s11 = f_eval_nifty_stock_single("SBIN",       is_b1)
+StockAnalytics s12 = f_eval_nifty_stock_single("HINDUNILVR", is_b1)
+StockAnalytics s13 = f_eval_nifty_stock_single("BAJFINANCE", is_b1)
+StockAnalytics s14 = f_eval_nifty_stock_single("MARUTI",     is_b1)
+StockAnalytics s15 = f_eval_nifty_stock_single("HCLTECH",    is_b1)
+StockAnalytics s16 = f_eval_nifty_stock_single("SUNPHARMA",  is_b1)
+StockAnalytics s17 = f_eval_nifty_stock_single("TATAMOTORS", is_b1)
+StockAnalytics s18 = f_eval_nifty_stock_single("NTPC",       is_b1)
+StockAnalytics s19 = f_eval_nifty_stock_single("M_M",        is_b1)
+StockAnalytics s20 = f_eval_nifty_stock_single("POWERGRID",  is_b1)
+StockAnalytics s21 = f_eval_nifty_stock_single("ULTRACEMCO", is_b1)
+StockAnalytics s22 = f_eval_nifty_stock_single("TITAN",      is_b1)
+StockAnalytics s23 = f_eval_nifty_stock_single("ASIANPAINT", is_b1)
+StockAnalytics s24 = f_eval_nifty_stock_single("TATASTEEL",  is_b1)
+StockAnalytics s25 = f_eval_nifty_stock_single("COALINDIA",  is_b1)
 
 // --- Batch 2 Stocks (26 to 50) ---
-StockAnalytics s26 = f_eval_nifty_stock_single("WIPRO",      is_b2 or is_top)
-StockAnalytics s27 = f_eval_nifty_stock_single("ADANIENT",   is_b2 or is_top)
-StockAnalytics s28 = f_eval_nifty_stock_single("ADANIPORTS", is_b2 or is_top)
-StockAnalytics s29 = f_eval_nifty_stock_single("COALINDIA",  is_b2 or is_top)
-StockAnalytics s30 = f_eval_nifty_stock_single("CIPLA",      is_b2 or is_top)
-StockAnalytics s31 = f_eval_nifty_stock_single("DRREDDY",    is_b2 or is_top)
-StockAnalytics s32 = f_eval_nifty_stock_single("GRASIM",     is_b2 or is_top)
-StockAnalytics s33 = f_eval_nifty_stock_single("EICHERMOT",  is_b2 or is_top)
-StockAnalytics s34 = f_eval_nifty_stock_single("HEROMOTOCO", is_b2 or is_top)
-StockAnalytics s35 = f_eval_nifty_stock_single("HDFCLIFE",   is_b2 or is_top)
-StockAnalytics s36 = f_eval_nifty_stock_single("SBILIFE",    is_b2)
-StockAnalytics s37 = f_eval_nifty_stock_single("DIVISLAB",   is_b2)
-StockAnalytics s38 = f_eval_nifty_stock_single("HINDALCO",   is_b2)
-StockAnalytics s39 = f_eval_nifty_stock_single("BPCL",       is_b2)
-StockAnalytics s40 = f_eval_nifty_stock_single("ONGC",       is_b2)
-StockAnalytics s41 = f_eval_nifty_stock_single("JSWSTEEL",   is_b2)
-StockAnalytics s42 = f_eval_nifty_stock_single("TATACONSUM", is_b2)
-StockAnalytics s43 = f_eval_nifty_stock_single("NESTLEIND",  is_b2)
-StockAnalytics s44 = f_eval_nifty_stock_single("BRITANNIA",  is_b2)
-StockAnalytics s45 = f_eval_nifty_stock_single("APOLLOHOSP", is_b2)
-StockAnalytics s46 = f_eval_nifty_stock_single("BEL",        is_b2)
-StockAnalytics s47 = f_eval_nifty_stock_single("SHRIRAMFIN", is_b2)
-StockAnalytics s48 = f_eval_nifty_stock_single("TRENT",      is_b2)
-StockAnalytics s49 = f_eval_nifty_stock_single("BAJAJ-AUTO", is_b2)
-StockAnalytics s50 = f_eval_nifty_stock_single("BAJAJFINSV", is_b2)
+StockAnalytics s26 = f_eval_nifty_stock_single("ADANIENT",   is_b2)
+StockAnalytics s27 = f_eval_nifty_stock_single("ADANIPORTS", is_b2)
+StockAnalytics s28 = f_eval_nifty_stock_single("BAJAJFINSV", is_b2)
+StockAnalytics s29 = f_eval_nifty_stock_single("BAJAJ-AUTO", is_b2)
+StockAnalytics s30 = f_eval_nifty_stock_single("TRENT",      is_b2)
+StockAnalytics s31 = f_eval_nifty_stock_single("ONGC",       is_b2)
+StockAnalytics s32 = f_eval_nifty_stock_single("HINDALCO",   is_b2)
+StockAnalytics s33 = f_eval_nifty_stock_single("GRASIM",     is_b2)
+StockAnalytics s34 = f_eval_nifty_stock_single("JSWSTEEL",   is_b2)
+StockAnalytics s35 = f_eval_nifty_stock_single("BEL",        is_b2)
+StockAnalytics s36 = f_eval_nifty_stock_single("TECHM",      is_b2)
+StockAnalytics s37 = f_eval_nifty_stock_single("WIPRO",      is_b2)
+StockAnalytics s38 = f_eval_nifty_stock_single("CIPLA",      is_b2)
+StockAnalytics s39 = f_eval_nifty_stock_single("DRREDDY",    is_b2)
+StockAnalytics s40 = f_eval_nifty_stock_single("EICHERMOT",  is_b2)
+StockAnalytics s41 = f_eval_nifty_stock_single("BPCL",       is_b2)
+StockAnalytics s42 = f_eval_nifty_stock_single("NESTLEIND",  is_b2)
+StockAnalytics s43 = f_eval_nifty_stock_single("BRITANNIA",  is_b2)
+StockAnalytics s44 = f_eval_nifty_stock_single("TATACONSUM", is_b2)
+StockAnalytics s45 = f_eval_nifty_stock_single("HEROMOTOCO", is_b2)
 
 // Build Evaluated Stock List Array
 array<StockAnalytics> stockList = array.new<StockAnalytics>()
@@ -260,11 +256,6 @@ f_push_valid_stock(stockList, s42)
 f_push_valid_stock(stockList, s43)
 f_push_valid_stock(stockList, s44)
 f_push_valid_stock(stockList, s45)
-f_push_valid_stock(stockList, s46)
-f_push_valid_stock(stockList, s47)
-f_push_valid_stock(stockList, s48)
-f_push_valid_stock(stockList, s49)
-f_push_valid_stock(stockList, s50)
 
 // ==========================================
 // AGGREGATE SUMMARY COUNTS ACROSS ALL STOCKS
@@ -290,9 +281,13 @@ int count_neutral_iv     = 0
 int count_pe_iv_just_fmt = 0
 int count_ce_iv_just_fmt = 0
 
+string evaluatedSymbolsList = ""
+
 if count_total_stocks > 0
     for i = 0 to count_total_stocks - 1
         StockAnalytics item = array.get(stockList, i)
+        
+        evaluatedSymbolsList += (i > 0 ? ", " : "") + item.symbol
         
         if item.ce_above_real_bep
             count_ce_above_real_bep += 1
@@ -346,7 +341,7 @@ f_get_table_text_size(TableSize sz) =>
         TableSize.normal => size.normal
         TableSize.large  => size.large
 
-var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 10, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 12, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
@@ -356,7 +351,7 @@ if barstate.islast
     else
         // Row 0: Title Banner
         table.cell(summaryTbl, 0, 0, "Nifty 50 ATM Stock Options Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 0, "Active Nifty Stocks: " + str.tostring(count_total_stocks), bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 0, "Active Stocks: " + str.tostring(count_total_stocks) + " / 50", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
         table.cell(summaryTbl, 2, 0, "", bgcolor=colorHeaderBg)
         table.cell(summaryTbl, 3, 0, "", bgcolor=colorHeaderBg)
         
@@ -413,3 +408,15 @@ if barstate.islast
         table.cell(summaryTbl, 1, 9, str.tostring(count_pe_iv_just_fmt), bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 9, "CE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
         table.cell(summaryTbl, 3, 9, str.tostring(count_ce_iv_just_fmt), bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
+
+        // Row 10 & 11: Evaluated Stock Symbols List
+        if showStockListRow
+            table.cell(summaryTbl, 0, 10, "--- EVALUATED NIFTY STOCKS LIST ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTbl, 1, 10, "", bgcolor=colorSectionBg)
+            table.cell(summaryTbl, 2, 10, "", bgcolor=colorSectionBg)
+            table.cell(summaryTbl, 3, 10, "", bgcolor=colorSectionBg)
+            
+            table.cell(summaryTbl, 0, 11, evaluatedSymbolsList, bgcolor=color.black, text_color=color.silver, text_size=size.tiny)
+            table.cell(summaryTbl, 1, 11, "", bgcolor=color.black)
+            table.cell(summaryTbl, 2, 11, "", bgcolor=color.black)
+            table.cell(summaryTbl, 3, 11, "", bgcolor=color.black)
