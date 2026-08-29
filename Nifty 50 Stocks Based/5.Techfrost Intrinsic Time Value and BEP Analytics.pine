@@ -99,12 +99,10 @@ colorOppBull      = input.color(color.new(#2962FF, 40), "Opposite Bullish Body",
 colorOppBear      = input.color(color.new(#FF6D00, 40), "Opposite Bearish Body", group="Candle Overlays Formatting")
 
 // Signal Styling & Colors
-colorSB_CE           = input.color(#00E676, "Strong Buy CE (SB CE) Arrow Color", group="Signal Styling & Colors")
-colorSB_PE           = input.color(#FF1744, "Strong Buy PE (SB PE) Arrow Color", group="Signal Styling & Colors")
-colorBuyCE           = input.color(#00E676, "Buy CE Crossover Arrow Color", group="Signal Styling & Colors")
-colorBuyPE           = input.color(#FF1744, "Buy PE Crossover Arrow Color", group="Signal Styling & Colors")
+colorSB_CE           = input.color(#00E676, "BC Arrow Color", group="Signal Styling & Colors")
+colorSB_PE           = input.color(#FF1744, "BP Arrow Color", group="Signal Styling & Colors")
 colorSignalTextColor = input.color(color.white, "Signal Label Text Color", group="Signal Styling & Colors",
-  tooltip="Color of signal text labels (SB CE, SB PE, BUY CE, BUY PE). Default is White for dark backgrounds.")
+  tooltip="Color of signal text labels (BC, BP). Default is White for dark backgrounds.")
 
 // ==========================================
 // HELPER FUNCTIONS (GLOBAL SCOPE ONLY)
@@ -391,6 +389,21 @@ float ce_iv_rt  = math.max(0.0, spot_ltp - ce_strike)
 float pe_iv_rt  = math.max(0.0, pe_strike - spot_ltp)
 float avg_iv_rt = (ce_iv_rt + pe_iv_rt) / 2.0
 
+// Dedicated ITM & OTM Intrinsic Values & Averages
+float ce_itm_iv_d0 = math.max(0.0, spot_r0 - itm_ce_strike)
+float pe_itm_iv_d0 = math.max(0.0, itm_pe_strike - spot_r0)
+float ce_otm_iv_d0 = math.max(0.0, spot_r0 - otm_ce_strike)
+float pe_otm_iv_d0 = math.max(0.0, otm_pe_strike - spot_r0)
+
+float ce_itm_iv_rt = math.max(0.0, spot_ltp - itm_ce_strike)
+float pe_itm_iv_rt = math.max(0.0, itm_pe_strike - spot_ltp)
+float ce_otm_iv_rt = math.max(0.0, spot_ltp - otm_ce_strike)
+float pe_otm_iv_rt = math.max(0.0, otm_pe_strike - spot_ltp)
+
+// ITM & OTM Average Intrinsic Values
+float itm_avg_iv_rt = (ce_itm_iv_rt + pe_itm_iv_rt) / 2.0
+float otm_avg_iv_rt = (ce_otm_iv_rt + pe_otm_iv_rt) / 2.0
+
 // 5-Day Static Intrinsic Values (Day 0 to Day 4)
 float ce_iv_d0 = math.max(0.0, spot_r0 - ce_strike)
 float pe_iv_d0 = math.max(0.0, pe_strike - spot_r0)
@@ -412,17 +425,6 @@ float ce_iv_d4 = math.max(0.0, spot_r4 - ce_strike)
 float pe_iv_d4 = math.max(0.0, pe_strike - spot_r4)
 float avg_iv_d4 = (ce_iv_d4 + pe_iv_d4) / 2.0
 
-// Dedicated ITM & OTM Static Intrinsic Values
-float ce_itm_iv_d0 = math.max(0.0, spot_r0 - itm_ce_strike)
-float pe_itm_iv_d0 = math.max(0.0, itm_pe_strike - spot_r0)
-float ce_otm_iv_d0 = math.max(0.0, spot_r0 - otm_ce_strike)
-float pe_otm_iv_d0 = math.max(0.0, otm_pe_strike - spot_r0)
-
-float ce_itm_iv_rt = math.max(0.0, spot_ltp - itm_ce_strike)
-float pe_itm_iv_rt = math.max(0.0, itm_pe_strike - spot_ltp)
-float ce_otm_iv_rt = math.max(0.0, spot_ltp - otm_ce_strike)
-float pe_otm_iv_rt = math.max(0.0, otm_pe_strike - spot_ltp)
-
 // ==========================================
 // 2. TIME VALUE CALCULATIONS (Option Price - Intrinsic Value OR Strike - Intrinsic Value)
 // ==========================================
@@ -431,6 +433,20 @@ float pe_otm_iv_rt = math.max(0.0, otm_pe_strike - spot_ltp)
 float ce_tv_rt  = timeValueFormulaInput == TimeValueFormula.standard ? (ce_ltp - ce_iv_rt) : (ce_strike - ce_iv_rt)
 float pe_tv_rt  = timeValueFormulaInput == TimeValueFormula.standard ? (pe_ltp - pe_iv_rt) : (pe_strike - pe_iv_rt)
 float avg_tv_rt = (ce_tv_rt + pe_tv_rt) / 2.0
+
+// Dedicated ITM & OTM Time Values
+float ce_itm_tv_d0 = math.max(0.0, ce_itm_r0 - ce_itm_iv_d0)
+float pe_itm_tv_d0 = math.max(0.0, pe_itm_r0 - pe_itm_iv_d0)
+float ce_otm_tv_d0 = math.max(0.0, ce_otm_r0 - ce_otm_iv_d0)
+float pe_otm_tv_d0 = math.max(0.0, pe_otm_r0 - pe_otm_iv_d0)
+
+float ce_itm_tv_rt = math.max(0.0, ce_itm_ltp - ce_itm_iv_rt)
+float pe_itm_tv_rt = math.max(0.0, pe_itm_ltp - pe_itm_iv_rt)
+float ce_otm_tv_rt = math.max(0.0, ce_otm_ltp - ce_otm_iv_rt)
+float pe_otm_tv_rt = math.max(0.0, pe_otm_ltp - pe_otm_iv_rt)
+
+// OTM Average Time Value: (OTM CE Time Value + OTM PE Time Value) / 2.0
+float otm_avg_tv_rt = (ce_otm_tv_rt + pe_otm_tv_rt) / 2.0
 
 // 5-Day Static Time Values (Day 0 to Day 4)
 float ce_tv_d0 = timeValueFormulaInput == TimeValueFormula.standard ? (ce_r0 - ce_iv_d0) : (ce_strike - ce_iv_d0)
@@ -452,17 +468,6 @@ float avg_tv_d3 = (ce_tv_d3 + pe_tv_d3) / 2.0
 float ce_tv_d4 = timeValueFormulaInput == TimeValueFormula.standard ? (ce_r4 - ce_iv_d4) : (ce_strike - ce_iv_d4)
 float pe_tv_d4 = timeValueFormulaInput == TimeValueFormula.standard ? (pe_r4 - pe_iv_d4) : (pe_strike - pe_iv_d4)
 float avg_tv_d4 = (ce_tv_d4 + pe_tv_d4) / 2.0
-
-// Dedicated ITM & OTM Static Time Values
-float ce_itm_tv_d0 = math.max(0.0, ce_itm_r0 - ce_itm_iv_d0)
-float pe_itm_tv_d0 = math.max(0.0, pe_itm_r0 - pe_itm_iv_d0)
-float ce_otm_tv_d0 = math.max(0.0, ce_otm_r0 - ce_otm_iv_d0)
-float pe_otm_tv_d0 = math.max(0.0, pe_otm_r0 - pe_otm_iv_d0)
-
-float ce_itm_tv_rt = math.max(0.0, ce_itm_ltp - ce_itm_iv_rt)
-float pe_itm_tv_rt = math.max(0.0, pe_itm_ltp - pe_itm_iv_rt)
-float ce_otm_tv_rt = math.max(0.0, ce_otm_ltp - ce_otm_iv_rt)
-float pe_otm_tv_rt = math.max(0.0, pe_otm_ltp - pe_otm_iv_rt)
 
 // ==========================================
 // 3. 5-DAY BEP CALCULATIONS: (CE + PE) / 2.0
@@ -499,11 +504,11 @@ float bar_pe_pdc      = request.security(pe_ticker, "D", close[1], lookahead=bar
 // PLOTTING ALL METRICS (EXPOSED IN TRADINGVIEW STYLE TAB)
 // ==========================================
 
-// --- Realtime Plots ---
-plot(showCE_IV_RT_Input and ce_iv_rt > 0 ? ce_iv_rt : na, "CE Realtime Intrinsic", color=#00E676, linewidth=2)
-plot(showPE_IV_RT_Input and pe_iv_rt > 0 ? pe_iv_rt : na, "PE Realtime Intrinsic", color=#FF5252, linewidth=2)
-plot(showAvg_IV_RT_Input and avg_iv_rt > 0 ? avg_iv_rt : na, "Avg Realtime Intrinsic", color=#FF00FF, linewidth=2)
+// --- Realtime Intrinsic Plots: Only Plot ITM & OTM Average Intrinsic Value ---
+plot(showAvg_IV_RT_Input and itm_avg_iv_rt > 0 ? itm_avg_iv_rt : na, "ITM Avg Intrinsic", color=#00E676, linewidth=2)
+plot(showAvg_IV_RT_Input and otm_avg_iv_rt > 0 ? otm_avg_iv_rt : na, "OTM Avg Intrinsic", color=#FF5252, linewidth=2)
 
+// --- Realtime Time Value Plots ---
 plot(showCE_TV_RT_Input and ce_tv_rt > 0 ? ce_tv_rt : na, "CE Realtime Time Value", color=#76FF03, linewidth=2)
 plot(showPE_TV_RT_Input and pe_tv_rt > 0 ? pe_tv_rt : na, "PE Realtime Time Value", color=#FF6E40, linewidth=2)
 plot(showAvg_TV_RT_Input and avg_tv_rt > 0 ? avg_tv_rt : na, "Avg Realtime Time Value", color=#FFD700, linewidth=2)
@@ -523,62 +528,38 @@ plot(showPD_CE_CloseInput and bar_ce_pdc > 0 ? bar_ce_pdc : na, "CE Prev Day Clo
 plot(showPD_PE_CloseInput and bar_pe_pdc > 0 ? bar_pe_pdc : na, "PE Prev Day Close", color=#FF5252, style=plot.style_linebr)
 
 // ==========================================
-// BUY / SELL SIGNALS & ALERTS LOGIC
+// BUY / SELL SIGNALS & ALERTS LOGIC (BC & BP)
 // ==========================================
 
-// 1. Strong Buy Conditions
-bool sb_pe_cond = (pe_iv_rt > 0.0) and (ce_iv_rt <= 0.0)
-bool sb_ce_cond = (ce_iv_rt > 0.0) and (pe_iv_rt <= 0.0)
+// OTM CE Price vs OTM Avg Time Value & OTM PE Price vs OTM Avg Time Value
+bool ce_above_otm_tv = ce_otm_ltp > otm_avg_tv_rt
+bool pe_below_otm_tv = pe_otm_ltp < otm_avg_tv_rt
 
-var bool in_sb_pe = false
-var bool in_sb_ce = false
+bool pe_above_otm_tv = pe_otm_ltp > otm_avg_tv_rt
+bool ce_below_otm_tv = ce_otm_ltp < otm_avg_tv_rt
 
-bool sb_pe_signal = false
-bool sb_ce_signal = false
+// 3-4 Candles Window Evaluation (bars 0 to 4)
+bool ce_above_win = ce_above_otm_tv or ce_above_otm_tv[1] or ce_above_otm_tv[2] or ce_above_otm_tv[3] or ce_above_otm_tv[4]
+bool pe_below_win = pe_below_otm_tv or pe_below_otm_tv[1] or pe_below_otm_tv[2] or pe_below_otm_tv[3] or pe_below_otm_tv[4]
 
-if sb_pe_cond and not in_sb_pe
-    in_sb_pe     := true
-    in_sb_ce     := false
-    sb_pe_signal := true
+bool pe_above_win = pe_above_otm_tv or pe_above_otm_tv[1] or pe_above_otm_tv[2] or pe_above_otm_tv[3] or pe_above_otm_tv[4]
+bool ce_below_win = ce_below_otm_tv or ce_below_otm_tv[1] or ce_below_otm_tv[2] or ce_below_otm_tv[3] or ce_below_otm_tv[4]
 
-if pe_iv_rt <= 0.0
-    in_sb_pe := false
+// Trigger OTM Buy CE (BC)
+bool otm_buy_ce_cond = ce_above_win and pe_below_win
+bool bc_signal       = otm_buy_ce_cond and not otm_buy_ce_cond[1]
 
-if sb_ce_cond and not in_sb_ce
-    in_sb_ce     := true
-    in_sb_pe     := false
-    sb_ce_signal := true
+// Trigger OTM Buy PE (BP)
+bool otm_buy_pe_cond = pe_above_win and ce_below_win
+bool bp_signal       = otm_buy_pe_cond and not otm_buy_pe_cond[1]
 
-if ce_iv_rt <= 0.0
-    in_sb_ce := false
-
-// 2. Crossover Buy Conditions
-bool buy_pe_signal = ta.crossover(pe_iv_rt, ce_iv_rt)
-bool buy_ce_signal = ta.crossover(ce_iv_rt, pe_iv_rt)
-
-// 3. Dedicated ITM & OTM Table Buy / Sell Signal Conditions
-// Buy CE: ITM CE > Intrinsic AND ITM PE < Intrinsic AND OTM CE < Time Value AND OTM PE > Time Value
-bool buy_ce_itmotm = (ce_itm_ltp > ce_itm_iv_rt or ce_itm_r0 > ce_itm_iv_d0) and (pe_itm_ltp < pe_itm_iv_rt or pe_itm_r0 < pe_itm_iv_d0) and (ce_otm_ltp < ce_otm_tv_rt or ce_otm_r0 < ce_otm_tv_d0) and (pe_otm_ltp > pe_otm_tv_rt or pe_otm_r0 > pe_otm_tv_d0)
-
-// Buy PE: ITM PE > Intrinsic AND ITM CE < Intrinsic AND OTM PE < Time Value AND OTM CE > Time Value
-bool buy_pe_itmotm = (pe_itm_ltp > pe_itm_iv_rt or pe_itm_r0 > pe_itm_iv_d0) and (ce_itm_ltp < ce_itm_iv_rt or ce_itm_r0 < ce_itm_iv_d0) and (pe_otm_ltp < pe_otm_tv_rt or pe_otm_r0 < pe_otm_tv_d0) and (ce_otm_ltp > ce_otm_tv_rt or ce_otm_r0 > ce_otm_tv_d0)
-
-// Visual Signal Plotshapes
-plotshape(showSignalPlotsInput and sb_ce_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="SB CE")
-plotshape(showSignalPlotsInput and sb_pe_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.small, text="SB PE")
-
-plotshape(showSignalPlotsInput and buy_ce_signal and not sb_ce_signal, title="Buy CE Signal", style=shape.labelup, location=location.belowbar, color=colorBuyCE, textcolor=colorSignalTextColor, size=size.tiny, text="BUY CE")
-plotshape(showSignalPlotsInput and buy_pe_signal and not sb_pe_signal, title="Buy PE Signal", style=shape.labeldown, location=location.abovebar, color=colorBuyPE, textcolor=colorSignalTextColor, size=size.tiny, text="BUY PE")
+// Visual Signal Plotshapes: Plot BC for Buy CE & BP for Buy PE
+plotshape(showSignalPlotsInput and bc_signal, title="Buy CE (BC)", style=shape.labelup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="BC")
+plotshape(showSignalPlotsInput and bp_signal, title="Buy PE (BP)", style=shape.labeldown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.small, text="BP")
 
 // TradingView Alert Conditions
-alertcondition(sb_ce_signal, title="Strong Buy CE (SB CE)", message="STRONG BUY CE: CE Realtime Intrinsic Value > 0 and PE Realtime Intrinsic Value <= 0 on {{ticker}}!")
-alertcondition(sb_pe_signal, title="Strong Buy PE (SB PE)", message="STRONG BUY PE: PE Realtime Intrinsic Value > 0 and CE Realtime Intrinsic Value <= 0 on {{ticker}}!")
-
-alertcondition(buy_ce_signal, title="Buy CE (Crossover)", message="BUY CE Signal: CE Realtime Intrinsic Value Crossed Above PE Realtime Intrinsic Value on {{ticker}}!")
-alertcondition(buy_pe_signal, title="Buy PE (Crossover)", message="BUY PE Signal: PE Realtime Intrinsic Value Crossed Above CE Realtime Intrinsic Value on {{ticker}}!")
-
-alertcondition(buy_ce_itmotm, title="ITM/OTM Table Buy CE Alert", message="ITM/OTM Analytics: Buy CE Signal Triggered on {{ticker}}")
-alertcondition(buy_pe_itmotm, title="ITM/OTM Table Buy PE Alert", message="ITM/OTM Analytics: Buy PE Signal Triggered on {{ticker}}")
+alertcondition(bc_signal, title="Buy CE (BC) Alert", message="BC ALERT: OTM CE price closed above OTM Avg Time Value & OTM PE closed below OTM Avg Time Value on {{ticker}}!")
+alertcondition(bp_signal, title="Buy PE (BP) Alert", message="BP ALERT: OTM PE price closed above OTM Avg Time Value & OTM CE closed below OTM Avg Time Value on {{ticker}}!")
 
 // ==========================================
 // SUMMARY DASHBOARD TABLE
