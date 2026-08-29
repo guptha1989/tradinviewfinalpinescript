@@ -556,6 +556,13 @@ if ce_iv_rt <= 0.0
 bool buy_pe_signal = ta.crossover(pe_iv_rt, ce_iv_rt)
 bool buy_ce_signal = ta.crossover(ce_iv_rt, pe_iv_rt)
 
+// 3. Dedicated ITM & OTM Table Buy / Sell Signal Conditions
+// Buy CE: ITM CE > Intrinsic AND ITM PE < Intrinsic AND OTM CE < Time Value AND OTM PE > Time Value
+bool buy_ce_itmotm = (ce_itm_ltp > ce_itm_iv_rt or ce_itm_r0 > ce_itm_iv_d0) and (pe_itm_ltp < pe_itm_iv_rt or pe_itm_r0 < pe_itm_iv_d0) and (ce_otm_ltp < ce_otm_tv_rt or ce_otm_r0 < ce_otm_tv_d0) and (pe_otm_ltp > pe_otm_tv_rt or pe_otm_r0 > pe_otm_tv_d0)
+
+// Buy PE: ITM PE > Intrinsic AND ITM CE < Intrinsic AND OTM PE < Time Value AND OTM CE > Time Value
+bool buy_pe_itmotm = (pe_itm_ltp > pe_itm_iv_rt or pe_itm_r0 > pe_itm_iv_d0) and (ce_itm_ltp < ce_itm_iv_rt or ce_itm_r0 < ce_itm_iv_d0) and (pe_otm_ltp < pe_otm_tv_rt or pe_otm_r0 < pe_otm_tv_d0) and (ce_otm_ltp > ce_otm_tv_rt or ce_otm_r0 > ce_otm_tv_d0)
+
 // Visual Signal Plotshapes
 plotshape(showSignalPlotsInput and sb_ce_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="SB CE")
 plotshape(showSignalPlotsInput and sb_pe_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.small, text="SB PE")
@@ -569,6 +576,9 @@ alertcondition(sb_pe_signal, title="Strong Buy PE (SB PE)", message="STRONG BUY 
 
 alertcondition(buy_ce_signal, title="Buy CE (Crossover)", message="BUY CE Signal: CE Realtime Intrinsic Value Crossed Above PE Realtime Intrinsic Value on {{ticker}}!")
 alertcondition(buy_pe_signal, title="Buy PE (Crossover)", message="BUY PE Signal: PE Realtime Intrinsic Value Crossed Above CE Realtime Intrinsic Value on {{ticker}}!")
+
+alertcondition(buy_ce_itmotm, title="ITM/OTM Table Buy CE Alert", message="ITM/OTM Analytics: Buy CE Signal Triggered on {{ticker}}")
+alertcondition(buy_pe_itmotm, title="ITM/OTM Table Buy PE Alert", message="ITM/OTM Analytics: Buy PE Signal Triggered on {{ticker}}")
 
 // ==========================================
 // SUMMARY DASHBOARD TABLE
@@ -669,7 +679,7 @@ if showITMOTMTableInput and barstate.islast
            
     basisTag = staticBasisInput == StaticBasis.prevClose ? "Prev Close" : (staticBasisInput == StaticBasis.first5Min ? "First 5m Close" : "Day Open")
 
-    itmotmTable := table.new(itmotm_pos, 5, 4, border_width=1, border_color=color.gray)
+    itmotmTable := table.new(itmotm_pos, 5, 5, border_width=1, border_color=color.gray)
 
     // Header Row 0
     table.cell(itmotmTable, 0, 0, "ITM & OTM Static Analytics (Offset: " + str.tostring(rawOffsetPts, "#") + " pts)", bgcolor=#1A237E, text_color=color.white, text_size=t_sz)
@@ -698,3 +708,14 @@ if showITMOTMTableInput and barstate.islast
     table.cell(itmotmTable, 2, 3, str.tostring(pe_itm_r0, "#.##"), bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
     table.cell(itmotmTable, 3, 3, str.tostring(ce_otm_r0, "#.##"), bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
     table.cell(itmotmTable, 4, 3, str.tostring(pe_otm_r0, "#.##"), bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+
+    // Row 4: Buy / Sell Alert Status Row
+    string sigText  = buy_ce_itmotm ? "BUY CE 🟢" : (buy_pe_itmotm ? "BUY PE 🔴" : "NEUTRAL 🟡")
+    color sigBg     = buy_ce_itmotm ? #00E676 : (buy_pe_itmotm ? #FF1744 : color.black)
+    color sigTxtCol = buy_ce_itmotm ? color.black : (buy_pe_itmotm ? color.white : color.yellow)
+
+    table.cell(itmotmTable, 0, 4, "Buy / Sell Alert", bgcolor=#263238, text_color=color.white, text_size=t_sz)
+    table.cell(itmotmTable, 1, 4, sigText, bgcolor=sigBg, text_color=sigTxtCol, text_size=t_sz)
+    table.cell(itmotmTable, 2, 4, sigText, bgcolor=sigBg, text_color=sigTxtCol, text_size=t_sz)
+    table.cell(itmotmTable, 3, 4, sigText, bgcolor=sigBg, text_color=sigTxtCol, text_size=t_sz)
+    table.cell(itmotmTable, 4, 4, sigText, bgcolor=sigBg, text_color=sigTxtCol, text_size=t_sz)
