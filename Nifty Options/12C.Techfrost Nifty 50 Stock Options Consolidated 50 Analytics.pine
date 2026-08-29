@@ -245,20 +245,34 @@ int b1_count_pe_iv_fmt   = 0, int b1_count_ce_iv_fmt   = 0
 
 for i = 0 to array.size(listB1) - 1
     StockAnalytics item = array.get(listB1, i)
-    if item.ce_above_real_bep => b1_count_ce_real_bep += 1
-    if item.pe_above_real_bep => b1_count_pe_real_bep += 1
-    if item.ce_above_open_bep => b1_count_ce_open_bep += 1
-    if item.pe_above_open_bep => b1_count_pe_open_bep += 1
-    if item.neutral_open_bep  => b1_count_neut_open_bep += 1
-    if item.ce_cross_above_real_bep => b1_count_ce_cross_up += 1
-    if item.ce_cross_below_real_bep => b1_count_ce_cross_dn += 1
-    if item.pe_cross_above_real_bep => b1_count_pe_cross_up += 1
-    if item.pe_cross_below_real_bep => b1_count_pe_cross_dn += 1
-    if item.is_pe_iv_only => b1_count_pe_iv_only += 1
-    if item.is_ce_iv_only => b1_count_ce_iv_only += 1
-    if item.is_neutral_iv => b1_count_neut_iv += 1
-    if item.pe_iv_just_formed => b1_count_pe_iv_fmt += 1
-    if item.ce_iv_just_formed => b1_count_ce_iv_fmt += 1
+    if item.ce_above_real_bep
+        b1_count_ce_real_bep += 1
+    if item.pe_above_real_bep
+        b1_count_pe_real_bep += 1
+    if item.ce_above_open_bep
+        b1_count_ce_open_bep += 1
+    if item.pe_above_open_bep
+        b1_count_pe_open_bep += 1
+    if item.neutral_open_bep
+        b1_count_neut_open_bep += 1
+    if item.ce_cross_above_real_bep
+        b1_count_ce_cross_up += 1
+    if item.ce_cross_below_real_bep
+        b1_count_ce_cross_dn += 1
+    if item.pe_cross_above_real_bep
+        b1_count_pe_cross_up += 1
+    if item.pe_cross_below_real_bep
+        b1_count_pe_cross_dn += 1
+    if item.is_pe_iv_only
+        b1_count_pe_iv_only += 1
+    if item.is_ce_iv_only
+        b1_count_ce_iv_only += 1
+    if item.is_neutral_iv
+        b1_count_neut_iv += 1
+    if item.pe_iv_just_formed
+        b1_count_pe_iv_fmt += 1
+    if item.ce_iv_just_formed
+        b1_count_ce_iv_fmt += 1
 
 int b2_count_ce_real_bep = 0, int b2_count_pe_real_bep = 0
 int b2_count_ce_open_bep = 0, int b2_count_pe_open_bep = 0, int b2_count_neut_open_bep = 0
@@ -269,20 +283,34 @@ int b2_count_pe_iv_fmt   = 0, int b2_count_ce_iv_fmt   = 0
 
 for i = 0 to array.size(listB2) - 1
     StockAnalytics item = array.get(listB2, i)
-    if item.ce_above_real_bep => b2_count_ce_real_bep += 1
-    if item.pe_above_real_bep => b2_count_pe_real_bep += 1
-    if item.ce_above_open_bep => b2_count_ce_open_bep += 1
-    if item.pe_above_open_bep => b2_count_pe_open_bep += 1
-    if item.neutral_open_bep  => b2_count_neut_open_bep += 1
-    if item.ce_cross_above_real_bep => b2_count_ce_cross_up += 1
-    if item.ce_cross_below_real_bep => b2_count_ce_cross_dn += 1
-    if item.pe_cross_above_real_bep => b2_count_pe_cross_up += 1
-    if item.pe_cross_below_real_bep => b2_count_pe_cross_dn += 1
-    if item.is_pe_iv_only => b2_count_pe_iv_only += 1
-    if item.is_ce_iv_only => b2_count_ce_iv_only += 1
-    if item.is_neutral_iv => b2_count_neut_iv += 1
-    if item.pe_iv_just_formed => b2_count_pe_iv_fmt += 1
-    if item.ce_iv_just_formed => b2_count_ce_iv_fmt += 1
+    if item.ce_above_real_bep
+        b2_count_ce_real_bep += 1
+    if item.pe_above_real_bep
+        b2_count_pe_real_bep += 1
+    if item.ce_above_open_bep
+        b2_count_ce_open_bep += 1
+    if item.pe_above_open_bep
+        b2_count_pe_open_bep += 1
+    if item.neutral_open_bep
+        b2_count_neut_open_bep += 1
+    if item.ce_cross_above_real_bep
+        b2_count_ce_cross_up += 1
+    if item.ce_cross_below_real_bep
+        b2_count_ce_cross_dn += 1
+    if item.pe_cross_above_real_bep
+        b2_count_pe_cross_up += 1
+    if item.pe_cross_below_real_bep
+        b2_count_pe_cross_dn += 1
+    if item.is_pe_iv_only
+        b2_count_pe_iv_only += 1
+    if item.is_ce_iv_only
+        b2_count_ce_iv_only += 1
+    if item.is_neutral_iv
+        b2_count_neut_iv += 1
+    if item.pe_iv_just_formed
+        b2_count_pe_iv_fmt += 1
+    if item.ce_iv_just_formed
+        b2_count_ce_iv_fmt += 1
 
 // CONSOLIDATED TOTALS
 int tot_ce_real_bep  = b1_count_ce_real_bep + b2_count_ce_real_bep
