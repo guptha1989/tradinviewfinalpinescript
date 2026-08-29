@@ -237,14 +237,28 @@ f_calc_leg(float spot_p, float K, bool is_ce, float base_tv) =>
 [otm_ce_premium_st, otm_ce_iv_st, otm_ce_tv_st, otm_ce_above_st] = f_calc_leg(ref_static_spot, otm_ce_strike, true, base_tv_atm)
 [otm_pe_premium_st, otm_pe_iv_st, otm_pe_tv_st, otm_pe_above_st] = f_calc_leg(ref_static_spot, otm_pe_strike, false, base_tv_atm)
 
+// --- Calculate Option Premium High & Low for each Option Leg ---
+float ref_high = math.max(0.0, highLowSrcInput == HighLowSource.min5 ? (not na(high_5m) ? high_5m : high) : (not na(prev_day_high) ? prev_day_high : high))
+float ref_low  = math.max(0.0, highLowSrcInput == HighLowSource.min5 ? (not na(low_5m) ? low_5m : low) : (not na(prev_day_low) ? prev_day_low : low))
+
+f_calc_leg_hl(float h_spot, float l_spot, float K, bool is_ce, float base_tv) =>
+    float p_high = is_ce ? math.max(0.0, h_spot - K) + base_tv : math.max(0.0, K - l_spot) + base_tv
+    float p_low  = is_ce ? math.max(0.0, l_spot - K) + base_tv : math.max(0.0, K - h_spot) + base_tv
+    [math.max(0.0, p_high), math.max(0.0, p_low)]
+
+[atm_ce_h, atm_ce_l] = f_calc_leg_hl(ref_high, ref_low, atm_strike, true, base_tv_atm)
+[atm_pe_h, atm_pe_l] = f_calc_leg_hl(ref_high, ref_low, atm_strike, false, base_tv_atm)
+
+[itm_ce_h, itm_ce_l] = f_calc_leg_hl(ref_high, ref_low, itm_ce_strike, true, base_tv_atm)
+[itm_pe_h, itm_pe_l] = f_calc_leg_hl(ref_high, ref_low, itm_pe_strike, false, base_tv_atm)
+
+[otm_ce_h, otm_ce_l] = f_calc_leg_hl(ref_high, ref_low, otm_ce_strike, true, base_tv_atm)
+[otm_pe_h, otm_pe_l] = f_calc_leg_hl(ref_high, ref_low, otm_pe_strike, false, base_tv_atm)
+
 // Paired Average BEP levels for Signal cross evaluation
 float atm_bep_rt  = math.max(0.0, (atm_ce_premium_rt + atm_pe_premium_rt) / 2.0)
 float itm1_bep_rt = math.max(0.0, (itm_ce_premium_rt + otm_pe_premium_rt) / 2.0)
 float otm1_bep_rt = math.max(0.0, (otm_ce_premium_rt + itm_pe_premium_rt) / 2.0)
-
-// High & Low Reference Values
-float ref_high = math.max(0.0, highLowSrcInput == HighLowSource.min5 ? (not na(high_5m) ? high_5m : high) : (not na(prev_day_high) ? prev_day_high : high))
-float ref_low  = math.max(0.0, highLowSrcInput == HighLowSource.min5 ? (not na(low_5m) ? low_5m : low) : (not na(prev_day_low) ? prev_day_low : low))
 
 // ==========================================
 // CONSOLIDATED BUY / SELL SIGNAL ENGINE
@@ -315,6 +329,12 @@ plotshape(plot_signal_gate and signal_std_buy_ce,    title="Buy CE Signal",     
 
 plotshape(plot_signal_gate and signal_strong_buy_pe, title="Strong Buy PE Signal", style=shape.arrowdown, location=location.abovebar, color=#D50000, text="STRONG PE 💥", textcolor=color.white, size=size.normal)
 plotshape(plot_signal_gate and signal_std_buy_pe,    title="Buy PE Signal",        style=shape.triangledown, location=location.abovebar, color=#FF1744, text="BUY PE 🔴", textcolor=color.white, size=size.small)
+
+// Alert Conditions for TradingView Alert System
+alertcondition(signal_strong_buy_ce, title="Strong Buy CE Alert", message="TF Options: Strong Buy CE Signal Triggered on {{ticker}} at {{close}}")
+alertcondition(signal_std_buy_ce,    title="Buy CE Alert",        message="TF Options: Buy CE Signal Triggered on {{ticker}} at {{close}}")
+alertcondition(signal_strong_buy_pe, title="Strong Buy PE Alert", message="TF Options: Strong Buy PE Signal Triggered on {{ticker}} at {{close}}")
+alertcondition(signal_std_buy_pe,    title="Buy PE Alert",        message="TF Options: Buy PE Signal Triggered on {{ticker}} at {{close}}")
 
 // ==========================================
 // LAST 5 DAYS SWING PERFORMANCE TRACKER
@@ -517,15 +537,14 @@ if barstate.islast
         table.cell(summaryTbl, 5, 7, str.tostring(math.max(0.0, otm_ce_tv_rt), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 7, str.tostring(math.max(0.0, otm_pe_tv_rt), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
-        // Row 8: Option High & Low Reference (Ref H/L)
+        // Row 8: Option High & Low Reference (Ref H/L) for each Option Leg
         table.cell(summaryTbl, 0, 8, "Ref H/L", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
-        string hl_val = str.tostring(math.max(0.0, ref_high), "#.##") + " / " + str.tostring(math.max(0.0, ref_low), "#.##")
-        table.cell(summaryTbl, 1, 8, hl_val, bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 8, hl_val, bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 8, hl_val, bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 8, hl_val, bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 8, hl_val, bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 8, hl_val, bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 8, str.tostring(atm_ce_h, "#.##") + " / " + str.tostring(atm_ce_l, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 8, str.tostring(atm_pe_h, "#.##") + " / " + str.tostring(atm_pe_l, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 8, str.tostring(itm_ce_h, "#.##") + " / " + str.tostring(itm_ce_l, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 8, str.tostring(itm_pe_h, "#.##") + " / " + str.tostring(itm_pe_l, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 8, str.tostring(otm_ce_h, "#.##") + " / " + str.tostring(otm_ce_l, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 8, str.tostring(otm_pe_h, "#.##") + " / " + str.tostring(otm_pe_l, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
 
         // Row 9 & 10: Signal Status Row
         table.cell(summaryTbl, 0, 9, "--- BUY / SELL SIGNAL ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
