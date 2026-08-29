@@ -28,8 +28,6 @@ b1_neut_open_bep_src= input.source(close, "Batch 1: Neutral Open BEP (From 12A)"
 b1_pe_iv_only_src   = input.source(close, "Batch 1: PE IV Only (From 12A)",         group="Data Link: Indicator 12A (Batch 1)")
 b1_ce_iv_only_src   = input.source(close, "Batch 1: CE IV Only (From 12A)",         group="Data Link: Indicator 12A (Batch 1)")
 b1_neut_iv_src      = input.source(close, "Batch 1: Neutral IV (From 12A)",         group="Data Link: Indicator 12A (Batch 1)")
-b1_pe_iv_fmt_src    = input.source(close, "Batch 1: PE IV Just Formed (From 12A)",   group="Data Link: Indicator 12A (Batch 1)")
-b1_ce_iv_fmt_src    = input.source(close, "Batch 1: CE IV Just Formed (From 12A)",   group="Data Link: Indicator 12A (Batch 1)")
 
 // --- Inputs to Connect Plots from Indicator 12B (Batch 2: Stocks 26-50) ---
 b2_ce_real_bep_src  = input.source(close, "Batch 2: CEs Above Real BEP (From 12B)",  group="Data Link: Indicator 12B (Batch 2)")
@@ -41,8 +39,6 @@ b2_neut_open_bep_src= input.source(close, "Batch 2: Neutral Open BEP (From 12B)"
 b2_pe_iv_only_src   = input.source(close, "Batch 2: PE IV Only (From 12B)",         group="Data Link: Indicator 12B (Batch 2)")
 b2_ce_iv_only_src   = input.source(close, "Batch 2: CE IV Only (From 12B)",         group="Data Link: Indicator 12B (Batch 2)")
 b2_neut_iv_src      = input.source(close, "Batch 2: Neutral IV (From 12B)",         group="Data Link: Indicator 12B (Batch 2)")
-b2_pe_iv_fmt_src    = input.source(close, "Batch 2: PE IV Just Formed (From 12B)",   group="Data Link: Indicator 12B (Batch 2)")
-b2_ce_iv_fmt_src    = input.source(close, "Batch 2: CE IV Just Formed (From 12B)",   group="Data Link: Indicator 12B (Batch 2)")
 
 useOffHoursPrevClose = input.bool(true, "Use Previous Day Close When Market Is Closed", group="Data Source Settings",
   tooltip="When checked, automatically uses Previous Day Close price outside market hours so the table displays valid analytics 24/7.")
@@ -101,17 +97,11 @@ type StockAnalytics
     bool ce_above_open_bep
     bool pe_above_open_bep
     bool neutral_open_bep
-    bool ce_cross_above_real_bep
-    bool ce_cross_below_real_bep
-    bool pe_cross_above_real_bep
-    bool pe_cross_below_real_bep
     float ce_iv
     float pe_iv
     bool is_pe_iv_only
     bool is_ce_iv_only
     bool is_neutral_iv
-    bool pe_iv_just_formed
-    bool ce_iv_just_formed
 
 f_eval_nifty_stock_single(string root_sym, bool is_enabled) =>
     StockAnalytics res = StockAnalytics.new()
@@ -142,30 +132,15 @@ f_eval_nifty_stock_single(string root_sym, bool is_enabled) =>
             res.pe_above_open_bep := eval_spot < open_st
             res.neutral_open_bep  := (eval_spot == open_st)
             
-            float prev_spot = not na(spot_prev_close) and spot_prev_close > 0 ? spot_prev_close : eval_spot
-            float prev_atm  = f_calc_atm_strike(prev_spot)
-            
-            res.ce_cross_above_real_bep := (prev_spot <= prev_atm) and (eval_spot > atm_st)
-            res.ce_cross_below_real_bep := (prev_spot >= prev_atm) and (eval_spot < atm_st)
-            
-            res.pe_cross_above_real_bep := (prev_spot >= prev_atm) and (eval_spot < atm_st)
-            res.pe_cross_below_real_bep := (prev_spot <= prev_atm) and (eval_spot > atm_st)
-            
             res.ce_iv := math.max(0.0, eval_spot - atm_st)
             res.pe_iv := math.max(0.0, atm_st - eval_spot)
             
             res.is_pe_iv_only := (res.pe_iv > 0.0) and (res.ce_iv <= 0.0)
             res.is_ce_iv_only := (res.ce_iv > 0.0) and (res.pe_iv <= 0.0)
             res.is_neutral_iv := ((res.ce_iv > 0.0) and (res.pe_iv > 0.0)) or ((res.ce_iv <= 0.0) and (res.pe_iv <= 0.0))
-            
-            float prev_ce_iv = math.max(0.0, prev_spot - prev_atm)
-            float prev_pe_iv = math.max(0.0, prev_atm - prev_spot)
-            
-            res.pe_iv_just_formed := (res.pe_iv > 0.0) and (prev_pe_iv <= 0.0)
-            res.ce_iv_just_formed := (res.ce_iv > 0.0) and (prev_ce_iv <= 0.0)
     res
 
-// --- STANDALONE FALLBACK CALCULATIONS (20 STOCKS BATCH 1 + 20 STOCKS BATCH 2) ---
+// --- STANDALONE FALLBACK CALCULATIONS ---
 StockAnalytics b1_1  = f_eval_nifty_stock_single("RELIANCE",   true)
 StockAnalytics b1_2  = f_eval_nifty_stock_single("HDFCBANK",   true)
 StockAnalytics b1_3  = f_eval_nifty_stock_single("ICICIBANK",  true)
@@ -229,10 +204,7 @@ f_push_valid_stock(listB2, b2_10)
 
 int calc_b1_ce_real = 0, int calc_b1_pe_real = 0
 int calc_b1_ce_open = 0, int calc_b1_pe_open = 0, int calc_b1_neut_open = 0
-int calc_b1_ce_up   = 0, int calc_b1_ce_dn   = 0
-int calc_b1_pe_up   = 0, int calc_b1_pe_dn   = 0
 int calc_b1_pe_iv   = 0, int calc_b1_ce_iv   = 0, int calc_b1_neut_iv = 0
-int calc_b1_pe_fmt  = 0, int calc_b1_ce_fmt  = 0
 
 for i = 0 to array.size(listB1) - 1
     StockAnalytics item = array.get(listB1, i)
@@ -246,31 +218,16 @@ for i = 0 to array.size(listB1) - 1
         calc_b1_pe_open += 1
     if item.neutral_open_bep
         calc_b1_neut_open += 1
-    if item.ce_cross_above_real_bep
-        calc_b1_ce_up += 1
-    if item.ce_cross_below_real_bep
-        calc_b1_ce_dn += 1
-    if item.pe_cross_above_real_bep
-        calc_b1_pe_up += 1
-    if item.pe_cross_below_real_bep
-        calc_b1_pe_dn += 1
     if item.is_pe_iv_only
         calc_b1_pe_iv += 1
     if item.is_ce_iv_only
         calc_b1_ce_iv += 1
     if item.is_neutral_iv
         calc_b1_neut_iv += 1
-    if item.pe_iv_just_formed
-        calc_b1_pe_fmt += 1
-    if item.ce_iv_just_formed
-        calc_b1_ce_fmt += 1
 
 int calc_b2_ce_real = 0, int calc_b2_pe_real = 0
 int calc_b2_ce_open = 0, int calc_b2_pe_open = 0, int calc_b2_neut_open = 0
-int calc_b2_ce_up   = 0, int calc_b2_ce_dn   = 0
-int calc_b2_pe_up   = 0, int calc_b2_pe_dn   = 0
 int calc_b2_pe_iv   = 0, int calc_b2_ce_iv   = 0, int calc_b2_neut_iv = 0
-int calc_b2_pe_fmt  = 0, int calc_b2_ce_fmt  = 0
 
 for i = 0 to array.size(listB2) - 1
     StockAnalytics item = array.get(listB2, i)
@@ -284,24 +241,12 @@ for i = 0 to array.size(listB2) - 1
         calc_b2_pe_open += 1
     if item.neutral_open_bep
         calc_b2_neut_open += 1
-    if item.ce_cross_above_real_bep
-        calc_b2_ce_up += 1
-    if item.ce_cross_below_real_bep
-        calc_b2_ce_dn += 1
-    if item.pe_cross_above_real_bep
-        calc_b2_pe_up += 1
-    if item.pe_cross_below_real_bep
-        calc_b2_pe_dn += 1
     if item.is_pe_iv_only
         calc_b2_pe_iv += 1
     if item.is_ce_iv_only
         calc_b2_ce_iv += 1
     if item.is_neutral_iv
         calc_b2_neut_iv += 1
-    if item.pe_iv_just_formed
-        calc_b2_pe_fmt += 1
-    if item.ce_iv_just_formed
-        calc_b2_ce_fmt += 1
 
 // --- DYNAMIC SELECTION (Use Linked Plot Data if available, else Standalone Fallback) ---
 int b1_count_ce_real_bep = not na(b1_ce_real_bep_src) and b1_ce_real_bep_src != close ? int(b1_ce_real_bep_src) : calc_b1_ce_real
@@ -309,30 +254,18 @@ int b1_count_pe_real_bep = not na(b1_pe_real_bep_src) and b1_pe_real_bep_src != 
 int b1_count_ce_open_bep = not na(b1_ce_open_bep_src) and b1_ce_open_bep_src != close ? int(b1_ce_open_bep_src) : calc_b1_ce_open
 int b1_count_pe_open_bep = not na(b1_pe_open_bep_src) and b1_pe_open_bep_src != close ? int(b1_pe_open_bep_src) : calc_b1_pe_open
 int b1_count_neut_open_bep = not na(b1_neut_open_bep_src) and b1_neut_open_bep_src != close ? int(b1_neut_open_bep_src) : calc_b1_neut_open
-int b1_count_ce_cross_up = calc_b1_ce_up
-int b1_count_ce_cross_dn = calc_b1_ce_dn
-int b1_count_pe_cross_up = calc_b1_pe_up
-int b1_count_pe_cross_dn = calc_b1_pe_dn
 int b1_count_pe_iv_only  = not na(b1_pe_iv_only_src) and b1_pe_iv_only_src != close ? int(b1_pe_iv_only_src) : calc_b1_pe_iv
 int b1_count_ce_iv_only  = not na(b1_ce_iv_only_src) and b1_ce_iv_only_src != close ? int(b1_ce_iv_only_src) : calc_b1_ce_iv
 int b1_count_neut_iv     = not na(b1_neut_iv_src) and b1_neut_iv_src != close ? int(b1_neut_iv_src) : calc_b1_neut_iv
-int b1_count_pe_iv_fmt   = not na(b1_pe_iv_fmt_src) and b1_pe_iv_fmt_src != close ? int(b1_pe_iv_fmt_src) : calc_b1_pe_fmt
-int b1_count_ce_iv_fmt   = not na(b1_ce_iv_fmt_src) and b1_ce_iv_fmt_src != close ? int(b1_ce_iv_fmt_src) : calc_b1_ce_fmt
 
 int b2_count_ce_real_bep = not na(b2_ce_real_bep_src) and b2_ce_real_bep_src != close ? int(b2_ce_real_bep_src) : calc_b2_ce_real
 int b2_count_pe_real_bep = not na(b2_pe_real_bep_src) and b2_pe_real_bep_src != close ? int(b2_pe_real_bep_src) : calc_b2_pe_real
 int b2_count_ce_open_bep = not na(b2_ce_open_bep_src) and b2_ce_open_bep_src != close ? int(b2_ce_open_bep_src) : calc_b2_ce_open
 int b2_count_pe_open_bep = not na(b2_pe_open_bep_src) and b2_pe_open_bep_src != close ? int(b2_pe_open_bep_src) : calc_b2_pe_open
 int b2_count_neut_open_bep = not na(b2_neut_open_bep_src) and b2_neut_open_bep_src != close ? int(b2_neut_open_bep_src) : calc_b2_neut_open
-int b2_count_ce_cross_up = calc_b2_ce_up
-int b2_count_ce_cross_dn = calc_b2_ce_dn
-int b2_count_pe_cross_up = calc_b2_pe_up
-int b2_count_pe_cross_dn = calc_b2_pe_dn
 int b2_count_pe_iv_only  = not na(b2_pe_iv_only_src) and b2_pe_iv_only_src != close ? int(b2_pe_iv_only_src) : calc_b2_pe_iv
 int b2_count_ce_iv_only  = not na(b2_ce_iv_only_src) and b2_ce_iv_only_src != close ? int(b2_ce_iv_only_src) : calc_b2_ce_iv
 int b2_count_neut_iv     = not na(b2_neut_iv_src) and b2_neut_iv_src != close ? int(b2_neut_iv_src) : calc_b2_neut_iv
-int b2_count_pe_iv_fmt   = not na(b2_pe_iv_fmt_src) and b2_pe_iv_fmt_src != close ? int(b2_pe_iv_fmt_src) : calc_b2_pe_fmt
-int b2_count_ce_iv_fmt   = not na(b2_ce_iv_fmt_src) and b2_ce_iv_fmt_src != close ? int(b2_ce_iv_fmt_src) : calc_b2_ce_fmt
 
 // CONSOLIDATED TOTALS (FULL 50 NIFTY STOCKS WHEN LINKED TO 12A & 12B)
 int tot_ce_real_bep  = b1_count_ce_real_bep + b2_count_ce_real_bep
@@ -341,16 +274,9 @@ int tot_ce_open_bep  = b1_count_ce_open_bep + b2_count_ce_open_bep
 int tot_pe_open_bep  = b1_count_pe_open_bep + b2_count_pe_open_bep
 int tot_neut_open_bep= b1_count_neut_open_bep + b2_count_neut_open_bep
 
-int tot_ce_cross_up = b1_count_ce_cross_up + b2_count_ce_cross_up
-int tot_ce_cross_dn = b1_count_ce_cross_dn + b2_count_ce_cross_dn
-int tot_pe_cross_up = b1_count_pe_cross_up + b2_count_pe_cross_up
-int tot_pe_cross_dn = b1_count_pe_cross_dn + b2_count_pe_cross_dn
-
 int tot_pe_iv_only  = b1_count_pe_iv_only + b2_count_pe_iv_only
 int tot_ce_iv_only  = b1_count_ce_iv_only + b2_count_ce_iv_only
 int tot_neut_iv     = b1_count_neut_iv + b2_count_neut_iv
-int tot_pe_iv_fmt   = b1_count_pe_iv_fmt + b2_count_pe_iv_fmt
-int tot_ce_iv_fmt   = b1_count_ce_iv_fmt + b2_count_ce_iv_fmt
 
 // ==========================================
 // RENDER CONSOLIDATED MASTER DASHBOARD TABLE
@@ -371,7 +297,7 @@ f_get_table_text_size(TableSize sz) =>
         TableSize.normal => size.normal
         TableSize.large  => size.large
 
-var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 15, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 11, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
 if barstate.islast
@@ -417,45 +343,24 @@ if barstate.islast
         table.cell(summaryTbl, 2, 6, str.tostring(b2_count_neut_open_bep), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
         table.cell(summaryTbl, 3, 6, str.tostring(tot_neut_open_bep), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
         
-        // Crossovers
-        table.cell(summaryTbl, 0, 7, "CE Just Crossed Realtime BEP", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 7, "+" + str.tostring(b1_count_ce_cross_up) + " / -" + str.tostring(b1_count_ce_cross_dn), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 7, "+" + str.tostring(b2_count_ce_cross_up) + " / -" + str.tostring(b2_count_ce_cross_dn), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 7, "+" + str.tostring(tot_ce_cross_up) + " / -" + str.tostring(tot_ce_cross_dn), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        
-        table.cell(summaryTbl, 0, 8, "PE Just Crossed Realtime BEP", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 8, "+" + str.tostring(b1_count_pe_cross_up) + " / -" + str.tostring(b1_count_pe_cross_dn), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 8, "+" + str.tostring(b2_count_pe_cross_up) + " / -" + str.tostring(b2_count_pe_cross_dn), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 8, "+" + str.tostring(tot_pe_cross_up) + " / -" + str.tostring(tot_pe_cross_dn), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        
         // IV Banner
-        table.cell(summaryTbl, 0, 9, "--- REALTIME INTRINSIC VALUE (IV) ANALYTICS ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 9, "", bgcolor=colorSectionBg)
-        table.cell(summaryTbl, 2, 9, "", bgcolor=colorSectionBg)
-        table.cell(summaryTbl, 3, 9, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 0, 7, "--- REALTIME INTRINSIC VALUE (IV) ANALYTICS ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 7, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 2, 7, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 3, 7, "", bgcolor=colorSectionBg)
         
         // IV Segregation
-        table.cell(summaryTbl, 0, 10, "PE IV Only (PE IV > 0)", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 10, str.tostring(b1_count_pe_iv_only), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 10, str.tostring(b2_count_pe_iv_only), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 10, str.tostring(tot_pe_iv_only), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(summaryTbl, 0, 8, "PE IV Only (PE IV > 0)", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 8, str.tostring(b1_count_pe_iv_only), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 8, str.tostring(b2_count_pe_iv_only), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 8, str.tostring(tot_pe_iv_only), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
         
-        table.cell(summaryTbl, 0, 11, "CE IV Only (CE IV > 0)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 11, str.tostring(b1_count_ce_iv_only), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 11, str.tostring(b2_count_ce_iv_only), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 11, str.tostring(tot_ce_iv_only), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(summaryTbl, 0, 9, "CE IV Only (CE IV > 0)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 9, str.tostring(b1_count_ce_iv_only), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 9, str.tostring(b2_count_ce_iv_only), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 9, str.tostring(tot_ce_iv_only), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
         
-        table.cell(summaryTbl, 0, 12, "Neutral IV (Both IVs Exist or Zero)", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 12, str.tostring(b1_count_neut_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 12, str.tostring(b2_count_neut_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 12, str.tostring(tot_neut_iv), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        
-        table.cell(summaryTbl, 0, 13, "PE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 13, str.tostring(b1_count_pe_iv_fmt), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 13, str.tostring(b2_count_pe_iv_fmt), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 13, str.tostring(tot_pe_iv_fmt), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        
-        table.cell(summaryTbl, 0, 14, "CE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 14, str.tostring(b1_count_ce_iv_fmt), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 14, str.tostring(b2_count_ce_iv_fmt), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 14, str.tostring(tot_ce_iv_fmt), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(summaryTbl, 0, 10, "Neutral IV (Both IVs Exist or Zero)", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 10, str.tostring(b1_count_neut_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 10, str.tostring(b2_count_neut_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 10, str.tostring(tot_neut_iv), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)

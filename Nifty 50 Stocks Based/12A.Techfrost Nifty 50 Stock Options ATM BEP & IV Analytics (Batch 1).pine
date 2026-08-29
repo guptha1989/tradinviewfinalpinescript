@@ -33,7 +33,6 @@ colorSectionBg     = input.color(#263238, "Section Banner Background", group="St
 colorCEColor       = input.color(#00E676, "CE / Bullish Accent Color", group="Styling & Colors")
 colorPEColor       = input.color(#FF1744, "PE / Bearish Accent Color", group="Styling & Colors")
 colorNeutralColor  = input.color(#FFD600, "Neutral Accent Color", group="Styling & Colors")
-colorCrossColor    = input.color(#00B0FF, "Crossover / Formation Highlight Color", group="Styling & Colors")
 
 // ==========================================
 // HELPER FUNCTIONS & STRIKE AUTO-DETECTION
@@ -77,17 +76,11 @@ type StockAnalytics
     bool ce_above_open_bep
     bool pe_above_open_bep
     bool neutral_open_bep
-    bool ce_cross_above_real_bep
-    bool ce_cross_below_real_bep
-    bool pe_cross_above_real_bep
-    bool pe_cross_below_real_bep
     float ce_iv
     float pe_iv
     bool is_pe_iv_only
     bool is_ce_iv_only
     bool is_neutral_iv
-    bool pe_iv_just_formed
-    bool ce_iv_just_formed
 
 // Single-Security Request Stock Evaluation Function (1 Security Call = 1 Stock)
 f_eval_nifty_stock_single(string root_sym, bool is_enabled) =>
@@ -119,27 +112,12 @@ f_eval_nifty_stock_single(string root_sym, bool is_enabled) =>
             res.pe_above_open_bep := eval_spot < open_st
             res.neutral_open_bep  := (eval_spot == open_st)
             
-            float prev_spot = not na(spot_prev_close) and spot_prev_close > 0 ? spot_prev_close : eval_spot
-            float prev_atm  = f_calc_atm_strike(prev_spot)
-            
-            res.ce_cross_above_real_bep := (prev_spot <= prev_atm) and (eval_spot > atm_st)
-            res.ce_cross_below_real_bep := (prev_spot >= prev_atm) and (eval_spot < atm_st)
-            
-            res.pe_cross_above_real_bep := (prev_spot >= prev_atm) and (eval_spot < atm_st)
-            res.pe_cross_below_real_bep := (prev_spot <= prev_atm) and (eval_spot > atm_st)
-            
             res.ce_iv := math.max(0.0, eval_spot - atm_st)
             res.pe_iv := math.max(0.0, atm_st - eval_spot)
             
             res.is_pe_iv_only := (res.pe_iv > 0.0) and (res.ce_iv <= 0.0)
             res.is_ce_iv_only := (res.ce_iv > 0.0) and (res.pe_iv <= 0.0)
             res.is_neutral_iv := ((res.ce_iv > 0.0) and (res.pe_iv > 0.0)) or ((res.ce_iv <= 0.0) and (res.pe_iv <= 0.0))
-            
-            float prev_ce_iv = math.max(0.0, prev_spot - prev_atm)
-            float prev_pe_iv = math.max(0.0, prev_atm - prev_spot)
-            
-            res.pe_iv_just_formed := (res.pe_iv > 0.0) and (prev_pe_iv <= 0.0)
-            res.ce_iv_just_formed := (res.ce_iv > 0.0) and (prev_ce_iv <= 0.0)
     res
 
 // ==========================================
@@ -217,16 +195,9 @@ int count_ce_above_open_bep = 0
 int count_pe_above_open_bep = 0
 int count_neutral_open_bep  = 0
 
-int count_ce_cross_above_real_bep = 0
-int count_ce_cross_below_real_bep = 0
-int count_pe_cross_above_real_bep = 0
-int count_pe_cross_below_real_bep = 0
-
 int count_pe_iv_only     = 0
 int count_ce_iv_only     = 0
 int count_neutral_iv     = 0
-int count_pe_iv_just_fmt = 0
-int count_ce_iv_just_fmt = 0
 
 string evaluatedSymbolsList = ""
 
@@ -247,26 +218,12 @@ if count_total_stocks > 0
         if item.neutral_open_bep
             count_neutral_open_bep  += 1
         
-        if item.ce_cross_above_real_bep
-            count_ce_cross_above_real_bep += 1
-        if item.ce_cross_below_real_bep
-            count_ce_cross_below_real_bep += 1
-        if item.pe_cross_above_real_bep
-            count_pe_cross_above_real_bep += 1
-        if item.pe_cross_below_real_bep
-            count_pe_cross_below_real_bep += 1
-        
         if item.is_pe_iv_only
             count_pe_iv_only += 1
         if item.is_ce_iv_only
             count_ce_iv_only += 1
         if item.is_neutral_iv
             count_neutral_iv += 1
-        
-        if item.pe_iv_just_formed
-            count_pe_iv_just_fmt += 1
-        if item.ce_iv_just_formed
-            count_ce_iv_just_fmt += 1
 
 // --- PLOTS FOR CONSOLIDATED SCRIPT ---
 plot(count_ce_above_real_bep, "B1_CE_RealBEP", display=display.none)
@@ -274,15 +231,9 @@ plot(count_pe_above_real_bep, "B1_PE_RealBEP", display=display.none)
 plot(count_ce_above_open_bep, "B1_CE_OpenBEP", display=display.none)
 plot(count_pe_above_open_bep, "B1_PE_OpenBEP", display=display.none)
 plot(count_neutral_open_bep,  "B1_Neut_OpenBEP", display=display.none)
-plot(count_ce_cross_above_real_bep, "B1_CE_CrossUp", display=display.none)
-plot(count_ce_cross_below_real_bep, "B1_CE_CrossDn", display=display.none)
-plot(count_pe_cross_above_real_bep, "B1_PE_CrossUp", display=display.none)
-plot(count_pe_cross_below_real_bep, "B1_PE_CrossDn", display=display.none)
 plot(count_pe_iv_only,     "B1_PE_IV_Only", display=display.none)
 plot(count_ce_iv_only,     "B1_CE_IV_Only", display=display.none)
 plot(count_neutral_iv,     "B1_Neut_IV", display=display.none)
-plot(count_pe_iv_just_fmt, "B1_PE_IV_JustFmt", display=display.none)
-plot(count_ce_iv_just_fmt, "B1_CE_IV_JustFmt", display=display.none)
 
 // ==========================================
 // RENDER BATCH 1 DASHBOARD TABLE
@@ -303,7 +254,7 @@ f_get_table_text_size(TableSize sz) =>
         TableSize.normal => size.normal
         TableSize.large  => size.large
 
-var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 12, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 10, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
 if barstate.islast
@@ -335,38 +286,28 @@ if barstate.islast
         table.cell(summaryTbl, 2, 4, "", bgcolor=color.black)
         table.cell(summaryTbl, 3, 4, "", bgcolor=color.black)
         
-        table.cell(summaryTbl, 0, 5, "CE Just Crossed Realtime BEP", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 5, "+" + str.tostring(count_ce_cross_above_real_bep) + " Above / -" + str.tostring(count_ce_cross_below_real_bep) + " Below", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 5, "PE Just Crossed Realtime BEP", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 5, "+" + str.tostring(count_pe_cross_above_real_bep) + " Above / -" + str.tostring(count_pe_cross_below_real_bep) + " Below", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
+        table.cell(summaryTbl, 0, 5, "--- REALTIME INTRINSIC VALUE (IV) ANALYTICS ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 5, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 2, 5, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 3, 5, "", bgcolor=colorSectionBg)
         
-        table.cell(summaryTbl, 0, 6, "--- REALTIME INTRINSIC VALUE (IV) ANALYTICS ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 6, "", bgcolor=colorSectionBg)
-        table.cell(summaryTbl, 2, 6, "", bgcolor=colorSectionBg)
-        table.cell(summaryTbl, 3, 6, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 0, 6, "PE IV Only (PE IV > 0)", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 6, str.tostring(count_pe_iv_only), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 6, "CE IV Only (CE IV > 0)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 6, str.tostring(count_ce_iv_only), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         
-        table.cell(summaryTbl, 0, 7, "PE IV Only (PE IV > 0)", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 7, str.tostring(count_pe_iv_only), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 7, "CE IV Only (CE IV > 0)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 7, str.tostring(count_ce_iv_only), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        
-        table.cell(summaryTbl, 0, 8, "Neutral IV (Both IVs Exist or Zero)", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 8, str.tostring(count_neutral_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 8, "", bgcolor=color.black)
-        table.cell(summaryTbl, 3, 8, "", bgcolor=color.black)
-        
-        table.cell(summaryTbl, 0, 9, "PE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 9, str.tostring(count_pe_iv_just_fmt), bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 9, "CE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 9, str.tostring(count_ce_iv_just_fmt), bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
+        table.cell(summaryTbl, 0, 7, "Neutral IV (Both IVs Exist or Zero)", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 7, str.tostring(count_neutral_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 7, "", bgcolor=color.black)
+        table.cell(summaryTbl, 3, 7, "", bgcolor=color.black)
 
         if showStockListRow
-            table.cell(summaryTbl, 0, 10, "--- EVALUATED BATCH 1 STOCKS LIST (" + str.tostring(count_total_stocks) + " STOCKS) ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
-            table.cell(summaryTbl, 1, 10, "", bgcolor=colorSectionBg)
-            table.cell(summaryTbl, 2, 10, "", bgcolor=colorSectionBg)
-            table.cell(summaryTbl, 3, 10, "", bgcolor=colorSectionBg)
+            table.cell(summaryTbl, 0, 8, "--- EVALUATED BATCH 1 STOCKS LIST (" + str.tostring(count_total_stocks) + " STOCKS) ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTbl, 1, 8, "", bgcolor=colorSectionBg)
+            table.cell(summaryTbl, 2, 8, "", bgcolor=colorSectionBg)
+            table.cell(summaryTbl, 3, 8, "", bgcolor=colorSectionBg)
             
-            table.cell(summaryTbl, 0, 11, evaluatedSymbolsList, bgcolor=color.black, text_color=color.silver, text_size=size.tiny)
-            table.cell(summaryTbl, 1, 11, "", bgcolor=color.black)
-            table.cell(summaryTbl, 2, 11, "", bgcolor=color.black)
-            table.cell(summaryTbl, 3, 11, "", bgcolor=color.black)
+            table.cell(summaryTbl, 0, 9, evaluatedSymbolsList, bgcolor=color.black, text_color=color.silver, text_size=size.tiny)
+            table.cell(summaryTbl, 1, 9, "", bgcolor=color.black)
+            table.cell(summaryTbl, 2, 9, "", bgcolor=color.black)
+            table.cell(summaryTbl, 3, 9, "", bgcolor=color.black)
