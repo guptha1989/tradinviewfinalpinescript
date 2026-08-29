@@ -223,18 +223,17 @@ f_build_option_symbol(float target_strike, bool target_is_ce) =>
 // TARGET STRIKE SELECTION & CANDLE OVERLAYS
 // ==========================================
 
-float rawOffsetPts = strikeOffsetPtsInput > 0 ? strikeOffsetPtsInput : (switch offsetChoiceInput
-    "5 Points"   => 5.0
-    "10 Points"  => 10.0
-    "15 Points"  => 15.0
-    "20 Points"  => 20.0
-    "25 Points"  => 25.0
-    "40 Points"  => 40.0
-    "50 Points"  => 50.0
-    "100 Points" => 100.0
-    "150 Points" => 150.0
-    "200 Points" => 200.0
-    => 100.0)
+float rawOffsetPts = strikeOffsetPtsInput > 0 ? strikeOffsetPtsInput : (
+     offsetChoiceInput == "5 Points"   ? 5.0 :
+     offsetChoiceInput == "10 Points"  ? 10.0 :
+     offsetChoiceInput == "15 Points"  ? 15.0 :
+     offsetChoiceInput == "20 Points"  ? 20.0 :
+     offsetChoiceInput == "25 Points"  ? 25.0 :
+     offsetChoiceInput == "40 Points"  ? 40.0 :
+     offsetChoiceInput == "50 Points"  ? 50.0 :
+     offsetChoiceInput == "100 Points" ? 100.0 :
+     offsetChoiceInput == "150 Points" ? 150.0 :
+     offsetChoiceInput == "200 Points" ? 200.0 : 100.0)
 
 float offsetPts = (strikeModeInput == StrikeMode.atm) ? 0.0 : rawOffsetPts
 float base_strike = chartStrikePrice
