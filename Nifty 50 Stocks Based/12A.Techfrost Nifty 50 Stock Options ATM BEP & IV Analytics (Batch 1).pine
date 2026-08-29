@@ -1,5 +1,5 @@
 //@version=6
-indicator("Techfrost Nifty 50 Stock Options ATM BEP & IV Analytics (Batch 1)", shorttitle="TF Nifty50 BEP-IV B1", overlay=true, precision=2)
+indicator("12A.Techfrost Nifty 50 Stock Options ATM BEP & IV Analytics (Batch 1)", overlay=true, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
