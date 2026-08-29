@@ -148,9 +148,14 @@ if session.isfirstbar and timeframe.isintraday and not is_option_chart
 if na(day_open_spot) or (is_option_chart and day_open_spot < 100.0)
     day_open_spot := fetched_day_open
 
-// Previous Day Close for Spot
+// Previous Day Close, High, Low for Spot
 float fetched_prev_close = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "D", close[1], ignore_invalid_symbol=true)
+float fetched_prev_high  = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "D", high[1],  ignore_invalid_symbol=true)
+float fetched_prev_low   = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "D", low[1],   ignore_invalid_symbol=true)
+
 float prev_day_close = fetched_prev_close
+float prev_day_high  = fetched_prev_high
+float prev_day_low   = fetched_prev_low
 
 if useOffHoursPrevClose and (na(eval_spot) or eval_spot < 10.0 or not barstate.isrealtime)
     if not na(prev_day_close) and prev_day_close > 10.0
