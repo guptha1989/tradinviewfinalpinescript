@@ -18,6 +18,15 @@ enum TableSize
     normal = "Normal"
     large  = "Large"
 
+enum BasketPreset
+    top10  = "Top 10 Nifty Heavyweights (RELIANCE, TCS, INFY, HDFCBANK...)"
+    top12  = "Top 12 Nifty Stocks (Heavyweights + AXISBANK, TATAMOTORS)"
+    custom = "Custom Stock Selection (Max 12 Active Stocks)"
+
+// --- Basket Selection ---
+basketPresetInput  = input.enum(BasketPreset.top10, "Stock Basket Selection Mode", group="Nifty 50 Stock Basket Selection",
+  tooltip="TradingView limits security requests to 40 calls per script. Select Top 10 / 12 or Custom (Max 12 stocks evaluated simultaneously).")
+
 // --- Display & Controls ---
 showSummaryTable   = input.bool(true, "Show Dashboard Summary Table", group="Display Controls")
 showStockBreakdown = input.bool(true, "Show Individual Stock Breakdown Table", group="Display Controls")
@@ -32,27 +41,21 @@ colorPEColor       = input.color(#FF1744, "PE / Bearish Accent Color", group="St
 colorNeutralColor  = input.color(#FFD600, "Neutral Accent Color", group="Styling & Colors")
 colorCrossColor    = input.color(#00B0FF, "Crossover / Formation Highlight Color", group="Styling & Colors")
 
-// --- Stock Basket Selection (Top Liquid Nifty 50 Stocks) ---
-enable_RELIANCE   = input.bool(true, "RELIANCE", group="Nifty 50 Stock Basket Selection")
-enable_TCS        = input.bool(true, "TCS", group="Nifty 50 Stock Basket Selection")
-enable_INFY       = input.bool(true, "INFY", group="Nifty 50 Stock Basket Selection")
-enable_HDFCBANK   = input.bool(true, "HDFCBANK", group="Nifty 50 Stock Basket Selection")
-enable_ICICIBANK  = input.bool(true, "ICICIBANK", group="Nifty 50 Stock Basket Selection")
-enable_SBIN       = input.bool(true, "SBIN", group="Nifty 50 Stock Basket Selection")
-enable_BHARTIARTL = input.bool(true, "BHARTIARTL", group="Nifty 50 Stock Basket Selection")
-enable_ITC        = input.bool(true, "ITC", group="Nifty 50 Stock Basket Selection")
-enable_KOTAKBANK  = input.bool(true, "KOTAKBANK", group="Nifty 50 Stock Basket Selection")
-enable_LT         = input.bool(true, "LT", group="Nifty 50 Stock Basket Selection")
-enable_AXISBANK   = input.bool(true, "AXISBANK", group="Nifty 50 Stock Basket Selection")
-enable_TATAMOTORS = input.bool(true, "TATAMOTORS", group="Nifty 50 Stock Basket Selection")
-enable_MARUTI     = input.bool(true, "MARUTI", group="Nifty 50 Stock Basket Selection")
-enable_SUNPHARMA  = input.bool(true, "SUNPHARMA", group="Nifty 50 Stock Basket Selection")
-enable_ASIANPAINT = input.bool(true, "ASIANPAINT", group="Nifty 50 Stock Basket Selection")
-enable_TITAN      = input.bool(true, "TITAN", group="Nifty 50 Stock Basket Selection")
-enable_BAJFINANCE = input.bool(true, "BAJFINANCE", group="Nifty 50 Stock Basket Selection")
-enable_HINDUNILVR = input.bool(true, "HINDUNILVR", group="Nifty 50 Stock Basket Selection")
-enable_TATASTEEL  = input.bool(true, "TATASTEEL", group="Nifty 50 Stock Basket Selection")
-enable_NTPC       = input.bool(true, "NTPC", group="Nifty 50 Stock Basket Selection")
+// --- Custom Stock Selection Toggles (Used when Mode = Custom) ---
+enable_RELIANCE   = input.bool(true,  "RELIANCE",   group="Custom Stock Selection (Max 12 Active)")
+enable_TCS        = input.bool(true,  "TCS",        group="Custom Stock Selection (Max 12 Active)")
+enable_INFY       = input.bool(true,  "INFY",       group="Custom Stock Selection (Max 12 Active)")
+enable_HDFCBANK   = input.bool(true,  "HDFCBANK",   group="Custom Stock Selection (Max 12 Active)")
+enable_ICICIBANK  = input.bool(true,  "ICICIBANK",  group="Custom Stock Selection (Max 12 Active)")
+enable_SBIN       = input.bool(true,  "SBIN",       group="Custom Stock Selection (Max 12 Active)")
+enable_BHARTIARTL = input.bool(true,  "BHARTIARTL", group="Custom Stock Selection (Max 12 Active)")
+enable_ITC        = input.bool(true,  "ITC",        group="Custom Stock Selection (Max 12 Active)")
+enable_KOTAKBANK  = input.bool(true,  "KOTAKBANK",  group="Custom Stock Selection (Max 12 Active)")
+enable_LT         = input.bool(true,  "LT",         group="Custom Stock Selection (Max 12 Active)")
+enable_AXISBANK   = input.bool(false, "AXISBANK",   group="Custom Stock Selection (Max 12 Active)")
+enable_TATAMOTORS = input.bool(false, "TATAMOTORS", group="Custom Stock Selection (Max 12 Active)")
+enable_MARUTI     = input.bool(false, "MARUTI",     group="Custom Stock Selection (Max 12 Active)")
+enable_SUNPHARMA  = input.bool(false, "SUNPHARMA",  group="Custom Stock Selection (Max 12 Active)")
 
 // ==========================================
 // HELPER FUNCTIONS & STRIKE AUTO-DETECTION
@@ -184,72 +187,50 @@ f_eval_stock(string root_sym, bool is_enabled) =>
     res
 
 // ==========================================
-// EVALUATE ALL NIFTY 50 STOCKS IN BASKET
+// PRESET VS CUSTOM BASKET SELECTION (MAX 12 STOCKS = 36 CALLS <= 40)
 // ==========================================
 
-StockAnalytics s_RELIANCE   = f_eval_stock("RELIANCE",   enable_RELIANCE)
-StockAnalytics s_TCS        = f_eval_stock("TCS",        enable_TCS)
-StockAnalytics s_INFY       = f_eval_stock("INFY",       enable_INFY)
-StockAnalytics s_HDFCBANK   = f_eval_stock("HDFCBANK",   enable_HDFCBANK)
-StockAnalytics s_ICICIBANK  = f_eval_stock("ICICIBANK",  enable_ICICIBANK)
-StockAnalytics s_SBIN       = f_eval_stock("SBIN",       enable_SBIN)
-StockAnalytics s_BHARTIARTL = f_eval_stock("BHARTIARTL", enable_BHARTIARTL)
-StockAnalytics s_ITC        = f_eval_stock("ITC",        enable_ITC)
-StockAnalytics s_KOTAKBANK  = f_eval_stock("KOTAKBANK",  enable_KOTAKBANK)
-StockAnalytics s_LT         = f_eval_stock("LT",         enable_LT)
-StockAnalytics s_AXISBANK   = f_eval_stock("AXISBANK",   enable_AXISBANK)
-StockAnalytics s_TATAMOTORS = f_eval_stock("TATAMOTORS", enable_TATAMOTORS)
-StockAnalytics s_MARUTI     = f_eval_stock("MARUTI",     enable_MARUTI)
-StockAnalytics s_SUNPHARMA  = f_eval_stock("SUNPHARMA",  enable_SUNPHARMA)
-StockAnalytics s_ASIANPAINT = f_eval_stock("ASIANPAINT", enable_ASIANPAINT)
-StockAnalytics s_TITAN      = f_eval_stock("TITAN",      enable_TITAN)
-StockAnalytics s_BAJFINANCE = f_eval_stock("BAJFINANCE", enable_BAJFINANCE)
-StockAnalytics s_HINDUNILVR = f_eval_stock("HINDUNILVR", enable_HINDUNILVR)
-StockAnalytics s_TATASTEEL  = f_eval_stock("TATASTEEL",  enable_TATASTEEL)
-StockAnalytics s_NTPC       = f_eval_stock("NTPC",       enable_NTPC)
+bool use_RELIANCE   = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_RELIANCE
+bool use_TCS        = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_TCS
+bool use_INFY       = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_INFY
+bool use_HDFCBANK   = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_HDFCBANK
+bool use_ICICIBANK  = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_ICICIBANK
+bool use_SBIN       = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_SBIN
+bool use_BHARTIARTL = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_BHARTIARTL
+bool use_ITC        = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_ITC
+bool use_KOTAKBANK  = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_KOTAKBANK
+bool use_LT         = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_LT
+bool use_AXISBANK   = (basketPresetInput == BasketPreset.top12) ? true : (basketPresetInput == BasketPreset.custom ? enable_AXISBANK : false)
+bool use_TATAMOTORS = (basketPresetInput == BasketPreset.top12) ? true : (basketPresetInput == BasketPreset.custom ? enable_TATAMOTORS : false)
 
-// Array of all Stock Analytics Objects
+// Evaluate exactly up to 12 stocks (12 * 3 = 36 security calls, perfectly <= 40 limit)
+StockAnalytics s_RELIANCE   = f_eval_stock("RELIANCE",   use_RELIANCE)
+StockAnalytics s_TCS        = f_eval_stock("TCS",        use_TCS)
+StockAnalytics s_INFY       = f_eval_stock("INFY",       use_INFY)
+StockAnalytics s_HDFCBANK   = f_eval_stock("HDFCBANK",   use_HDFCBANK)
+StockAnalytics s_ICICIBANK  = f_eval_stock("ICICIBANK",  use_ICICIBANK)
+StockAnalytics s_SBIN       = f_eval_stock("SBIN",       use_SBIN)
+StockAnalytics s_BHARTIARTL = f_eval_stock("BHARTIARTL", use_BHARTIARTL)
+StockAnalytics s_ITC        = f_eval_stock("ITC",        use_ITC)
+StockAnalytics s_KOTAKBANK  = f_eval_stock("KOTAKBANK",  use_KOTAKBANK)
+StockAnalytics s_LT         = f_eval_stock("LT",         use_LT)
+StockAnalytics s_AXISBANK   = f_eval_stock("AXISBANK",   use_AXISBANK)
+StockAnalytics s_TATAMOTORS = f_eval_stock("TATAMOTORS", use_TATAMOTORS)
+
+// Array of evaluated Stock Analytics Objects
 array<StockAnalytics> stockList = array.new<StockAnalytics>()
-if enable_RELIANCE
-    array.push(stockList, s_RELIANCE)
-if enable_TCS
-    array.push(stockList, s_TCS)
-if enable_INFY
-    array.push(stockList, s_INFY)
-if enable_HDFCBANK
-    array.push(stockList, s_HDFCBANK)
-if enable_ICICIBANK
-    array.push(stockList, s_ICICIBANK)
-if enable_SBIN
-    array.push(stockList, s_SBIN)
-if enable_BHARTIARTL
-    array.push(stockList, s_BHARTIARTL)
-if enable_ITC
-    array.push(stockList, s_ITC)
-if enable_KOTAKBANK
-    array.push(stockList, s_KOTAKBANK)
-if enable_LT
-    array.push(stockList, s_LT)
-if enable_AXISBANK
-    array.push(stockList, s_AXISBANK)
-if enable_TATAMOTORS
-    array.push(stockList, s_TATAMOTORS)
-if enable_MARUTI
-    array.push(stockList, s_MARUTI)
-if enable_SUNPHARMA
-    array.push(stockList, s_SUNPHARMA)
-if enable_ASIANPAINT
-    array.push(stockList, s_ASIANPAINT)
-if enable_TITAN
-    array.push(stockList, s_TITAN)
-if enable_BAJFINANCE
-    array.push(stockList, s_BAJFINANCE)
-if enable_HINDUNILVR
-    array.push(stockList, s_HINDUNILVR)
-if enable_TATASTEEL
-    array.push(stockList, s_TATASTEEL)
-if enable_NTPC
-    array.push(stockList, s_NTPC)
+if use_RELIANCE   => array.push(stockList, s_RELIANCE)
+if use_TCS        => array.push(stockList, s_TCS)
+if use_INFY       => array.push(stockList, s_INFY)
+if use_HDFCBANK   => array.push(stockList, s_HDFCBANK)
+if use_ICICIBANK  => array.push(stockList, s_ICICIBANK)
+if use_SBIN       => array.push(stockList, s_SBIN)
+if use_BHARTIARTL => array.push(stockList, s_BHARTIARTL)
+if use_ITC        => array.push(stockList, s_ITC)
+if use_KOTAKBANK  => array.push(stockList, s_KOTAKBANK)
+if use_LT         => array.push(stockList, s_LT)
+if use_AXISBANK   => array.push(stockList, s_AXISBANK)
+if use_TATAMOTORS => array.push(stockList, s_TATAMOTORS)
 
 // ==========================================
 // AGGREGATE SUMMARY COUNTS ACROSS ALL STOCKS
@@ -331,7 +312,7 @@ f_get_table_text_size(TableSize sz) =>
         TableSize.normal => size.normal
         TableSize.large  => size.large
 
-var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 16, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 18, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
@@ -341,7 +322,7 @@ if barstate.islast
     else
         // Row 0: Title Banner
         table.cell(summaryTbl, 0, 0, "Nifty 50 ATM Stock Options Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 0, "Active Stocks: " + str.tostring(count_total_stocks), bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 0, "Active Stocks: " + str.tostring(count_total_stocks) + " / 12", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
         table.cell(summaryTbl, 2, 0, "", bgcolor=colorHeaderBg)
         table.cell(summaryTbl, 3, 0, "", bgcolor=colorHeaderBg)
         
@@ -413,7 +394,7 @@ if barstate.islast
             table.cell(summaryTbl, 2, 11, "BEP Status / Cross", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
             table.cell(summaryTbl, 3, 11, "IV Segregation / Just Formed", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
             
-            for k = 0 to math.min(count_total_stocks - 1, 3)
+            for k = 0 to math.min(count_total_stocks - 1, 5)
                 StockAnalytics item = array.get(stockList, k)
                 int r = 12 + k
                 
