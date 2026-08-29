@@ -309,6 +309,28 @@ int tot_ce_iv_only  = b1_count_ce_iv_only + b2_count_ce_iv_only
 int tot_neut_iv     = b1_count_neut_iv + b2_count_neut_iv
 
 // ==========================================
+// CONSOLIDATED BUY / SELL SIGNAL CALCULATION
+// ==========================================
+// 1. Buy CE: CE count > PE count in Realtime BEP AND CE count > PE count in Day Open BEP AND CE IV Only > PE IV Only
+// 2. Buy PE: PE count > CE count in Realtime BEP AND PE count > CE count in Day Open BEP AND PE IV Only > CE IV Only
+
+bool is_buy_ce = (tot_ce_real_bep > tot_pe_real_bep) and (tot_ce_open_bep > tot_pe_open_bep) and (tot_ce_iv_only > tot_pe_iv_only)
+bool is_buy_pe = (tot_pe_real_bep > tot_ce_real_bep) and (tot_pe_open_bep > tot_ce_open_bep) and (tot_pe_iv_only > tot_ce_iv_only)
+
+string signalText    = "NEUTRAL / WAIT 🟡"
+color  signalBg      = color.black
+color  signalTxtColor= colorNeutralColor
+
+if is_buy_ce
+    signalText    := "BUY CE (BULLISH SIGNAL) 🟢"
+    signalBg      := #00C853
+    signalTxtColor:= color.white
+else if is_buy_pe
+    signalText    := "BUY PE (BEARISH SIGNAL) 🔴"
+    signalBg      := #D50000
+    signalTxtColor:= color.white
+
+// ==========================================
 // RENDER CONSOLIDATED MASTER DASHBOARD TABLE
 // ==========================================
 
@@ -327,7 +349,7 @@ f_get_table_text_size(TableSize sz) =>
         TableSize.normal => size.normal
         TableSize.large  => size.large
 
-var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 11, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 13, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
 if barstate.islast
@@ -394,3 +416,14 @@ if barstate.islast
         table.cell(summaryTbl, 1, 10, str.tostring(b1_count_neut_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 10, str.tostring(b2_count_neut_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
         table.cell(summaryTbl, 3, 10, str.tostring(tot_neut_iv), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+
+        // SIGNAL TAB AT BOTTOM (Rows 11 & 12)
+        table.cell(summaryTbl, 0, 11, "--- CONSOLIDATED BUY / SELL SIGNAL ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 11, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 2, 11, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 3, 11, "", bgcolor=colorSectionBg)
+        
+        table.cell(summaryTbl, 0, 12, "Consolidated Signal Status", bgcolor=color.black, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 12, signalText, bgcolor=signalBg, text_color=signalTxtColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 12, "", bgcolor=signalBg)
+        table.cell(summaryTbl, 3, 12, "", bgcolor=signalBg)
