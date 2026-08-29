@@ -679,7 +679,7 @@ if showITMOTMTableInput and barstate.islast
            
     basisTag = staticBasisInput == StaticBasis.prevClose ? "Prev Close" : (staticBasisInput == StaticBasis.first5Min ? "First 5m Close" : "Day Open")
 
-    itmotmTable := table.new(itmotm_pos, 5, 5, border_width=1, border_color=color.gray)
+    itmotmTable := table.new(itmotm_pos, 5, 3, border_width=1, border_color=color.gray)
 
     // Header Row 0
     table.cell(itmotmTable, 0, 0, "ITM & OTM Static Analytics (Offset: " + str.tostring(rawOffsetPts, "#") + " pts)", bgcolor=#1A237E, text_color=color.white, text_size=t_sz)
@@ -699,11 +699,6 @@ if showITMOTMTableInput and barstate.islast
     bool ce_otm_above_tv = ce_otm_ltp >= ce_otm_tv_d0
     bool pe_otm_above_tv = pe_otm_ltp >= pe_otm_tv_d0
 
-    bool ce_itm_above_ref = ce_itm_ltp >= ce_itm_r0
-    bool pe_itm_above_ref = pe_itm_ltp >= pe_itm_r0
-    bool ce_otm_above_ref = ce_otm_ltp >= ce_otm_r0
-    bool pe_otm_above_ref = pe_otm_ltp >= pe_otm_r0
-
     // Row 1: Static Intrinsic Value (with Realtime Premium Above / Below Suffix)
     table.cell(itmotmTable, 0, 1, "Static Intrinsic (" + basisTag + ")", bgcolor=#263238, text_color=color.white, text_size=t_sz)
     table.cell(itmotmTable, 1, 1, str.tostring(ce_itm_iv_d0, "#.##") + " (" + (ce_itm_above_iv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=ce_itm_above_iv ? #00E676 : #FF1744, text_size=t_sz)
@@ -717,17 +712,3 @@ if showITMOTMTableInput and barstate.islast
     table.cell(itmotmTable, 2, 2, str.tostring(pe_itm_tv_d0, "#.##") + " (" + (pe_itm_above_tv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=pe_itm_above_tv ? #00E676 : #FF1744, text_size=t_sz)
     table.cell(itmotmTable, 3, 2, str.tostring(ce_otm_tv_d0, "#.##") + " (" + (ce_otm_above_tv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=ce_otm_above_tv ? #00E676 : #FF1744, text_size=t_sz)
     table.cell(itmotmTable, 4, 2, str.tostring(pe_otm_tv_d0, "#.##") + " (" + (pe_otm_above_tv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=pe_otm_above_tv ? #00E676 : #FF1744, text_size=t_sz)
-
-    // Row 3: Static Option Premium (BEP level) (with Realtime Premium Above / Below Suffix)
-    table.cell(itmotmTable, 0, 3, "Static Premium (Anchor Ref)", bgcolor=#263238, text_color=color.yellow, text_size=t_sz)
-    table.cell(itmotmTable, 1, 3, str.tostring(ce_itm_r0, "#.##") + " (" + (ce_itm_above_ref ? "Above" : "Below") + ")", bgcolor=color.black, text_color=ce_itm_above_ref ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 2, 3, str.tostring(pe_itm_r0, "#.##") + " (" + (pe_itm_above_ref ? "Above" : "Below") + ")", bgcolor=color.black, text_color=pe_itm_above_ref ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 3, 3, str.tostring(ce_otm_r0, "#.##") + " (" + (ce_otm_above_ref ? "Above" : "Below") + ")", bgcolor=color.black, text_color=ce_otm_above_ref ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 4, 3, str.tostring(pe_otm_r0, "#.##") + " (" + (pe_otm_above_ref ? "Above" : "Below") + ")", bgcolor=color.black, text_color=pe_otm_above_ref ? #00E676 : #FF1744, text_size=t_sz)
-
-    // Row 4: Realtime Premium Status Row (Above / Below per Option Leg)
-    table.cell(itmotmTable, 0, 4, "Realtime Premium Status", bgcolor=#263238, text_color=color.white, text_size=t_sz)
-    table.cell(itmotmTable, 1, 4, ce_itm_above_ref ? "Above" : "Below", bgcolor=color.black, text_color=ce_itm_above_ref ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 2, 4, pe_itm_above_ref ? "Above" : "Below", bgcolor=color.black, text_color=pe_itm_above_ref ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 3, 4, ce_otm_above_ref ? "Above" : "Below", bgcolor=color.black, text_color=ce_otm_above_ref ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 4, 4, pe_otm_above_ref ? "Above" : "Below", bgcolor=color.black, text_color=pe_otm_above_ref ? #00E676 : #FF1744, text_size=t_sz)
