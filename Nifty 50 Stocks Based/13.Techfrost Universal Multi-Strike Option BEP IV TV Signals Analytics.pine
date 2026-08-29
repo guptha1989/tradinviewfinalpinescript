@@ -1,0 +1,382 @@
+//@version=6
+indicator("13.Techfrost Universal Multi-Strike Option BEP IV TV Signals Analytics", shorttitle="TF Universal Options Analytics", overlay=true, precision=2)
+
+// ==========================================
+// ENUMS & INPUTS
+// ==========================================
+
+enum TablePos
+    topRight   = "Top Right"
+    topLeft    = "Top Left"
+    bottomRight= "Bottom Right"
+    bottomLeft = "Bottom Left"
+
+enum TableSize
+    auto   = "Auto"
+    tiny   = "Tiny"
+    small  = "Small"
+    normal = "Normal"
+    large  = "Large"
+
+enum StaticAnchor
+    dayOpen   = "Day Open Price (09:15 AM)"
+    prevClose = "Previous Day Close Price"
+    first5m   = "First 5 Mins Close Price"
+
+enum HighLowSource
+    min5     = "5-Min High & Low"
+    prevDay  = "Previous Day High & Low"
+
+// --- Calculation Settings ---
+staticAnchorInput  = input.enum(StaticAnchor.dayOpen, "Static BEP / IV / TV Anchor", group="Baseline Calculation Settings",
+  tooltip="Select baseline reference price used to calculate Static BEP, Static IV, and Static TV.")
+
+highLowSrcInput    = input.enum(HighLowSource.min5, "Option High & Low Reference Source", group="Baseline Calculation Settings")
+
+offsetValInput     = input.int(1, "ITM / OTM Strike Offset Steps", minval=1, maxval=10, group="Baseline Calculation Settings",
+  tooltip="Offset step multiplier from ATM strike. e.g. Offset 1 for Nifty (Step 50) sets ITM=ATM-50 & OTM=ATM+50.")
+
+useAutoStrikeStep  = input.bool(true, "Auto-Detect Instrument Strike Step", group="Instrument Strike Settings")
+manualStrikeStep   = input.float(50.0, "Manual Strike Step Size", minval=0.1, group="Instrument Strike Settings")
+
+useOffHoursPrevClose = input.bool(true, "Use Previous Day Close When Market Is Closed", group="Data Source Settings")
+
+// --- Display Controls ---
+showSummaryTable   = input.bool(true, "Show Dashboard Analytics Table", group="Display Controls")
+showDetailedValues = input.bool(true, "Show All Numeric Calculation Values (Detailed vs Simple Mode)", group="Display Controls",
+  tooltip="When enabled, displays exact numeric prices & values in the table. When disabled, displays clean status text e.g. 'Price Above'.")
+showSignalsOnChart = input.bool(true, "Plot Buy / Sell Signal Arrows on Chart", group="Display Controls")
+
+tablePosInput      = input.enum(TablePos.topRight, "Table Position", group="Display Controls")
+tableTextSizeInput = input.enum(TableSize.small, "Table Text Size", group="Display Controls")
+
+// --- Styling & Colors ---
+colorHeaderBg      = input.color(#1A237E, "Header Banner Background", group="Styling & Colors")
+colorSectionBg     = input.color(#263238, "Section Banner Background", group="Styling & Colors")
+colorCEColor       = input.color(#00E676, "CE / Bullish Accent Color", group="Styling & Colors")
+colorPEColor       = input.color(#FF1744, "PE / Bearish Accent Color", group="Styling & Colors")
+colorNeutralColor  = input.color(#FFD600, "Neutral Accent Color", group="Styling & Colors")
+colorTotalColor    = input.color(#00E5FF, "Total / Consolidated Accent Color", group="Styling & Colors")
+
+// ==========================================
+// INSTRUMENT STRIKE STEP AUTO-DETECTION
+// ==========================================
+
+f_get_strike_step(float spot_price) =>
+    float s = 50.0
+    if na(spot_price) or spot_price <= 0
+        s := 50.0
+    else if spot_price < 100
+        s := 1.0
+    else if spot_price < 250
+        s := 2.5
+    else if spot_price < 500
+        s := 5.0
+    else if spot_price < 1200
+        s := 10.0
+    else if spot_price < 2500
+        s := 20.0
+    else if spot_price < 5000
+        s := 50.0
+    else
+        s := 100.0
+    s
+
+f_calc_atm_strike(float spot_price, float step) =>
+    math.round(spot_price / step) * step
+
+// ==========================================
+// ANCHOR PRICES & MULTI-TIMEFRAME DATA
+// ==========================================
+
+// Intraday Day Open Anchor
+var float day_open_spot = na
+if session.isfirstbar and timeframe.isintraday
+    day_open_spot := open
+if na(day_open_spot)
+    day_open_spot := request.security(syminfo.tickerid, "D", open, ignore_invalid_symbol=true)
+
+// Previous Day Close, High, Low
+float prev_day_close = request.security(syminfo.tickerid, "D", close[1], ignore_invalid_symbol=true)
+float prev_day_high  = request.security(syminfo.tickerid, "D", high[1],  ignore_invalid_symbol=true)
+float prev_day_low   = request.security(syminfo.tickerid, "D", low[1],   ignore_invalid_symbol=true)
+
+// First 5-Minute Candle Close of the day
+var float first_5m_close_val = na
+[f5_c, f5_is_first] = request.security(syminfo.tickerid, "5", [close, session.isfirstbar], ignore_invalid_symbol=true)
+if f5_is_first
+    first_5m_close_val := f5_c
+if na(first_5m_close_val)
+    first_5m_close_val := day_open_spot
+
+// 5-Min High & Low
+[high_5m, low_5m] = request.security(syminfo.tickerid, "5", [high, low], ignore_invalid_symbol=true)
+
+// Live Spot Price Resolution
+float spot_close = close
+float eval_spot = spot_close
+if useOffHoursPrevClose and (na(spot_close) or spot_close <= 0 or not barstate.isrealtime)
+    eval_spot := not na(prev_day_close) and prev_day_close > 0 ? prev_day_close : spot_close
+
+// Determine Static Reference Spot Price
+float ref_static_spot = switch staticAnchorInput
+    StaticAnchor.dayOpen   => not na(day_open_spot) ? day_open_spot : eval_spot
+    StaticAnchor.prevClose => not na(prev_day_close) ? prev_day_close : eval_spot
+    StaticAnchor.first5m   => not na(first_5m_close_val) ? first_5m_close_val : eval_spot
+
+// Strike Step Resolution
+float strike_step = useAutoStrikeStep ? f_get_strike_step(eval_spot) : manualStrikeStep
+
+// ATM & Offset Strike Calculations
+float atm_strike = f_calc_atm_strike(eval_spot, strike_step)
+float itm_ce_strike = atm_strike - (offsetValInput * strike_step)
+float otm_ce_strike = atm_strike + (offsetValInput * strike_step)
+
+float itm_pe_strike = atm_strike + (offsetValInput * strike_step)
+float otm_pe_strike = atm_strike - (offsetValInput * strike_step)
+
+// ==========================================
+// OPTION PRICE, IV, TV & BEP ENGINE
+// ==========================================
+
+// Synthetic Time Value estimation based on 14-period ATR
+float base_tv_est = ta.atr(14) * 0.4
+
+// Helper function to calculate option metrics for any strike K
+f_calc_option_analytics(float live_spot, float static_spot, float K, bool is_ce, float tv_est) =>
+    // Intrinsic Values (IV)
+    float iv_realtime = is_ce ? math.max(0.0, live_spot - K) : math.max(0.0, K - live_spot)
+    float iv_static   = is_ce ? math.max(0.0, static_spot - K) : math.max(0.0, K - static_spot)
+    
+    // Estimated Option Premiums
+    float opt_price_realtime = iv_realtime + tv_est
+    float opt_price_static   = iv_static + tv_est
+    
+    // Time Values (TV)
+    float tv_realtime = math.max(0.0, opt_price_realtime - iv_realtime)
+    float tv_static   = math.max(0.0, opt_price_static - iv_static)
+    
+    // Break-Even Prices (BEP)
+    float bep_realtime = is_ce ? (K + opt_price_realtime) : (K - opt_price_realtime)
+    float bep_static   = is_ce ? (K + opt_price_static) : (K - opt_price_static)
+    
+    // Price Above / Below Strike Condition
+    bool is_price_above = live_spot > K
+    
+    [opt_price_realtime, opt_price_static, iv_realtime, iv_static, tv_realtime, tv_static, bep_realtime, bep_static, is_price_above]
+
+// --- Calculate Analytics for all 6 Option Legs ---
+[atm_ce_price, atm_ce_price_st, atm_ce_iv_rt, atm_ce_iv_st, atm_ce_tv_rt, atm_ce_tv_st, atm_ce_bep_rt, atm_ce_bep_st, atm_ce_above] = f_calc_option_analytics(eval_spot, ref_static_spot, atm_strike, true, base_tv_est)
+[atm_pe_price, atm_pe_price_st, atm_pe_iv_rt, atm_pe_iv_st, atm_pe_tv_rt, atm_pe_tv_st, atm_pe_bep_rt, atm_pe_bep_st, atm_pe_above] = f_calc_option_analytics(eval_spot, ref_static_spot, atm_strike, false, base_tv_est)
+
+[itm_ce_price, itm_ce_price_st, itm_ce_iv_rt, itm_ce_iv_st, itm_ce_tv_rt, itm_ce_tv_st, itm_ce_bep_rt, itm_ce_bep_st, itm_ce_above] = f_calc_option_analytics(eval_spot, ref_static_spot, itm_ce_strike, true, base_tv_est)
+[itm_pe_price, itm_pe_price_st, itm_pe_iv_rt, itm_pe_iv_st, itm_pe_tv_rt, itm_pe_tv_st, itm_pe_bep_rt, itm_pe_bep_st, itm_pe_above] = f_calc_option_analytics(eval_spot, ref_static_spot, itm_pe_strike, false, base_tv_est)
+
+[otm_ce_price, otm_ce_price_st, otm_ce_iv_rt, otm_ce_iv_st, otm_ce_tv_rt, otm_ce_tv_st, otm_ce_bep_rt, otm_ce_bep_st, otm_ce_above] = f_calc_option_analytics(eval_spot, ref_static_spot, otm_ce_strike, true, base_tv_est)
+[otm_pe_price, otm_pe_price_st, otm_pe_iv_rt, otm_pe_iv_st, otm_pe_tv_rt, otm_pe_tv_st, otm_pe_bep_rt, otm_pe_bep_st, otm_pe_above] = f_calc_option_analytics(eval_spot, ref_static_spot, otm_pe_strike, false, base_tv_est)
+
+// High & Low Reference Values
+float ref_high = highLowSrcInput == HighLowSource.min5 ? (not na(high_5m) ? high_5m : high) : (not na(prev_day_high) ? prev_day_high : high)
+float ref_low  = highLowSrcInput == HighLowSource.min5 ? (not na(low_5m) ? low_5m : low) : (not na(prev_day_low) ? prev_day_low : low)
+
+// ==========================================
+// CONSOLIDATED BUY / SELL SIGNAL ENGINE
+// ==========================================
+
+// 1. Crossover of ATM CE / PE price over Realtime BEP (or Spot Crossover of ATM Strike)
+bool atm_ce_cross_bep = ta.crossover(eval_spot, atm_ce_bep_rt) or ta.crossover(eval_spot, atm_strike)
+bool atm_pe_cross_bep = ta.crossunder(eval_spot, atm_pe_bep_rt) or ta.crossunder(eval_spot, atm_strike)
+
+// 2. Standard Buy CE Conditions:
+// - ATM CE crossover Realtime BEP
+// - ITM CE price > CE IV
+// - ITM PE price < PE IV
+// - OTM CE price < Time Value (TV)
+// - OTM PE price > Time Value (TV)
+bool buy_ce_cond = atm_ce_cross_bep and (itm_ce_price > itm_ce_iv_rt) and (itm_pe_price < itm_pe_iv_rt) and (otm_ce_price < otm_ce_tv_rt) and (otm_pe_price > otm_pe_tv_rt)
+
+// 3. Standard Buy PE Conditions:
+// - ATM PE crossover Realtime BEP
+// - ITM PE price > PE IV
+// - ITM CE price < CE IV
+// - OTM CE price < Time Value (TV)
+// - OTM PE price > Time Value (TV)
+bool buy_pe_cond = atm_pe_cross_bep and (itm_pe_price > itm_pe_iv_rt) and (itm_ce_price < itm_ce_iv_rt) and (otm_ce_price < otm_ce_tv_rt) and (otm_pe_price > otm_pe_tv_rt)
+
+// 4. Strong Buy CE Conditions:
+// - Spot > Previous Day Low AND Spot > Day Open
+// - CE ATM Price > Day Open AND CE ATM Price > Previous Day Low
+// - PE ATM Price < Previous Day High AND PE ATM Price < Day Open
+bool spot_strong_ce = (eval_spot > prev_day_low) and (eval_spot > day_open_spot)
+bool ce_atm_strong  = (atm_ce_price > day_open_spot) and (atm_ce_price > prev_day_low)
+bool pe_atm_strong  = (atm_pe_price < prev_day_high) and (atm_pe_price < day_open_spot)
+
+bool strong_buy_ce_cond = buy_ce_cond and spot_strong_ce and ce_atm_strong and pe_atm_strong
+
+// 5. Strong Buy PE Conditions:
+// - Spot < Previous Day High AND Spot < Day Open
+// - CE ATM Price < Day Open AND CE ATM Price < Previous Day High
+// - PE ATM Price > Previous Day Low AND PE ATM Price > Day Open
+bool spot_strong_pe = (eval_spot < prev_day_high) and (eval_spot < day_open_spot)
+bool ce_atm_strong_pe = (atm_ce_price < day_open_spot) and (atm_ce_price < prev_day_high)
+bool pe_atm_strong_pe = (atm_pe_price > prev_day_low) and (atm_pe_price > day_open_spot)
+
+bool strong_buy_pe_cond = buy_pe_cond and spot_strong_pe and ce_atm_strong_pe and pe_atm_strong_pe
+
+// Final Signal Classification
+string signalText    = "NEUTRAL / WAIT 🟡"
+color  signalBg      = color.black
+color  signalTxtColor= colorNeutralColor
+
+if strong_buy_ce_cond
+    signalText    := "STRONG BUY CE (HIGH CONVICTION) 🚀"
+    signalBg      := #00C853
+    signalTxtColor:= color.white
+else if buy_ce_cond
+    signalText    := "BUY CE (BULLISH SIGNAL) 🟢"
+    signalBg      := #00E676
+    signalTxtColor:= color.black
+else if strong_buy_pe_cond
+    signalText    := "STRONG BUY PE (HIGH CONVICTION) 💥"
+    signalBg      := #D50000
+    signalTxtColor:= color.white
+else if buy_pe_cond
+    signalText    := "BUY PE (BEARISH SIGNAL) 🔴"
+    signalBg      := #FF1744
+    signalTxtColor:= color.white
+
+// Chart Plot Shapes
+plotshape(showSignalsOnChart and (strong_buy_ce_cond or buy_ce_cond), title="Buy CE Signal", style=shape.triangleup, position=position.belowbar, color=color.green, size=size.small)
+plotshape(showSignalsOnChart and (strong_buy_pe_cond or buy_pe_cond), title="Buy PE Signal", style=shape.triangledown, position=position.abovebar, color=color.red, size=size.small)
+
+// ==========================================
+// RENDER DASHBOARD ANALYTICS TABLE
+// ==========================================
+
+f_get_table_pos(TablePos pos) =>
+    switch pos
+        TablePos.topRight    => position.top_right
+        TablePos.topLeft     => position.top_left
+        TablePos.bottomRight => position.bottom_right
+        TablePos.bottomLeft  => position.bottom_left
+
+f_get_table_text_size(TableSize sz) =>
+    switch sz
+        TableSize.auto   => size.auto
+        TableSize.tiny   => size.tiny
+        TableSize.small  => size.small
+        TableSize.normal => size.normal
+        TableSize.large  => size.large
+
+var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 7, 12, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+string curTextSize = f_get_table_text_size(tableTextSizeInput)
+
+// Helper formatting function for table cells based on showDetailedValues mode
+f_fmt_val_cell(float numVal, bool condition, string trueTxt, string falseTxt) =>
+    if showDetailedValues
+        str.tostring(numVal, "#.2f") + " (" + (condition ? trueTxt : falseTxt) + ")"
+    else
+        condition ? trueTxt : falseTxt
+
+if barstate.islast
+    if not showSummaryTable
+        table.delete(summaryTbl)
+    else
+        // Row 0: Master Header
+        table.cell(summaryTbl, 0, 0, "Techfrost Universal Option BEP IV TV Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 0, "ATM CE (" + str.tostring(atm_strike) + ")", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 0, "ATM PE (" + str.tostring(atm_strike) + ")", bgcolor=colorHeaderBg, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 0, "ITM CE (" + str.tostring(itm_ce_strike) + ")", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 0, "ITM PE (" + str.tostring(itm_pe_strike) + ")", bgcolor=colorHeaderBg, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 0, "OTM CE (" + str.tostring(otm_ce_strike) + ")", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 0, "OTM PE (" + str.tostring(otm_pe_strike) + ")", bgcolor=colorHeaderBg, text_color=colorPEColor, text_size=curTextSize)
+
+        // Row 1: Price Above or Below Strike
+        table.cell(summaryTbl, 0, 1, "Price vs Strike", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 1, atm_ce_above ? "Price Above" : "Price Below", bgcolor=color.black, text_color=atm_ce_above ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 1, atm_pe_above ? "Price Above" : "Price Below", bgcolor=color.black, text_color=atm_pe_above ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 1, itm_ce_above ? "Price Above" : "Price Below", bgcolor=color.black, text_color=itm_ce_above ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 1, itm_pe_above ? "Price Above" : "Price Below", bgcolor=color.black, text_color=itm_pe_above ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 1, otm_ce_above ? "Price Above" : "Price Below", bgcolor=color.black, text_color=otm_ce_above ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 1, otm_pe_above ? "Price Above" : "Price Below", bgcolor=color.black, text_color=otm_pe_above ? colorCEColor : colorPEColor, text_size=curTextSize)
+
+        // Row 2: Realtime BEP
+        table.cell(summaryTbl, 0, 2, "Realtime BEP", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 2, f_fmt_val_cell(atm_ce_bep_rt, eval_spot > atm_ce_bep_rt, "Above BEP", "Below BEP"), bgcolor=color.black, text_color=eval_spot > atm_ce_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 2, f_fmt_val_cell(atm_pe_bep_rt, eval_spot < atm_pe_bep_rt, "Below BEP", "Above BEP"), bgcolor=color.black, text_color=eval_spot < atm_pe_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 2, f_fmt_val_cell(itm_ce_bep_rt, eval_spot > itm_ce_bep_rt, "Above BEP", "Below BEP"), bgcolor=color.black, text_color=eval_spot > itm_ce_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 2, f_fmt_val_cell(itm_pe_bep_rt, eval_spot < itm_pe_bep_rt, "Below BEP", "Above BEP"), bgcolor=color.black, text_color=eval_spot < itm_pe_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 2, f_fmt_val_cell(otm_ce_bep_rt, eval_spot > otm_ce_bep_rt, "Above BEP", "Below BEP"), bgcolor=color.black, text_color=eval_spot > otm_ce_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 2, f_fmt_val_cell(otm_pe_bep_rt, eval_spot < otm_pe_bep_rt, "Below BEP", "Above BEP"), bgcolor=color.black, text_color=eval_spot < otm_pe_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
+
+        // Row 3: Static BEP
+        table.cell(summaryTbl, 0, 3, "Static BEP", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 3, f_fmt_val_cell(atm_ce_bep_st, eval_spot > atm_ce_bep_st, "Above BEP", "Below BEP"), bgcolor=color.black, text_color=eval_spot > atm_ce_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 3, f_fmt_val_cell(atm_pe_bep_st, eval_spot < atm_pe_bep_st, "Below BEP", "Above BEP"), bgcolor=color.black, text_color=eval_spot < atm_pe_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 3, f_fmt_val_cell(itm_ce_bep_st, eval_spot > itm_ce_bep_st, "Above BEP", "Below BEP"), bgcolor=color.black, text_color=eval_spot > itm_ce_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 3, f_fmt_val_cell(itm_pe_bep_st, eval_spot < itm_pe_bep_st, "Below BEP", "Above BEP"), bgcolor=color.black, text_color=eval_spot < itm_pe_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 3, f_fmt_val_cell(otm_ce_bep_st, eval_spot > otm_ce_bep_st, "Above BEP", "Below BEP"), bgcolor=color.black, text_color=eval_spot > otm_ce_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 3, f_fmt_val_cell(otm_pe_bep_st, eval_spot < otm_pe_bep_st, "Below BEP", "Above BEP"), bgcolor=color.black, text_color=eval_spot < otm_pe_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
+
+        // Row 4: Realtime IV
+        table.cell(summaryTbl, 0, 4, "Realtime IV", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 4, str.tostring(atm_ce_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 4, str.tostring(atm_pe_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 4, str.tostring(itm_ce_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 4, str.tostring(itm_pe_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 4, str.tostring(otm_ce_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 4, str.tostring(otm_pe_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+
+        // Row 5: Static IV
+        table.cell(summaryTbl, 0, 5, "Static IV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 5, str.tostring(atm_ce_iv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 5, str.tostring(atm_pe_iv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 5, str.tostring(itm_ce_iv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 5, str.tostring(itm_pe_iv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 5, str.tostring(otm_ce_iv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 5, str.tostring(otm_pe_iv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+
+        // Row 6: Realtime TV
+        table.cell(summaryTbl, 0, 6, "Realtime TV", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 6, str.tostring(atm_ce_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 6, str.tostring(atm_pe_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 6, str.tostring(itm_ce_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 6, str.tostring(itm_pe_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 6, str.tostring(otm_ce_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 6, str.tostring(otm_pe_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+
+        // Row 7: Static TV
+        table.cell(summaryTbl, 0, 7, "Static TV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 7, str.tostring(atm_ce_tv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 7, str.tostring(atm_pe_tv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 7, str.tostring(itm_ce_tv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 7, str.tostring(itm_pe_tv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 7, str.tostring(otm_ce_tv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 7, str.tostring(otm_pe_tv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+
+        // Row 8: Option High & Low Reference
+        string hlLabel = highLowSrcInput == HighLowSource.min5 ? "5-Min H/L" : "Prev Day H/L"
+        table.cell(summaryTbl, 0, 8, "Ref " + hlLabel, bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+
+        // Row 9 & 10: Signal Tab Banner & Status
+        table.cell(summaryTbl, 0, 9, "--- UNIVERSAL OPTIONS BUY / SELL SIGNAL ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 9, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 2, 9, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 3, 9, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 4, 9, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 5, 9, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 6, 9, "", bgcolor=colorSectionBg)
+
+        table.cell(summaryTbl, 0, 10, "Signal Direction", bgcolor=color.black, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 10, signalText, bgcolor=signalBg, text_color=signalTxtColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 10, "", bgcolor=signalBg)
+        table.cell(summaryTbl, 3, 10, "", bgcolor=signalBg)
+        table.cell(summaryTbl, 4, 10, "", bgcolor=signalBg)
+        table.cell(summaryTbl, 5, 10, "", bgcolor=signalBg)
+        table.cell(summaryTbl, 6, 10, "", bgcolor=signalBg)
