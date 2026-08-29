@@ -140,32 +140,29 @@ float itm_pe_strike = atm_strike + (offsetValInput * strike_step)
 float otm_pe_strike = atm_strike - (offsetValInput * strike_step)
 
 // ==========================================
-// EXACT FORMULA IMPLEMENTATION (USER SPECIFIED)
+// EXACT FORMULA IMPLEMENTATION (NON-NEGATIVE CLAMPED)
 // ==========================================
-// 1. CE Intrinsic Value = max(0, Spot Price - CE Strike)
-// 2. PE Intrinsic Value = max(0, PE Strike - Spot Price)
-// 3. Time Value = Option Premium - Intrinsic Value
-// 4. BEP = (CE Option Premium + PE Option Premium) / 2.0
 
 // Baseline Time Value estimation derived from 14-period ATR
 float base_tv_atm = ta.atr(14) * 0.5
 if na(base_tv_atm) or base_tv_atm <= 0
     base_tv_atm := eval_spot * 0.005
 
-// Calculation Helper for single option leg
+// Calculation Helper for single option leg with strict non-negative clamping (math.max(0.0, ...))
 f_calc_leg(float spot_p, float K, bool is_ce, float step_val, float base_tv) =>
-    // Intrinsic Value (IV)
-    float iv = is_ce ? math.max(0.0, spot_p - K) : math.max(0.0, K - spot_p)
+    // Intrinsic Value (IV) - Clamped to 0 if negative
+    float raw_iv = is_ce ? (spot_p - K) : (K - spot_p)
+    float iv     = math.max(0.0, raw_iv)
     
-    // Time Value (TV) decay distance from ATM
+    // Time Value (TV) decay distance from ATM - Clamped to 0 if negative
     float dist_steps = math.abs(K - f_calc_atm_strike(spot_p, step_val)) / step_val
-    float tv = math.max(0.05, base_tv * math.max(0.2, 1.0 - 0.25 * dist_steps))
+    float tv         = math.max(0.0, base_tv * math.max(0.2, 1.0 - 0.25 * dist_steps))
     
-    // Option Premium = Intrinsic Value + Time Value
-    float opt_premium = iv + tv
+    // Option Premium = Intrinsic Value + Time Value - Clamped to 0 if negative
+    float opt_premium = math.max(0.0, iv + tv)
     
-    // Time Value = Option Premium - Intrinsic Value (Verified exact match)
-    float tv_verified = opt_premium - iv
+    // Time Value = Option Premium - Intrinsic Value (Clamped to 0 if negative)
+    float tv_verified = math.max(0.0, opt_premium - iv)
     
     bool is_above = spot_p > K
     
@@ -191,18 +188,18 @@ f_calc_leg(float spot_p, float K, bool is_ce, float step_val, float base_tv) =>
 [otm_ce_premium_st, otm_ce_iv_st, otm_ce_tv_st, otm_ce_above_st] = f_calc_leg(ref_static_spot, otm_ce_strike, true, strike_step, base_tv_atm)
 [otm_pe_premium_st, otm_pe_iv_st, otm_pe_tv_st, otm_pe_above_st] = f_calc_leg(ref_static_spot, otm_pe_strike, false, strike_step, base_tv_atm)
 
-// --- Break-Even Price (BEP) = (CE Option Premium + PE Option Premium) / 2.0 ---
-float atm_bep_rt  = (atm_ce_premium_rt + atm_pe_premium_rt) / 2.0
-float itm1_bep_rt = (itm_ce_premium_rt + otm_pe_premium_rt) / 2.0
-float otm1_bep_rt = (otm_ce_premium_rt + itm_pe_premium_rt) / 2.0
+// --- Break-Even Price (BEP) = (CE Option Premium + PE Option Premium) / 2.0 (Non-Negative Clamped) ---
+float atm_bep_rt  = math.max(0.0, (atm_ce_premium_rt + atm_pe_premium_rt) / 2.0)
+float itm1_bep_rt = math.max(0.0, (itm_ce_premium_rt + otm_pe_premium_rt) / 2.0)
+float otm1_bep_rt = math.max(0.0, (otm_ce_premium_rt + itm_pe_premium_rt) / 2.0)
 
-float atm_bep_st  = (atm_ce_premium_st + atm_pe_premium_st) / 2.0
-float itm1_bep_st = (itm_ce_premium_st + otm_pe_premium_st) / 2.0
-float otm1_bep_st = (otm_ce_premium_st + itm_pe_premium_st) / 2.0
+float atm_bep_st  = math.max(0.0, (atm_ce_premium_st + atm_pe_premium_st) / 2.0)
+float itm1_bep_st = math.max(0.0, (itm_ce_premium_st + otm_pe_premium_st) / 2.0)
+float otm1_bep_st = math.max(0.0, (otm_ce_premium_st + itm_pe_premium_st) / 2.0)
 
 // High & Low Reference Values
-float ref_high = highLowSrcInput == HighLowSource.min5 ? (not na(high_5m) ? high_5m : high) : (not na(prev_day_high) ? prev_day_high : high)
-float ref_low  = highLowSrcInput == HighLowSource.min5 ? (not na(low_5m) ? low_5m : low) : (not na(prev_day_low) ? prev_day_low : low)
+float ref_high = math.max(0.0, highLowSrcInput == HighLowSource.min5 ? (not na(high_5m) ? high_5m : high) : (not na(prev_day_high) ? prev_day_high : high))
+float ref_low  = math.max(0.0, highLowSrcInput == HighLowSource.min5 ? (not na(low_5m) ? low_5m : low) : (not na(prev_day_low) ? prev_day_low : low))
 
 // ==========================================
 // CONSOLIDATED BUY / SELL SIGNAL ENGINE
@@ -316,7 +313,7 @@ if has_new_signal or (is_new_day and active_signal_type != 0)
             
         bool is_profit = pts_gained > 0.0
         
-        array.set(pts_5d, 0, array.get(pts_5d, 0) + pts_gained)
+        array.set(pts_5d, 0, array.get(pts_5d, 0) + math.max(0.0, pts_gained))
         
         if active_signal_type == 1 or active_signal_type == 2 // Standard Buy
             array.set(std_alerts_5d, 0, array.get(std_alerts_5d, 0) + 1)
@@ -378,10 +375,11 @@ var table perfTbl    = table.new(f_get_table_pos(perfTablePosInput), 7, 7, bgcol
 
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
-// Helper formatting function for top table cells based on showDetailedValues mode
+// Helper formatting function for top table cells based on showDetailedValues mode (Clamped to >= 0)
 f_fmt_val_cell(float numVal, bool condition, string trueTxt, string falseTxt) =>
+    float safeVal = math.max(0.0, numVal)
     if showDetailedValues
-        str.tostring(numVal, "#.##") + " (" + (condition ? trueTxt : falseTxt) + ")"
+        str.tostring(safeVal, "#.##") + " (" + (condition ? trueTxt : falseTxt) + ")"
     else
         condition ? trueTxt : falseTxt
 
@@ -435,43 +433,43 @@ if barstate.islast
 
         // Row 4: Static IV (ST IV) - CE = max(0, Spot - K), PE = max(0, K - Spot)
         table.cell(summaryTbl, 0, 4, "ST IV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 4, str.tostring(atm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 4, str.tostring(atm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 4, str.tostring(itm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 4, str.tostring(itm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 4, str.tostring(otm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 4, str.tostring(otm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 4, str.tostring(math.max(0.0, atm_ce_iv_st), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 4, str.tostring(math.max(0.0, atm_pe_iv_st), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 4, str.tostring(math.max(0.0, itm_ce_iv_st), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 4, str.tostring(math.max(0.0, itm_pe_iv_st), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 4, str.tostring(math.max(0.0, otm_ce_iv_st), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 4, str.tostring(math.max(0.0, otm_pe_iv_st), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
         // Row 5: Static TV (ST TV) = Option Premium - Intrinsic Value
         table.cell(summaryTbl, 0, 5, "ST TV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 5, str.tostring(atm_ce_tv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 5, str.tostring(atm_pe_tv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 5, str.tostring(itm_ce_tv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 5, str.tostring(itm_pe_tv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 5, str.tostring(otm_ce_tv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 5, str.tostring(otm_pe_tv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 5, str.tostring(math.max(0.0, atm_ce_tv_st), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 5, str.tostring(math.max(0.0, atm_pe_tv_st), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 5, str.tostring(math.max(0.0, itm_ce_tv_st), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 5, str.tostring(math.max(0.0, itm_pe_tv_st), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 5, str.tostring(math.max(0.0, otm_ce_tv_st), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 5, str.tostring(math.max(0.0, otm_pe_tv_st), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
         // Row 6: Realtime IV (RT IV) = CE max(0, Spot - K) / PE max(0, K - Spot)
         table.cell(summaryTbl, 0, 6, "RT IV", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 6, str.tostring(atm_ce_iv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 6, str.tostring(atm_pe_iv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 6, str.tostring(itm_ce_iv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 6, str.tostring(itm_pe_iv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 6, str.tostring(otm_ce_iv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 6, str.tostring(otm_pe_iv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 6, str.tostring(math.max(0.0, atm_ce_iv_rt), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 6, str.tostring(math.max(0.0, atm_pe_iv_rt), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 6, str.tostring(math.max(0.0, itm_ce_iv_rt), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 6, str.tostring(math.max(0.0, itm_pe_iv_rt), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 6, str.tostring(math.max(0.0, otm_ce_iv_rt), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 6, str.tostring(math.max(0.0, otm_pe_iv_rt), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
         // Row 7: Realtime TV (RT TV) = Option Premium - Intrinsic Value
         table.cell(summaryTbl, 0, 7, "RT TV", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 7, str.tostring(atm_ce_tv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 7, str.tostring(atm_pe_tv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 7, str.tostring(itm_ce_tv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 7, str.tostring(itm_pe_tv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 7, str.tostring(otm_ce_tv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 7, str.tostring(otm_pe_tv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 7, str.tostring(math.max(0.0, atm_ce_tv_rt), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 7, str.tostring(math.max(0.0, atm_pe_tv_rt), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 7, str.tostring(math.max(0.0, itm_ce_tv_rt), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 7, str.tostring(math.max(0.0, itm_pe_tv_rt), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 7, str.tostring(math.max(0.0, otm_ce_tv_rt), "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 7, str.tostring(math.max(0.0, otm_pe_tv_rt), "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
         // Row 8: Option High & Low Reference (Ref H/L)
         table.cell(summaryTbl, 0, 8, "Ref H/L", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
-        string hl_val = str.tostring(ref_high, "#.##") + " / " + str.tostring(ref_low, "#.##")
+        string hl_val = str.tostring(math.max(0.0, ref_high), "#.##") + " / " + str.tostring(math.max(0.0, ref_low), "#.##")
         table.cell(summaryTbl, 1, 8, hl_val, bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
         table.cell(summaryTbl, 2, 8, hl_val, bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
         table.cell(summaryTbl, 3, 8, hl_val, bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
@@ -512,7 +510,7 @@ if barstate.islast
         // Totals
         int tot_std_alerts    = array.sum(std_alerts_5d)
         int tot_strong_alerts = array.sum(strong_alerts_5d)
-        float tot_pts         = array.sum(pts_5d)
+        float tot_pts         = math.max(0.0, array.sum(pts_5d))
         int tot_prof          = array.sum(profit_5d)
         int tot_loss          = array.sum(loss_5d)
 
@@ -531,7 +529,7 @@ if barstate.islast
         // Row 3: Points Captured
         table.cell(perfTbl, 0, 3, "Pts Captured (Max)", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
         for i = 0 to 4
-            table.cell(perfTbl, i + 1, 3, str.tostring(array.get(pts_5d, i), "#.##"), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+            table.cell(perfTbl, i + 1, 3, str.tostring(math.max(0.0, array.get(pts_5d, i)), "#.##"), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
         table.cell(perfTbl, 6, 3, str.tostring(tot_pts, "#.##"), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
 
         // Row 4: Profit / Loss Ratio
@@ -546,8 +544,8 @@ if barstate.islast
         for i = 0 to 4
             int total_day_entries = array.get(profit_5d, i) + array.get(loss_5d, i)
             float day_wr = total_day_entries > 0 ? (array.get(profit_5d, i) / float(total_day_entries)) * 100.0 : 0.0
-            table.cell(perfTbl, i + 1, 5, str.tostring(day_wr, "#.#") + "%", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+            table.cell(perfTbl, i + 1, 5, str.tostring(math.max(0.0, day_wr), "#.#") + "%", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         
         int overall_entries = tot_prof + tot_loss
         float overall_wr = overall_entries > 0 ? (tot_prof / float(overall_entries)) * 100.0 : 0.0
-        table.cell(perfTbl, 6, 5, str.tostring(overall_wr, "#.#") + "%", bgcolor=colorSectionBg, text_color=color.yellow, text_size=curTextSize)
+        table.cell(perfTbl, 6, 5, str.tostring(math.max(0.0, overall_wr), "#.#") + "%", bgcolor=colorSectionBg, text_color=color.yellow, text_size=curTextSize)
