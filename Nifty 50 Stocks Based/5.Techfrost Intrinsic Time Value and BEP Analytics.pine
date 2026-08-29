@@ -54,13 +54,6 @@ timeValueFormulaInput = input.enum(TimeValueFormula.standard, "Time Value Formul
   tooltip="Formula for Time Value: Option Price - Intrinsic Value OR Strike Price - Intrinsic Value.")
 
 // --- Plot Controls: Realtime Metrics ---
-showCE_LTP_Input       = input.bool(true, "Show CE Realtime Price (LTP) Line", group="Realtime Plots")
-showPE_LTP_Input       = input.bool(true, "Show PE Realtime Price (LTP) Line", group="Realtime Plots")
-showITM_CE_LTP_Input   = input.bool(false, "Show ITM CE Realtime Price Line", group="Realtime Plots")
-showITM_PE_LTP_Input   = input.bool(false, "Show ITM PE Realtime Price Line", group="Realtime Plots")
-showOTM_CE_LTP_Input   = input.bool(false, "Show OTM CE Realtime Price Line", group="Realtime Plots")
-showOTM_PE_LTP_Input   = input.bool(false, "Show OTM PE Realtime Price Line", group="Realtime Plots")
-
 showCE_IV_RT_Input     = input.bool(true, "Show CE Realtime Intrinsic Line", group="Realtime Plots")
 showPE_IV_RT_Input     = input.bool(true, "Show PE Realtime Intrinsic Line", group="Realtime Plots")
 showAvg_IV_RT_Input    = input.bool(true, "Show Avg Realtime Intrinsic Line", group="Realtime Plots")
@@ -391,7 +384,7 @@ spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 // 1. INTRINSIC VALUE CALCULATIONS (CE: max(0, Spot - Strike), PE: max(0, Strike - Spot))
 // ==========================================
 
-// Realtime Intrinsic Value (Live)
+// Realtime Intrinsic Value for Selected Strike (Live)
 float ce_iv_rt  = math.max(0.0, spot_ltp - ce_strike)
 float pe_iv_rt  = math.max(0.0, pe_strike - spot_ltp)
 float avg_iv_rt = (ce_iv_rt + pe_iv_rt) / 2.0
@@ -518,17 +511,9 @@ float bar_pe_pdc      = request.security(pe_ticker, "D", close[1], lookahead=bar
 // PLOTTING ALL METRICS (EXPOSED IN TRADINGVIEW STYLE TAB)
 // ==========================================
 
-// --- Realtime Option Price (LTP) Plots ---
-plot(showCE_LTP_Input and ce_ltp > 0 ? ce_ltp : na, "CE Realtime Price (LTP)", color=#00E676, linewidth=2)
-plot(showPE_LTP_Input and pe_ltp > 0 ? pe_ltp : na, "PE Realtime Price (LTP)", color=#FF1744, linewidth=2)
-
-plot(showITM_CE_LTP_Input and ce_itm_ltp > 0 ? ce_itm_ltp : na, "ITM CE Realtime Price", color=#00E676, linewidth=1, style=plot.style_circles)
-plot(showITM_PE_LTP_Input and pe_itm_ltp > 0 ? pe_itm_ltp : na, "ITM PE Realtime Price", color=#FF1744, linewidth=1, style=plot.style_circles)
-
-plot(showOTM_CE_LTP_Input and ce_otm_ltp > 0 ? ce_otm_ltp : na, "OTM CE Realtime Price", color=#00E676, linewidth=1, style=plot.style_cross)
-plot(showOTM_PE_LTP_Input and pe_otm_ltp > 0 ? pe_otm_ltp : na, "OTM PE Realtime Price", color=#FF1744, linewidth=1, style=plot.style_cross)
-
-// --- Realtime Intrinsic Plots: Always Plot ITM & OTM Average Intrinsic Value ---
+// --- Realtime Intrinsic Plots: Selected Strike CE & PE Realtime Intrinsic Separately ---
+plot(showCE_IV_RT_Input and ce_iv_rt > 0 ? ce_iv_rt : na, "CE Realtime Intrinsic", color=#00E676, linewidth=2)
+plot(showPE_IV_RT_Input and pe_iv_rt > 0 ? pe_iv_rt : na, "PE Realtime Intrinsic", color=#FF1744, linewidth=2)
 plot(showAvg_IV_RT_Input ? itm_avg_iv_rt : na, "ITM Avg Intrinsic", color=#00E676, linewidth=2)
 plot(showAvg_IV_RT_Input ? otm_avg_iv_rt : na, "OTM Avg Intrinsic", color=#FF5252, linewidth=2)
 
