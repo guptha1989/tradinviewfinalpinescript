@@ -1,5 +1,5 @@
 //@version=6
-indicator("Techfrost Nifty 50 Stock Options ATM BEP & IV Analytics", shorttitle="TF Nifty50 BEP-IV", overlay=false, precision=2)
+indicator("Techfrost ATM Options BEP & Intrinsic Value Analytics", shorttitle="TF ATM BEP-IV", overlay=false, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -18,24 +18,27 @@ enum TableSize
     normal = "Normal"
     large  = "Large"
 
-enum BasketPreset
-    top6   = "Top 6 Nifty Heavyweights (RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK, SBIN)"
-    top5   = "Top 5 Core Heavyweights (RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK)"
-    custom = "Custom Stock Selection (Max 6 Active Stocks)"
+enum StepOverrideChoice
+    auto    = "Auto"
+    step1   = "1"
+    step2_5 = "2.5"
+    step5   = "5"
+    step10  = "10"
+    step20  = "20"
+    step25  = "25"
+    step40  = "40"
+    step50  = "50"
+    step100 = "100"
+    step200 = "200"
 
-enum StrikeAnchorMode
-    dayOpen = "Day Open Fixed ATM Strike (Zero Ticker Churn)"
-    dynamic = "Realtime Dynamic ATM Strike"
+// --- Instrument Settings ---
+spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE, NSE:NIFTY)", group="Instrument Settings",
+  tooltip="Leave blank to use current chart instrument.")
+strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
+  tooltip="Set to Auto for auto-detection based on underlying stock/index (Auto-detects 1, 2.5, 5, 10, 20, 25, 40, 50, 100).")
 
-// --- Basket & Strike Selection ---
-basketPresetInput  = input.enum(BasketPreset.top6, "Stock Basket Selection Mode", group="Nifty 50 Stock Basket Selection",
-  tooltip="TradingView limits total unique security requests to 40 across historical bars. Select Top 6, Top 5 or Custom (Max 6 stocks).")
-strikeAnchorInput  = input.enum(StrikeAnchorMode.dayOpen, "ATM Strike Anchor Mode", group="Nifty 50 Stock Basket Selection",
-  tooltip="Day Open Fixed ATM Strike anchors the ATM strike at session open to eliminate security call quota errors across historical bars.")
-
-// --- Display & Controls ---
-showSummaryTable   = input.bool(true, "Show Dashboard Summary Table", group="Display Controls")
-showStockBreakdown = input.bool(true, "Show Individual Stock Breakdown Table", group="Display Controls")
+// --- Display Controls ---
+showSummaryTable   = input.bool(true, "Show ATM Analytics Table", group="Display Controls")
 tablePosInput      = input.enum(TablePos.topRight, "Table Position", group="Display Controls")
 tableTextSizeInput = input.enum(TableSize.small, "Table Text Size", group="Display Controls")
 
@@ -47,21 +50,33 @@ colorPEColor       = input.color(#FF1744, "PE / Bearish Accent Color", group="St
 colorNeutralColor  = input.color(#FFD600, "Neutral Accent Color", group="Styling & Colors")
 colorCrossColor    = input.color(#00B0FF, "Crossover / Formation Highlight Color", group="Styling & Colors")
 
-// --- Custom Stock Selection Toggles (Used when Mode = Custom) ---
-enable_RELIANCE   = input.bool(true,  "RELIANCE",   group="Custom Stock Selection (Max 6 Active)")
-enable_TCS        = input.bool(true,  "TCS",        group="Custom Stock Selection (Max 6 Active)")
-enable_INFY       = input.bool(true,  "INFY",       group="Custom Stock Selection (Max 6 Active)")
-enable_HDFCBANK   = input.bool(true,  "HDFCBANK",   group="Custom Stock Selection (Max 6 Active)")
-enable_ICICIBANK  = input.bool(true,  "ICICIBANK",  group="Custom Stock Selection (Max 6 Active)")
-enable_SBIN       = input.bool(true,  "SBIN",       group="Custom Stock Selection (Max 6 Active)")
-enable_BHARTIARTL = input.bool(false, "BHARTIARTL", group="Custom Stock Selection (Max 6 Active)")
-enable_ITC        = input.bool(false, "ITC",        group="Custom Stock Selection (Max 6 Active)")
-
 // ==========================================
-// HELPER FUNCTIONS & STRIKE AUTO-DETECTION
+// TICKER PARSING & SPOT RESOLUTION
 // ==========================================
 
-f_get_strike_step(float spot_price) =>
+string cleanTicker = syminfo.ticker
+int colonPos = str.pos(cleanTicker, ":")
+if colonPos != -1
+    cleanTicker := str.substring(cleanTicker, colonPos + 1)
+cleanTicker := str.replace_all(cleanTicker, " ", "")
+
+// Extract base stock/symbol root
+string tickerWithoutCEPE = cleanTicker
+if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+    tickerWithoutCEPE := str.substring(cleanTicker, 0, str.length(cleanTicker) - 2)
+
+string symbolRoot = str.match(tickerWithoutCEPE, "^[A-Z&]+")
+if symbolRoot == ""
+    symbolRoot := cleanTicker
+
+string spotTicker = str.length(spotTickerOverride) > 0 ? spotTickerOverride : syminfo.prefix + ":" + symbolRoot
+
+// Fetch Spot Price Data (Close, Previous Close, Open)
+[spot_close, spot_prev_close, spot_open] = request.security(spotTicker, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
+float validSpot = na(spot_close) or spot_close <= 0 ? close : spot_close
+
+// Dynamic Strike Step Auto-Detection
+f_auto_detect_step(float spot_price) =>
     float s = 50.0
     if na(spot_price) or spot_price <= 0
         s := 50.0
@@ -81,219 +96,101 @@ f_get_strike_step(float spot_price) =>
         s := 100.0
     s
 
-f_calc_atm_strike(float spot_price) =>
-    float step = f_get_strike_step(spot_price)
-    math.round(spot_price / step) * step
+float stepVal = 50.0
+switch strikeStepInput
+    StepOverrideChoice.step1   => stepVal := 1.0
+    StepOverrideChoice.step2_5 => stepVal := 2.5
+    StepOverrideChoice.step5   => stepVal := 5.0
+    StepOverrideChoice.step10  => stepVal := 10.0
+    StepOverrideChoice.step20  => stepVal := 20.0
+    StepOverrideChoice.step25  => stepVal := 25.0
+    StepOverrideChoice.step40  => stepVal := 40.0
+    StepOverrideChoice.step50  => stepVal := 50.0
+    StepOverrideChoice.step100 => stepVal := 100.0
+    StepOverrideChoice.step200 => stepVal := 200.0
+    => stepVal := f_auto_detect_step(validSpot)
 
 f_format_strike(float st) =>
     st == math.floor(st) ? str.tostring(int(st)) : str.tostring(st, "#.#")
 
-f_build_opt_ticker(string symbol_root, float strike, bool is_ce) =>
+f_build_opt_ticker(string root, float strike, bool is_ce) =>
     string st_str = f_format_strike(strike)
     string type_str = is_ce ? "CE" : "PE"
-    syminfo.prefix + ":" + symbol_root + st_str + type_str
-
-// Struct to hold per-stock security data & analytics
-type StockAnalytics
-    string symbol
-    bool enabled
-    float spot_c
-    float spot_o
-    float ce_c
-    float ce_o
-    float pe_c
-    float pe_o
-    float atm_strike
-    float real_bep
-    float open_bep
-    bool ce_above_real_bep
-    bool pe_above_real_bep
-    bool ce_above_open_bep
-    bool pe_above_open_bep
-    bool neutral_open_bep
-    bool ce_cross_above_real_bep
-    bool ce_cross_below_real_bep
-    bool pe_cross_above_real_bep
-    bool pe_cross_below_real_bep
-    float ce_iv
-    float pe_iv
-    bool is_pe_iv_only
-    bool is_ce_iv_only
-    bool is_neutral_iv
-    bool pe_iv_just_formed
-    bool ce_iv_just_formed
-
-// Evaluation Function for a Stock
-f_eval_stock(string root_sym, bool is_enabled) =>
-    StockAnalytics res = StockAnalytics.new()
-    res.symbol := root_sym
-    res.enabled := is_enabled
-    
-    if is_enabled
-        // 1. Fetch Spot Data (Current Close, Previous Close, Session Open)
-        [spot_close, spot_prev_close, spot_open] = request.security(syminfo.prefix + ":" + root_sym, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        res.spot_c := spot_close
-        res.spot_o := spot_open
-        
-        // 2. Determine ATM Strike (Day Open Fixed or Realtime Dynamic)
-        float dyn_atm_st = f_calc_atm_strike(spot_close)
-        float open_atm_st = f_calc_atm_strike(spot_open)
-        
-        float atm_st = strikeAnchorInput == StrikeAnchorMode.dayOpen ? (na(open_atm_st) or open_atm_st <= 0 ? dyn_atm_st : open_atm_st) : dyn_atm_st
-        res.atm_strike := atm_st
-        
-        // 3. Fetch ATM CE and PE Data
-        string ce_ticker = f_build_opt_ticker(root_sym, atm_st, true)
-        string pe_ticker = f_build_opt_ticker(root_sym, atm_st, false)
-        
-        [ce_close, ce_prev_close, ce_open] = request.security(ce_ticker, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        [pe_close, pe_prev_close, pe_open] = request.security(pe_ticker, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        
-        res.ce_c := ce_close
-        res.ce_o := ce_open
-        res.pe_c := pe_close
-        res.pe_o := pe_open
-        
-        // 4. BEP Calculations
-        res.real_bep := (ce_close + pe_close) / 2.0
-        res.open_bep := (ce_open + pe_open) / 2.0
-        float prev_real_bep = (ce_prev_close + pe_prev_close) / 2.0
-        
-        res.ce_above_real_bep := ce_close > res.real_bep
-        res.pe_above_real_bep := pe_close > res.real_bep
-        
-        res.ce_above_open_bep := ce_close > res.open_bep
-        res.pe_above_open_bep := pe_close > res.open_bep
-        res.neutral_open_bep  := (ce_close <= res.open_bep) and (pe_close <= res.open_bep)
-        
-        // BEP Crossovers (Current vs Previous bar)
-        res.ce_cross_above_real_bep := (ce_prev_close <= prev_real_bep) and (ce_close > res.real_bep)
-        res.ce_cross_below_real_bep := (ce_prev_close >= prev_real_bep) and (ce_close < res.real_bep)
-        
-        res.pe_cross_above_real_bep := (pe_prev_close <= prev_real_bep) and (pe_close > res.real_bep)
-        res.pe_cross_below_real_bep := (pe_prev_close >= prev_real_bep) and (pe_close < res.real_bep)
-        
-        // 5. Intrinsic Value (IV) Calculations
-        res.ce_iv := math.max(0.0, spot_close - atm_st)
-        res.pe_iv := math.max(0.0, atm_st - spot_close)
-        
-        res.is_pe_iv_only := (res.pe_iv > 0.0) and (res.ce_iv <= 0.0)
-        res.is_ce_iv_only := (res.ce_iv > 0.0) and (res.pe_iv <= 0.0)
-        res.is_neutral_iv := ((res.ce_iv > 0.0) and (res.pe_iv > 0.0)) or ((res.ce_iv <= 0.0) and (res.pe_iv <= 0.0))
-        
-        float prev_ce_iv = math.max(0.0, spot_prev_close - atm_st)
-        float prev_pe_iv = math.max(0.0, atm_st - spot_prev_close)
-        
-        res.pe_iv_just_formed := (res.pe_iv > 0.0) and (prev_pe_iv <= 0.0)
-        res.ce_iv_just_formed := (res.ce_iv > 0.0) and (prev_ce_iv <= 0.0)
-        
-    res
+    syminfo.prefix + ":" + root + st_str + type_str
 
 // ==========================================
-// PRESET VS CUSTOM BASKET SELECTION (MAX 6 STOCKS = 18 CALLS <= 40)
+// LEAST DIFFERENCE ATM STRIKE SELECTION (|CE - PE|)
 // ==========================================
 
-bool use_RELIANCE   = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_RELIANCE
-bool use_TCS        = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_TCS
-bool use_INFY       = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_INFY
-bool use_HDFCBANK   = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_HDFCBANK
-bool use_ICICIBANK  = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_ICICIBANK
-bool use_SBIN       = (basketPresetInput == BasketPreset.top6) ? true : (basketPresetInput == BasketPreset.custom ? enable_SBIN : false)
-bool use_BHARTIARTL = (basketPresetInput == BasketPreset.custom) ? enable_BHARTIARTL : false
-bool use_ITC        = (basketPresetInput == BasketPreset.custom) ? enable_ITC : false
+float k_floor = math.floor(validSpot / stepVal) * stepVal
+float k_ceil  = math.ceil(validSpot / stepVal) * stepVal
 
-// Evaluate up to 6 stocks (6 * 3 = 18 security calls, leaves 22 call buffer below TradingView 40 limit)
-StockAnalytics s_RELIANCE   = f_eval_stock("RELIANCE",   use_RELIANCE)
-StockAnalytics s_TCS        = f_eval_stock("TCS",        use_TCS)
-StockAnalytics s_INFY       = f_eval_stock("INFY",       use_INFY)
-StockAnalytics s_HDFCBANK   = f_eval_stock("HDFCBANK",   use_HDFCBANK)
-StockAnalytics s_ICICIBANK  = f_eval_stock("ICICIBANK",  use_ICICIBANK)
-StockAnalytics s_SBIN       = f_eval_stock("SBIN",       use_SBIN)
-StockAnalytics s_BHARTIARTL = f_eval_stock("BHARTIARTL", use_BHARTIARTL)
-StockAnalytics s_ITC        = f_eval_stock("ITC",        use_ITC)
+string ce_ticker_fl = f_build_opt_ticker(symbolRoot, k_floor, true)
+string pe_ticker_fl = f_build_opt_ticker(symbolRoot, k_floor, false)
 
-// Array of evaluated Stock Analytics Objects
-array<StockAnalytics> stockList = array.new<StockAnalytics>()
-if use_RELIANCE
-    array.push(stockList, s_RELIANCE)
-if use_TCS
-    array.push(stockList, s_TCS)
-if use_INFY
-    array.push(stockList, s_INFY)
-if use_HDFCBANK
-    array.push(stockList, s_HDFCBANK)
-if use_ICICIBANK
-    array.push(stockList, s_ICICIBANK)
-if use_SBIN
-    array.push(stockList, s_SBIN)
-if use_BHARTIARTL
-    array.push(stockList, s_BHARTIARTL)
-if use_ITC
-    array.push(stockList, s_ITC)
+string ce_ticker_cl = f_build_opt_ticker(symbolRoot, k_ceil, true)
+string pe_ticker_cl = f_build_opt_ticker(symbolRoot, k_ceil, false)
+
+// Fetch Candidate Option Prices
+[ce_c_fl, ce_prev_fl, ce_o_fl] = request.security(ce_ticker_fl, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
+[pe_c_fl, pe_prev_fl, pe_o_fl] = request.security(pe_ticker_fl, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
+
+[ce_c_cl, ce_prev_cl, ce_o_cl] = request.security(ce_ticker_cl, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
+[pe_c_cl, pe_prev_cl, pe_o_cl] = request.security(pe_ticker_cl, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
+
+// Calculate Least Difference between CE and PE Prices
+float diff_fl = math.abs(nz(ce_c_fl) - nz(pe_c_fl))
+float diff_cl = math.abs(nz(ce_c_cl) - nz(pe_c_cl))
+
+bool choose_floor = (k_floor == k_ceil) or (diff_fl <= diff_cl)
+
+float atm_strike  = choose_floor ? k_floor : k_ceil
+float ce_close    = choose_floor ? ce_c_fl : ce_c_cl
+float ce_prev_c  = choose_floor ? ce_prev_fl : ce_prev_cl
+float ce_open     = choose_floor ? ce_o_fl : ce_o_cl
+
+float pe_close    = choose_floor ? pe_c_fl : pe_c_cl
+float pe_prev_c  = choose_floor ? pe_prev_fl : pe_prev_cl
+float pe_open     = choose_floor ? pe_o_fl : pe_o_cl
 
 // ==========================================
-// AGGREGATE SUMMARY COUNTS ACROSS ALL STOCKS
+// BEP & INTRINSIC VALUE (IV) CALCULATIONS
 // ==========================================
 
-int count_total_stocks = array.size(stockList)
+float real_bep = (ce_close + pe_close) / 2.0
+float open_bep = (ce_open + pe_open) / 2.0
+float prev_real_bep = (ce_prev_c + pe_prev_c) / 2.0
 
-int count_ce_above_real_bep = 0
-int count_pe_above_real_bep = 0
+bool ce_above_real_bep = ce_close > real_bep
+bool pe_above_real_bep = pe_close > real_bep
 
-int count_ce_above_open_bep = 0
-int count_pe_above_open_bep = 0
-int count_neutral_open_bep  = 0
+bool ce_above_open_bep = ce_close > open_bep
+bool pe_above_open_bep = pe_close > open_bep
+bool neutral_open_bep  = (ce_close <= open_bep) and (pe_close <= open_bep)
 
-int count_ce_cross_above_real_bep = 0
-int count_ce_cross_below_real_bep = 0
-int count_pe_cross_above_real_bep = 0
-int count_pe_cross_below_real_bep = 0
+// BEP Crossovers
+bool ce_cross_above_real_bep = (ce_prev_c <= prev_real_bep) and (ce_close > real_bep)
+bool ce_cross_below_real_bep = (ce_prev_c >= prev_real_bep) and (ce_close < real_bep)
 
-int count_pe_iv_only     = 0
-int count_ce_iv_only     = 0
-int count_neutral_iv     = 0
-int count_pe_iv_just_fmt = 0
-int count_ce_iv_just_fmt = 0
+bool pe_cross_above_real_bep = (pe_prev_c <= prev_real_bep) and (pe_close > real_bep)
+bool pe_cross_below_real_bep = (pe_prev_c >= prev_real_bep) and (pe_close < real_bep)
 
-if count_total_stocks > 0
-    for i = 0 to count_total_stocks - 1
-        StockAnalytics item = array.get(stockList, i)
-        
-        if item.ce_above_real_bep
-            count_ce_above_real_bep += 1
-        if item.pe_above_real_bep
-            count_pe_above_real_bep += 1
-        
-        if item.ce_above_open_bep
-            count_ce_above_open_bep += 1
-        if item.pe_above_open_bep
-            count_pe_above_open_bep += 1
-        if item.neutral_open_bep
-            count_neutral_open_bep  += 1
-        
-        if item.ce_cross_above_real_bep
-            count_ce_cross_above_real_bep += 1
-        if item.ce_cross_below_real_bep
-            count_ce_cross_below_real_bep += 1
-        if item.pe_cross_above_real_bep
-            count_pe_cross_above_real_bep += 1
-        if item.pe_cross_below_real_bep
-            count_pe_cross_below_real_bep += 1
-        
-        if item.is_pe_iv_only
-            count_pe_iv_only += 1
-        if item.is_ce_iv_only
-            count_ce_iv_only += 1
-        if item.is_neutral_iv
-            count_neutral_iv += 1
-        
-        if item.pe_iv_just_formed
-            count_pe_iv_just_fmt += 1
-        if item.ce_iv_just_formed
-            count_ce_iv_just_fmt += 1
+// Intrinsic Value (IV) Calculations
+float ce_iv = math.max(0.0, validSpot - atm_strike)
+float pe_iv = math.max(0.0, atm_strike - validSpot)
+
+bool is_pe_iv_only = (pe_iv > 0.0) and (ce_iv <= 0.0)
+bool is_ce_iv_only = (ce_iv > 0.0) and (pe_iv <= 0.0)
+bool is_neutral_iv = ((ce_iv > 0.0) and (pe_iv > 0.0)) or ((ce_iv <= 0.0) and (pe_iv <= 0.0))
+
+float prev_ce_iv = math.max(0.0, spot_prev_close - atm_strike)
+float prev_pe_iv = math.max(0.0, atm_strike - spot_prev_close)
+
+bool pe_iv_just_formed = (pe_iv > 0.0) and (prev_pe_iv <= 0.0)
+bool ce_iv_just_formed = (ce_iv > 0.0) and (prev_ce_iv <= 0.0)
 
 // ==========================================
-// RENDER DASHBOARD & BREAKDOWN TABLES
+// RENDER ATM ANALYTICS TABLE
 // ==========================================
 
 f_get_table_pos(TablePos pos) =>
@@ -311,7 +208,7 @@ f_get_table_text_size(TableSize sz) =>
         TableSize.normal => size.normal
         TableSize.large  => size.large
 
-var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 18, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 2, 14, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
@@ -320,101 +217,61 @@ if barstate.islast
         table.delete(summaryTbl)
     else
         // Row 0: Title Banner
-        table.cell(summaryTbl, 0, 0, "Nifty 50 ATM Stock Options Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 0, "Active Stocks: " + str.tostring(count_total_stocks) + " / 6", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 0, "", bgcolor=colorHeaderBg)
-        table.cell(summaryTbl, 3, 0, "", bgcolor=colorHeaderBg)
+        table.cell(summaryTbl, 0, 0, "ATM Options BEP & Intrinsic Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 0, symbolRoot + " (" + f_format_strike(atm_strike) + " ATM)", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
         
-        // Row 1: Section Banner - BEP ANALYTICS
+        // Row 1: Section Banner - REALTIME BEP ANALYTICS
         table.cell(summaryTbl, 0, 1, "--- REALTIME & DAY OPEN BEP ANALYTICS ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
         table.cell(summaryTbl, 1, 1, "", bgcolor=colorSectionBg)
-        table.cell(summaryTbl, 2, 1, "", bgcolor=colorSectionBg)
-        table.cell(summaryTbl, 3, 1, "", bgcolor=colorSectionBg)
         
-        // Row 2: Realtime BEP Counts
-        table.cell(summaryTbl, 0, 2, "ATM CEs Above Realtime BEP", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 2, str.tostring(count_ce_above_real_bep), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 2, "ATM PEs Above Realtime BEP", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 2, str.tostring(count_pe_above_real_bep), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        // Row 2: Realtime Prices & BEP
+        table.cell(summaryTbl, 0, 2, "CE / PE Prices [Realtime BEP]", bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 2, "CE:" + str.tostring(ce_close, "#.##") + " PE:" + str.tostring(pe_close, "#.##") + " [" + str.tostring(real_bep, "#.##") + "]", bgcolor=color.black, text_color=color.white, text_size=curTextSize)
         
-        // Row 3: Day Open BEP Counts
-        table.cell(summaryTbl, 0, 3, "CEs Above Day Open BEP", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 3, str.tostring(count_ce_above_open_bep), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 3, "PEs Above Day Open BEP", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 3, str.tostring(count_pe_above_open_bep), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        // Row 3: Realtime BEP Status
+        string real_bep_status = ce_above_real_bep ? "ATM CE Above Realtime BEP" : (pe_above_real_bep ? "ATM PE Above Realtime BEP" : "Both Below Realtime BEP")
+        color real_bep_col    = ce_above_real_bep ? colorCEColor : (pe_above_real_bep ? colorPEColor : colorNeutralColor)
+        table.cell(summaryTbl, 0, 3, "Realtime BEP Status", bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 3, real_bep_status, bgcolor=color.black, text_color=real_bep_col, text_size=curTextSize)
         
-        // Row 4: Neutral Day Open BEP Count
-        table.cell(summaryTbl, 0, 4, "Neutral (Both Below Day Open BEP)", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 4, str.tostring(count_neutral_open_bep), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 4, "", bgcolor=color.black)
-        table.cell(summaryTbl, 3, 4, "", bgcolor=color.black)
+        // Row 4: Day Open BEP Status
+        string open_bep_status = ce_above_open_bep ? "CE Above Day Open BEP" : (pe_above_open_bep ? "PE Above Day Open BEP" : "Neutral (Both Below Day Open BEP)")
+        color open_bep_col    = ce_above_open_bep ? colorCEColor : (pe_above_open_bep ? colorPEColor : colorNeutralColor)
+        table.cell(summaryTbl, 0, 4, "Day Open BEP Status", bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 4, open_bep_status, bgcolor=color.black, text_color=open_bep_col, text_size=curTextSize)
         
-        // Row 5: BEP Crossovers (Just Crossed)
-        table.cell(summaryTbl, 0, 5, "CE Just Crossed Realtime BEP", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 5, "+" + str.tostring(count_ce_cross_above_real_bep) + " Above / -" + str.tostring(count_ce_cross_below_real_bep) + " Below", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 5, "PE Just Crossed Realtime BEP", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 5, "+" + str.tostring(count_pe_cross_above_real_bep) + " Above / -" + str.tostring(count_pe_cross_below_real_bep) + " Below", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
+        // Row 5: BEP Crossover Status
+        string cross_status = "No Crossover"
+        if ce_cross_above_real_bep
+            cross_status := "CE Just Crossed Above Realtime BEP"
+        else if ce_cross_below_real_bep
+            cross_status := "CE Just Crossed Below Realtime BEP"
+        else if pe_cross_above_real_bep
+            cross_status := "PE Just Crossed Above Realtime BEP"
+        else if pe_cross_below_real_bep
+            cross_status := "PE Just Crossed Below Realtime BEP"
+        table.cell(summaryTbl, 0, 5, "Just Crossed BEP Status", bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 5, cross_status, bgcolor=color.black, text_color=cross_status != "No Crossover" ? colorCrossColor : color.gray, text_size=curTextSize)
         
-        // Row 6: Section Banner - INTRINSIC VALUE (IV) ANALYTICS
+        // Row 6: Section Banner - INTRINSIC VALUE ANALYTICS
         table.cell(summaryTbl, 0, 6, "--- REALTIME INTRINSIC VALUE (IV) ANALYTICS ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
         table.cell(summaryTbl, 1, 6, "", bgcolor=colorSectionBg)
-        table.cell(summaryTbl, 2, 6, "", bgcolor=colorSectionBg)
-        table.cell(summaryTbl, 3, 6, "", bgcolor=colorSectionBg)
         
-        // Row 7: IV Segregation Counts
-        table.cell(summaryTbl, 0, 7, "PE IV Only (PE IV > 0)", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 7, str.tostring(count_pe_iv_only), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 7, "CE IV Only (CE IV > 0)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 7, str.tostring(count_ce_iv_only), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        // Row 7: Intrinsic Values (CE IV / PE IV)
+        table.cell(summaryTbl, 0, 7, "CE IV / PE IV Values", bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 7, "CE IV:" + str.tostring(ce_iv, "#.##") + " | PE IV:" + str.tostring(pe_iv, "#.##"), bgcolor=color.black, text_color=color.white, text_size=curTextSize)
         
-        // Row 8: Neutral IV Count
-        table.cell(summaryTbl, 0, 8, "Neutral IV (Both IVs Exist or Zero)", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 8, str.tostring(count_neutral_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 8, "", bgcolor=color.black)
-        table.cell(summaryTbl, 3, 8, "", bgcolor=color.black)
+        // Row 8: IV Segregation Status
+        string iv_seg_status = is_pe_iv_only ? "PE IV Only (PE IV > 0)" : (is_ce_iv_only ? "CE IV Only (CE IV > 0)" : "Neutral IV (Both Exist / Zero)")
+        color iv_seg_col    = is_pe_iv_only ? colorPEColor : (is_ce_iv_only ? colorCEColor : colorNeutralColor)
+        table.cell(summaryTbl, 0, 8, "Realtime IV Segregation", bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 8, iv_seg_status, bgcolor=color.black, text_color=iv_seg_col, text_size=curTextSize)
         
-        // Row 9: IV Just Formed (Prev Candle)
-        table.cell(summaryTbl, 0, 9, "PE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 9, str.tostring(count_pe_iv_just_fmt), bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 9, "CE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 9, str.tostring(count_ce_iv_just_fmt), bgcolor=color.black, text_color=colorCrossColor, text_size=curTextSize)
-
-        // Stock Breakdown Table Rows (If Enabled)
-        if showStockBreakdown and count_total_stocks > 0
-            // Row 10: Section Banner - INDIVIDUAL STOCK BREAKDOWN
-            table.cell(summaryTbl, 0, 10, "--- INDIVIDUAL STOCK BREAKDOWN TABLE ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
-            table.cell(summaryTbl, 1, 10, "", bgcolor=colorSectionBg)
-            table.cell(summaryTbl, 2, 10, "", bgcolor=colorSectionBg)
-            table.cell(summaryTbl, 3, 10, "", bgcolor=colorSectionBg)
-            
-            // Row 11: Column Headers
-            table.cell(summaryTbl, 0, 11, "Stock (ATM)", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-            table.cell(summaryTbl, 1, 11, "CE / PE Price (Real BEP)", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-            table.cell(summaryTbl, 2, 11, "BEP Status / Cross", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-            table.cell(summaryTbl, 3, 11, "IV Segregation / Just Formed", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-            
-            for k = 0 to math.min(count_total_stocks - 1, 5)
-                StockAnalytics item = array.get(stockList, k)
-                int r = 12 + k
-                
-                string stk_info = item.symbol + " (" + f_format_strike(item.atm_strike) + ")"
-                string pr_info  = "CE:" + str.tostring(item.ce_c, "#.#") + " PE:" + str.tostring(item.pe_c, "#.#") + " [BEP:" + str.tostring(item.real_bep, "#.#") + "]"
-                
-                string bep_st = item.ce_above_real_bep ? "CE > BEP" : (item.pe_above_real_bep ? "PE > BEP" : "Below BEP")
-                if item.ce_cross_above_real_bep
-                    bep_st += " (CE Cross Up)"
-                if item.pe_cross_above_real_bep
-                    bep_st += " (PE Cross Up)"
-                    
-                string iv_st = item.is_pe_iv_only ? "PE IV Only" : (item.is_ce_iv_only ? "CE IV Only" : "Neutral IV")
-                if item.pe_iv_just_formed
-                    iv_st += " [PE IV Formed]"
-                if item.ce_iv_just_formed
-                    iv_st += " [CE IV Formed]"
-                    
-                color bg_col = k % 2 == 0 ? color.black : color.new(#1A1A1A, 0)
-                
-                table.cell(summaryTbl, 0, r, stk_info, bgcolor=bg_col, text_color=color.white, text_size=curTextSize)
-                table.cell(summaryTbl, 1, r, pr_info,  bgcolor=bg_col, text_color=color.silver, text_size=curTextSize)
-                table.cell(summaryTbl, 2, r, bep_st,   bgcolor=bg_col, text_color=item.ce_above_real_bep ? colorCEColor : (item.pe_above_real_bep ? colorPEColor : colorNeutralColor), text_size=curTextSize)
-                table.cell(summaryTbl, 3, r, iv_st,    bgcolor=bg_col, text_color=item.is_pe_iv_only ? colorPEColor : (item.is_ce_iv_only ? colorCEColor : colorNeutralColor), text_size=curTextSize)
+        // Row 9: Just Formed IV Status
+        string iv_formed_status = "No New Formation"
+        if pe_iv_just_formed
+            iv_formed_status := "PE IV Just Formed (Prev Candle)"
+        else if ce_iv_just_formed
+            iv_formed_status := "CE IV Just Formed (Prev Candle)"
+        table.cell(summaryTbl, 0, 9, "Just Formed IV Status", bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 9, iv_formed_status, bgcolor=color.black, text_color=iv_formed_status != "No New Formation" ? colorCrossColor : color.gray, text_size=curTextSize)
