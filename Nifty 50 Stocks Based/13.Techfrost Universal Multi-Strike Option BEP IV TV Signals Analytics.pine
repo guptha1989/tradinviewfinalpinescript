@@ -186,7 +186,7 @@ float ref_low  = highLowSrcInput == HighLowSource.min5 ? (not na(low_5m) ? low_5
 // CONSOLIDATED BUY / SELL SIGNAL ENGINE
 // ==========================================
 
-// Top-Level Unconditional Crossover & Crossunder Series Calculations (Fixes CW10002)
+// Top-Level Unconditional Crossover & Crossunder Series Calculations
 bool ce_cross_bep_raw    = ta.crossover(eval_spot, atm_ce_bep_rt)
 bool ce_cross_strike_raw = ta.crossover(eval_spot, atm_strike)
 bool pe_cross_bep_raw    = ta.crossunder(eval_spot, atm_pe_bep_rt)
@@ -243,7 +243,7 @@ else if buy_pe_cond
     signalBg      := #FF1744
     signalTxtColor:= color.white
 
-// Chart Plot Shapes (Fixes CE10120 & CE10272: location=location.belowbar / location=location.abovebar)
+// Chart Plot Shapes
 plotshape(showSignalsOnChart and (strong_buy_ce_cond or buy_ce_cond), title="Buy CE Signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
 plotshape(showSignalsOnChart and (strong_buy_pe_cond or buy_pe_cond), title="Buy PE Signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
 
@@ -251,7 +251,7 @@ plotshape(showSignalsOnChart and (strong_buy_pe_cond or buy_pe_cond), title="Buy
 // LAST 5 DAYS SWING PERFORMANCE TRACKER
 // ==========================================
 
-// Top-Level Unconditional Day Change Series Calculation (Fixes CW10002)
+// Top-Level Unconditional Day Change Series Calculation
 bool is_new_day = ta.change(time("D")) != 0
 
 var int day_count = 0
@@ -360,10 +360,10 @@ var table perfTbl    = table.new(f_get_table_pos(perfTablePosInput), 4, 7, bgcol
 
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
-// Helper formatting function for table cells based on showDetailedValues mode
+// Helper formatting function for table cells based on showDetailedValues mode (Fixed: Uses "#.##" format to eliminate trailing 'f')
 f_fmt_val_cell(float numVal, bool condition, string trueTxt, string falseTxt) =>
     if showDetailedValues
-        str.tostring(numVal, "#.2f") + " (" + (condition ? trueTxt : falseTxt) + ")"
+        str.tostring(numVal, "#.##") + " (" + (condition ? trueTxt : falseTxt) + ")"
     else
         condition ? trueTxt : falseTxt
 
@@ -372,14 +372,20 @@ if barstate.islast
     if not showSummaryTable
         table.delete(summaryTbl)
     else
-        // Row 0: Master Header
+        // Row 0: Master Header with Clean Strike Price Formatting
+        string atm_str = str.tostring(atm_strike, "#.##")
+        string itm_ce_str = str.tostring(itm_ce_strike, "#.##")
+        string otm_ce_str = str.tostring(otm_ce_strike, "#.##")
+        string itm_pe_str = str.tostring(itm_pe_strike, "#.##")
+        string otm_pe_str = str.tostring(otm_pe_strike, "#.##")
+
         table.cell(summaryTbl, 0, 0, "Techfrost Universal Option BEP IV TV Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 0, "ATM CE (" + str.tostring(atm_strike) + ")", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 0, "ATM PE (" + str.tostring(atm_strike) + ")", bgcolor=colorHeaderBg, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 0, "ITM CE (" + str.tostring(itm_ce_strike) + ")", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 0, "ITM PE (" + str.tostring(itm_pe_strike) + ")", bgcolor=colorHeaderBg, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 0, "OTM CE (" + str.tostring(otm_ce_strike) + ")", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 0, "OTM PE (" + str.tostring(otm_pe_strike) + ")", bgcolor=colorHeaderBg, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 0, "ATM CE (" + atm_str + ")", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 0, "ATM PE (" + atm_str + ")", bgcolor=colorHeaderBg, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 0, "ITM CE (" + itm_ce_str + ")", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 0, "ITM PE (" + itm_pe_str + ")", bgcolor=colorHeaderBg, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 0, "OTM CE (" + otm_ce_str + ")", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 0, "OTM PE (" + otm_pe_str + ")", bgcolor=colorHeaderBg, text_color=colorPEColor, text_size=curTextSize)
 
         // Row 1: Price Above or Below Strike
         table.cell(summaryTbl, 0, 1, "Price vs Strike", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
@@ -410,49 +416,49 @@ if barstate.islast
 
         // Row 4: Realtime IV
         table.cell(summaryTbl, 0, 4, "Realtime IV", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 4, str.tostring(atm_ce_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 4, str.tostring(atm_pe_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 4, str.tostring(itm_ce_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 4, str.tostring(itm_pe_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 4, str.tostring(otm_ce_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 4, str.tostring(otm_pe_iv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 4, str.tostring(atm_ce_iv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 4, str.tostring(atm_pe_iv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 4, str.tostring(itm_ce_iv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 4, str.tostring(itm_pe_iv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 4, str.tostring(otm_ce_iv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 4, str.tostring(otm_pe_iv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
         // Row 5: Static IV
         table.cell(summaryTbl, 0, 5, "Static IV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 5, str.tostring(atm_ce_iv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 5, str.tostring(atm_pe_iv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 5, str.tostring(itm_ce_iv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 5, str.tostring(itm_pe_iv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 5, str.tostring(otm_ce_iv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 5, str.tostring(otm_pe_iv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 5, str.tostring(atm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 5, str.tostring(atm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 5, str.tostring(itm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 5, str.tostring(itm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 5, str.tostring(otm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 5, str.tostring(otm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
         // Row 6: Realtime TV
         table.cell(summaryTbl, 0, 6, "Realtime TV", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 6, str.tostring(atm_ce_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 6, str.tostring(atm_pe_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 6, str.tostring(itm_ce_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 6, str.tostring(itm_pe_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 6, str.tostring(otm_ce_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 6, str.tostring(otm_pe_tv_rt, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 6, str.tostring(atm_ce_tv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 6, str.tostring(atm_pe_tv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 6, str.tostring(itm_ce_tv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 6, str.tostring(itm_pe_tv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 6, str.tostring(otm_ce_tv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 6, str.tostring(otm_pe_tv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
         // Row 7: Static TV
         table.cell(summaryTbl, 0, 7, "Static TV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 7, str.tostring(atm_ce_tv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 7, str.tostring(atm_pe_tv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 7, str.tostring(itm_ce_tv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 7, str.tostring(itm_pe_tv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 7, str.tostring(otm_ce_tv_st, "#.2f"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 7, str.tostring(otm_pe_tv_st, "#.2f"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 7, str.tostring(atm_ce_tv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 7, str.tostring(atm_pe_tv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 7, str.tostring(itm_ce_tv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 7, str.tostring(itm_pe_tv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 7, str.tostring(otm_ce_tv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 7, str.tostring(otm_pe_tv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
         // Row 8: Option High & Low Reference
         string hlLabel = highLowSrcInput == HighLowSource.min5 ? "5-Min H/L" : "Prev Day H/L"
         table.cell(summaryTbl, 0, 8, "Ref " + hlLabel, bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 8, str.tostring(ref_high, "#.2f") + " / " + str.tostring(ref_low, "#.2f"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 8, str.tostring(ref_high, "#.##") + " / " + str.tostring(ref_low, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 8, str.tostring(ref_high, "#.##") + " / " + str.tostring(ref_low, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 8, str.tostring(ref_high, "#.##") + " / " + str.tostring(ref_low, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 8, str.tostring(ref_high, "#.##") + " / " + str.tostring(ref_low, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 8, str.tostring(ref_high, "#.##") + " / " + str.tostring(ref_low, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 8, str.tostring(ref_high, "#.##") + " / " + str.tostring(ref_low, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=curTextSize)
 
         // Row 9 & 10: Signal Tab Banner & Status
         table.cell(summaryTbl, 0, 9, "--- UNIVERSAL OPTIONS BUY / SELL SIGNAL ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
@@ -495,9 +501,9 @@ if barstate.islast
 
         // Row 3: Points Captured (Max Swing Points)
         table.cell(perfTbl, 0, 3, "Points Captured (Max Swing)", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        table.cell(perfTbl, 1, 3, str.tostring(std_pts_captured, "#.2f") + " pts", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(perfTbl, 2, 3, str.tostring(strong_pts_captured, "#.2f") + " pts", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        table.cell(perfTbl, 3, 3, str.tostring(total_all_pts, "#.2f") + " pts", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(perfTbl, 1, 3, str.tostring(std_pts_captured, "#.##") + " pts", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(perfTbl, 2, 3, str.tostring(strong_pts_captured, "#.##") + " pts", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(perfTbl, 3, 3, str.tostring(total_all_pts, "#.##") + " pts", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
 
         // Row 4: Profit Making Entries
         table.cell(perfTbl, 0, 4, "Profit Making Entries (Gain > 0)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
@@ -517,6 +523,6 @@ if barstate.islast
         float total_win_rate  = total_all_alerts > 0 ? (total_all_profits / float(total_all_alerts)) * 100.0 : 0.0
 
         table.cell(perfTbl, 0, 6, "Win Rate (%)", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
-        table.cell(perfTbl, 1, 6, str.tostring(std_win_rate, "#.1f") + "%", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
-        table.cell(perfTbl, 2, 6, str.tostring(strong_win_rate, "#.1f") + "%", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        table.cell(perfTbl, 3, 6, str.tostring(total_win_rate, "#.1f") + "%", bgcolor=color.black, text_color=color.yellow, text_size=curTextSize)
+        table.cell(perfTbl, 1, 6, str.tostring(std_win_rate, "#.#") + "%", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(perfTbl, 2, 6, str.tostring(strong_win_rate, "#.#") + "%", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(perfTbl, 3, 6, str.tostring(total_win_rate, "#.#") + "%", bgcolor=color.black, text_color=color.yellow, text_size=curTextSize)
