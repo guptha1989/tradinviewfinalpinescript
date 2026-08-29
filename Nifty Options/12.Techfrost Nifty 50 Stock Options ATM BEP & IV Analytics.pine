@@ -19,13 +19,16 @@ enum TableSize
     large  = "Large"
 
 enum Nifty50SelectionMode
-    all50   = "All 50 Nifty 50 Constituent Stocks (Full Basket)"
-    batch1  = "Nifty 50 Batch 1: Stocks 1 to 25"
-    batch2  = "Nifty 50 Batch 2: Stocks 26 to 50"
+    batch1  = "Nifty 50 Batch 1: Stocks 1 to 25 (RELIANCE, HDFCBANK, TCS, INFY...)"
+    batch2  = "Nifty 50 Batch 2: Stocks 26 to 50 (ADANIENT, TRENT, WIPRO, HDFCLIFE...)"
+    custom  = "Custom Stock Selection"
 
 // --- Nifty 50 Stock Selection ---
-niftyModeInput     = input.enum(Nifty50SelectionMode.all50, "Nifty 50 Stock Selection Mode", group="Nifty 50 Stock Basket",
-  tooltip="Select All 50 Nifty 50 stocks from NSE Live Equity Market, or filter by Batch 1 (1-25) / Batch 2 (26-50).")
+niftyModeInput     = input.enum(Nifty50SelectionMode.batch1, "Nifty 50 Stock Batch Selection", group="Nifty 50 Stock Basket",
+  tooltip="TradingView limits security requests to 40 calls per script. Select Batch 1 (Stocks 1-25) or Batch 2 (Stocks 26-50) to evaluate all 50 Nifty 50 stocks from NSE Live Equity Market.")
+
+useOffHoursPrevClose = input.bool(true, "Use Previous Day Close When Market Is Closed", group="Data Source Settings",
+  tooltip="When checked, automatically uses Previous Day Close price outside market hours so the table displays valid analytics 24/7.")
 
 // --- Display Controls ---
 showSummaryTable   = input.bool(true, "Show Dashboard Summary Table", group="Display Controls")
@@ -102,57 +105,64 @@ f_eval_nifty_stock_single(string root_sym, bool is_enabled) =>
     res.enabled := is_enabled
     
     if is_enabled
-        // 1 Security Call per Stock: Fetch Spot Close, Previous Close, and Session Open
+        // Fetch Spot Close, Previous Close, and Session Open
         [spot_close, spot_prev_close, spot_open] = request.security("NSE:" + root_sym, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
         
-        if not na(spot_close) and spot_close > 0
-            res.spot_c      := spot_close
+        // Automatic Market-Closed Off-Hours Pricing Fallback
+        float eval_spot = spot_close
+        if useOffHoursPrevClose and (na(spot_close) or spot_close <= 0 or not barstate.isrealtime)
+            eval_spot := not na(spot_prev_close) and spot_prev_close > 0 ? spot_prev_close : spot_close
+            
+        if not na(eval_spot) and eval_spot > 0
+            res.spot_c      := eval_spot
             res.spot_o      := spot_open
             res.spot_prev_c := spot_prev_close
             
             // 2. Realtime ATM Strike & Day Open ATM Strike
-            float atm_st  = f_calc_atm_strike(spot_close)
+            float atm_st  = f_calc_atm_strike(eval_spot)
             float open_st = f_calc_atm_strike(spot_open)
             res.atm_strike      := atm_st
             res.open_atm_strike := open_st
             
             // 3. BEP Status & Crossovers
-            res.ce_above_real_bep := spot_close > atm_st
-            res.pe_above_real_bep := spot_close < atm_st
+            res.ce_above_real_bep := eval_spot > atm_st
+            res.pe_above_real_bep := eval_spot < atm_st
             
-            res.ce_above_open_bep := spot_close > open_st
-            res.pe_above_open_bep := spot_close < open_st
-            res.neutral_open_bep  := (spot_close == open_st)
+            res.ce_above_open_bep := eval_spot > open_st
+            res.pe_above_open_bep := eval_spot < open_st
+            res.neutral_open_bep  := (eval_spot == open_st)
             
-            float prev_atm = f_calc_atm_strike(spot_prev_close)
-            res.ce_cross_above_real_bep := (spot_prev_close <= prev_atm) and (spot_close > atm_st)
-            res.ce_cross_below_real_bep := (spot_prev_close >= prev_atm) and (spot_close < atm_st)
+            float prev_spot = not na(spot_prev_close) and spot_prev_close > 0 ? spot_prev_close : eval_spot
+            float prev_atm  = f_calc_atm_strike(prev_spot)
             
-            res.pe_cross_above_real_bep := (spot_prev_close >= prev_atm) and (spot_close < atm_st)
-            res.pe_cross_below_real_bep := (spot_prev_close <= prev_atm) and (spot_close > atm_st)
+            // Realtime BEP Crossover Updates
+            res.ce_cross_above_real_bep := (prev_spot <= prev_atm) and (eval_spot > atm_st)
+            res.ce_cross_below_real_bep := (prev_spot >= prev_atm) and (eval_spot < atm_st)
+            
+            res.pe_cross_above_real_bep := (prev_spot >= prev_atm) and (eval_spot < atm_st)
+            res.pe_cross_below_real_bep := (prev_spot <= prev_atm) and (eval_spot > atm_st)
             
             // 4. Intrinsic Value (IV) Calculations
-            res.ce_iv := math.max(0.0, spot_close - atm_st)
-            res.pe_iv := math.max(0.0, atm_st - spot_close)
+            res.ce_iv := math.max(0.0, eval_spot - atm_st)
+            res.pe_iv := math.max(0.0, atm_st - eval_spot)
             
             res.is_pe_iv_only := (res.pe_iv > 0.0) and (res.ce_iv <= 0.0)
             res.is_ce_iv_only := (res.ce_iv > 0.0) and (res.pe_iv <= 0.0)
             res.is_neutral_iv := ((res.ce_iv > 0.0) and (res.pe_iv > 0.0)) or ((res.ce_iv <= 0.0) and (res.pe_iv <= 0.0))
             
-            float prev_ce_iv = math.max(0.0, spot_prev_close - atm_st)
-            float prev_pe_iv = math.max(0.0, atm_st - spot_prev_close)
+            float prev_ce_iv = math.max(0.0, prev_spot - prev_atm)
+            float prev_pe_iv = math.max(0.0, prev_atm - prev_spot)
             
-            res.pe_iv_just_formed := (res.pe_iv > 0.0) and (prev_pe_iv <= 0.0)
-            res.ce_iv_just_formed := (res.ce_iv > 0.0) and (prev_ce_iv <= 0.0)
+            res.pe_iv_just_formed := (res.pe_iv > 0.0) and (prev_ce_iv <= 0.0)
+            res.ce_iv_just_formed := (res.ce_iv > 0.0) and (prev_pe_iv <= 0.0)
     res
 
 // ==========================================
-// EXACT 50 NIFTY 50 CONSTITUENT STOCKS (NSE LIVE EQUITY MARKET)
+// ALL 50 NIFTY 50 CONSTITUENT STOCKS (NSE LIVE EQUITY MARKET)
 // ==========================================
 
-bool is_all = (niftyModeInput == Nifty50SelectionMode.all50)
-bool is_b1  = (niftyModeInput == Nifty50SelectionMode.batch1) or is_all
-bool is_b2  = (niftyModeInput == Nifty50SelectionMode.batch2) or is_all
+bool is_b1 = (niftyModeInput == Nifty50SelectionMode.batch1)
+bool is_b2 = (niftyModeInput == Nifty50SelectionMode.batch2)
 
 // --- Batch 1 Stocks (1 to 25) ---
 StockAnalytics s1  = f_eval_nifty_stock_single("RELIANCE",   is_b1)
@@ -202,6 +212,11 @@ StockAnalytics s42 = f_eval_nifty_stock_single("NESTLEIND",  is_b2)
 StockAnalytics s43 = f_eval_nifty_stock_single("BRITANNIA",  is_b2)
 StockAnalytics s44 = f_eval_nifty_stock_single("TATACONSUM", is_b2)
 StockAnalytics s45 = f_eval_nifty_stock_single("HEROMOTOCO", is_b2)
+StockAnalytics s46 = f_eval_nifty_stock_single("HDFCLIFE",   is_b2)
+StockAnalytics s47 = f_eval_nifty_stock_single("SBILIFE",    is_b2)
+StockAnalytics s48 = f_eval_nifty_stock_single("DIVISLAB",   is_b2)
+StockAnalytics s49 = f_eval_nifty_stock_single("APOLLOHOSP", is_b2)
+StockAnalytics s50 = f_eval_nifty_stock_single("SHRIRAMFIN", is_b2)
 
 // Build Evaluated Stock List Array
 array<StockAnalytics> stockList = array.new<StockAnalytics>()
@@ -256,6 +271,11 @@ f_push_valid_stock(stockList, s42)
 f_push_valid_stock(stockList, s43)
 f_push_valid_stock(stockList, s44)
 f_push_valid_stock(stockList, s45)
+f_push_valid_stock(stockList, s46)
+f_push_valid_stock(stockList, s47)
+f_push_valid_stock(stockList, s48)
+f_push_valid_stock(stockList, s49)
+f_push_valid_stock(stockList, s50)
 
 // ==========================================
 // AGGREGATE SUMMARY COUNTS ACROSS ALL STOCKS
@@ -350,8 +370,9 @@ if barstate.islast
         table.delete(summaryTbl)
     else
         // Row 0: Title Banner
+        string batchLabel = is_b1 ? "Batch 1 (Stocks 1-25)" : "Batch 2 (Stocks 26-50)"
         table.cell(summaryTbl, 0, 0, "Nifty 50 ATM Stock Options Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 0, "Active Stocks: " + str.tostring(count_total_stocks) + " / 50", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 0, "Active Stocks: " + str.tostring(count_total_stocks) + " / 25 [" + batchLabel + "]", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
         table.cell(summaryTbl, 2, 0, "", bgcolor=colorHeaderBg)
         table.cell(summaryTbl, 3, 0, "", bgcolor=colorHeaderBg)
         
@@ -411,7 +432,7 @@ if barstate.islast
 
         // Row 10 & 11: Evaluated Stock Symbols List
         if showStockListRow
-            table.cell(summaryTbl, 0, 10, "--- EVALUATED NIFTY STOCKS LIST ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTbl, 0, 10, "--- EVALUATED NIFTY STOCKS LIST (" + str.tostring(count_total_stocks) + " STOCKS) ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
             table.cell(summaryTbl, 1, 10, "", bgcolor=colorSectionBg)
             table.cell(summaryTbl, 2, 10, "", bgcolor=colorSectionBg)
             table.cell(summaryTbl, 3, 10, "", bgcolor=colorSectionBg)
