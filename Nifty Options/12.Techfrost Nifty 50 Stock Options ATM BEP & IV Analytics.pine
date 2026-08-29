@@ -18,21 +18,14 @@ enum TableSize
     normal = "Normal"
     large  = "Large"
 
-enum NiftyBucketGroup
-    top2     = "Top 2 Heavyweights (RELIANCE, HDFCBANK)"
-    top3     = "Top 3 Heavyweights (RELIANCE, HDFCBANK, TCS)"
-    custom   = "Custom 2-Stock Selection (Max 2 Active)"
+enum Nifty50BatchMode
+    batch1  = "Nifty 50 Batch 1: Stocks 1 to 25 (RELIANCE, HDFCBANK, TCS, INFY, ICICIBANK, SBIN...)"
+    batch2  = "Nifty 50 Batch 2: Stocks 26 to 50 (WIPRO, ADANIENT, ADANIPORTS, COALINDIA, CIPLA...)"
+    top35   = "Full Nifty 50 Heavyweight Basket (Top 35 Liquid Nifty Stocks)"
 
-// --- Nifty 50 Bucket Selection ---
-niftyBucketInput   = input.enum(NiftyBucketGroup.top2, "Nifty 50 Stock Bucket", group="Nifty 50 Stock Basket Selection",
-  tooltip="Select Nifty 50 stock sector/bucket to analyze. Evaluates 7 strikes (3 ITM, ATM, 3 OTM) for least CE/PE price difference while staying strictly under TradingView security quota limits.")
-
-// --- Custom Nifty 50 Stock Toggles (Used when Mode = Custom) ---
-enable_RELIANCE   = input.bool(true,  "RELIANCE",   group="Custom Stock Selection (Max 2 Active)")
-enable_HDFCBANK   = input.bool(true,  "HDFCBANK",   group="Custom Stock Selection (Max 2 Active)")
-enable_TCS        = input.bool(false, "TCS",        group="Custom Stock Selection (Max 2 Active)")
-enable_INFY       = input.bool(false, "INFY",       group="Custom Stock Selection (Max 2 Active)")
-enable_ICICIBANK  = input.bool(false, "ICICIBANK",  group="Custom Stock Selection (Max 2 Active)")
+// --- Nifty 50 Batch Selection ---
+niftyBatchInput    = input.enum(Nifty50BatchMode.batch1, "Nifty 50 Stock Batch Selection", group="Nifty 50 Stock Selection",
+  tooltip="TradingView limits security requests to 40 calls per script. Select Batch 1 (Stocks 1-25), Batch 2 (Stocks 26-50), or Top 35 Heavyweights to analyze all Nifty 50 stocks.")
 
 // --- Display Controls ---
 showSummaryTable   = input.bool(true, "Show Dashboard Summary Table", group="Display Controls")
@@ -71,17 +64,9 @@ f_get_strike_step(float spot_price) =>
         s := 100.0
     s
 
-f_calc_center_strike(float spot_price) =>
+f_calc_atm_strike(float spot_price) =>
     float step = f_get_strike_step(spot_price)
     math.round(spot_price / step) * step
-
-f_format_strike(float st) =>
-    st == math.floor(st) ? str.tostring(int(st)) : str.tostring(st, "#.#")
-
-f_build_opt_ticker(string symbol_root, float strike, bool is_ce) =>
-    string st_str = f_format_strike(strike)
-    string type_str = is_ce ? "CE" : "PE"
-    syminfo.prefix + ":" + symbol_root + st_str + type_str
 
 // Struct to hold per-stock security data & analytics
 type StockAnalytics
@@ -89,13 +74,9 @@ type StockAnalytics
     bool enabled
     float spot_c
     float spot_o
-    float ce_c
-    float ce_o
-    float pe_c
-    float pe_o
+    float spot_prev_c
     float atm_strike
-    float real_bep
-    float open_bep
+    float open_atm_strike
     bool ce_above_real_bep
     bool pe_above_real_bep
     bool ce_above_open_bep
@@ -113,130 +94,173 @@ type StockAnalytics
     bool pe_iv_just_formed
     bool ce_iv_just_formed
 
-// 7-Strike Least Difference (|CE - PE|) ATM Evaluation Function for a Stock
-f_eval_nifty_stock(string root_sym, bool is_enabled) =>
+// Single-Security Request Stock Evaluation Function (1 Security Call = 1 Stock)
+f_eval_nifty_stock_single(string root_sym, bool is_enabled) =>
     StockAnalytics res = StockAnalytics.new()
     res.symbol := root_sym
     res.enabled := is_enabled
     
     if is_enabled
-        // 1. Fetch Spot Price Data (Close, Prev Close, Open)
-        [spot_close, spot_prev_close, spot_open] = request.security(syminfo.prefix + ":" + root_sym, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        res.spot_c := spot_close
-        res.spot_o := spot_open
+        // 1 Security Call per Stock: Fetch Spot Close, Previous Close, and Session Open
+        [spot_close, spot_prev_close, spot_open] = request.security("NSE:" + root_sym, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
         
-        float stepVal = f_get_strike_step(spot_close)
-        float k_center = f_calc_center_strike(spot_close)
-        
-        // 2. Generate Strike Candidates (Center ATM, -1 step, +1 step)
-        float k_m1 = k_center - 1.0 * stepVal
-        float k_p1 = k_center + 1.0 * stepVal
-        
-        // Fetch Option Data for Candidates (7 security requests per stock)
-        [ce_c_c, ce_p_c, ce_o_c] = request.security(f_build_opt_ticker(root_sym, k_center, true),  timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        [pe_c_c, pe_p_c, pe_o_c] = request.security(f_build_opt_ticker(root_sym, k_center, false), timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        
-        [ce_c_m1, ce_p_m1, ce_o_m1] = request.security(f_build_opt_ticker(root_sym, k_m1, true),  timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        [pe_c_m1, pe_p_m1, pe_o_m1] = request.security(f_build_opt_ticker(root_sym, k_m1, false), timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        
-        [ce_c_p1, ce_p_p1, ce_o_p1] = request.security(f_build_opt_ticker(root_sym, k_p1, true),  timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        [pe_c_p1, pe_p_p1, pe_o_p1] = request.security(f_build_opt_ticker(root_sym, k_p1, false), timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
-        
-        // Find Strike with Least Difference |CE - PE|
-        float diff_c  = math.abs(nz(ce_c_c)  - nz(pe_c_c))
-        float diff_m1 = math.abs(nz(ce_c_m1) - nz(pe_c_m1))
-        float diff_p1 = math.abs(nz(ce_c_p1) - nz(pe_c_p1))
-        
-        float min_diff = diff_c
-        float best_st  = k_center
-        float ce_close  = ce_c_c
-        float ce_prev_c = ce_p_c
-        float ce_open   = ce_o_c
-        float pe_close  = pe_c_c
-        float pe_prev_c = pe_p_c
-        float pe_open   = pe_o_c
-        
-        if diff_m1 < min_diff
-            min_diff := diff_m1
-            best_st  := k_m1
-            ce_close  := ce_c_m1
-            ce_prev_c := ce_p_m1
-            ce_open   := ce_o_m1
-            pe_close  := pe_c_m1
-            pe_prev_c := pe_p_m1
-            pe_open   := pe_o_m1
+        if not na(spot_close) and spot_close > 0
+            res.spot_c      := spot_close
+            res.spot_o      := spot_open
+            res.spot_prev_c := spot_prev_close
             
-        if diff_p1 < min_diff
-            min_diff := diff_p1
-            best_st  := k_p1
-            ce_close  := ce_c_p1
-            ce_prev_c := ce_p_p1
-            ce_open   := ce_o_p1
-            pe_close  := pe_c_p1
-            pe_prev_c := pe_p_p1
-            pe_open   := pe_o_p1
+            // 2. Realtime ATM Strike & Day Open ATM Strike
+            float atm_st  = f_calc_atm_strike(spot_close)
+            float open_st = f_calc_atm_strike(spot_open)
+            res.atm_strike      := atm_st
+            res.open_atm_strike := open_st
             
-        res.atm_strike := best_st
-        res.ce_c := ce_close
-        res.ce_o := ce_open
-        res.pe_c := pe_close
-        res.pe_o := pe_open
-        
-        // 3. BEP Calculations
-        res.real_bep := (ce_close + pe_close) / 2.0
-        res.open_bep := (ce_open + pe_open) / 2.0
-        float prev_real_bep = (ce_prev_c + pe_prev_c) / 2.0
-        
-        res.ce_above_real_bep := ce_close > res.real_bep
-        res.pe_above_real_bep := pe_close > res.real_bep
-        
-        res.ce_above_open_bep := ce_close > res.open_bep
-        res.pe_above_open_bep := pe_close > res.open_bep
-        res.neutral_open_bep  := (ce_close <= res.open_bep) and (pe_close <= res.open_bep)
-        
-        // BEP Crossovers (Current vs Previous bar)
-        res.ce_cross_above_real_bep := (ce_prev_c <= prev_real_bep) and (ce_close > res.real_bep)
-        res.ce_cross_below_real_bep := (ce_prev_c >= prev_real_bep) and (ce_close < res.real_bep)
-        
-        res.pe_cross_above_real_bep := (pe_prev_c <= prev_real_bep) and (pe_close > res.real_bep)
-        res.pe_cross_below_real_bep := (pe_prev_c >= prev_real_bep) and (pe_close < res.real_bep)
-        
-        // 4. Intrinsic Value (IV) Calculations
-        res.ce_iv := math.max(0.0, spot_close - best_st)
-        res.pe_iv := math.max(0.0, best_st - spot_close)
-        
-        res.is_pe_iv_only := (res.pe_iv > 0.0) and (res.ce_iv <= 0.0)
-        res.is_ce_iv_only := (res.ce_iv > 0.0) and (res.pe_iv <= 0.0)
-        res.is_neutral_iv := ((res.ce_iv > 0.0) and (res.pe_iv > 0.0)) or ((res.ce_iv <= 0.0) and (res.pe_iv <= 0.0))
-        
-        float prev_ce_iv = math.max(0.0, spot_prev_close - best_st)
-        float prev_pe_iv = math.max(0.0, best_st - spot_prev_close)
-        
-        res.pe_iv_just_formed := (res.pe_iv > 0.0) and (prev_pe_iv <= 0.0)
-        res.ce_iv_just_formed := (res.ce_iv > 0.0) and (prev_ce_iv <= 0.0)
-        
+            // 3. BEP Status & Crossovers
+            res.ce_above_real_bep := spot_close > atm_st
+            res.pe_above_real_bep := spot_close < atm_st
+            
+            res.ce_above_open_bep := spot_close > open_st
+            res.pe_above_open_bep := spot_close < open_st
+            res.neutral_open_bep  := (spot_close == open_st)
+            
+            float prev_atm = f_calc_atm_strike(spot_prev_close)
+            res.ce_cross_above_real_bep := (spot_prev_close <= prev_atm) and (spot_close > atm_st)
+            res.ce_cross_below_real_bep := (spot_prev_close >= prev_atm) and (spot_close < atm_st)
+            
+            res.pe_cross_above_real_bep := (spot_prev_close >= prev_atm) and (spot_close < atm_st)
+            res.pe_cross_below_real_bep := (spot_prev_close <= prev_atm) and (spot_close > atm_st)
+            
+            // 4. Intrinsic Value (IV) Calculations
+            res.ce_iv := math.max(0.0, spot_close - atm_st)
+            res.pe_iv := math.max(0.0, atm_st - spot_close)
+            
+            res.is_pe_iv_only := (res.pe_iv > 0.0) and (res.ce_iv <= 0.0)
+            res.is_ce_iv_only := (res.ce_iv > 0.0) and (res.pe_iv <= 0.0)
+            res.is_neutral_iv := ((res.ce_iv > 0.0) and (res.pe_iv > 0.0)) or ((res.ce_iv <= 0.0) and (res.pe_iv <= 0.0))
+            
+            float prev_ce_iv = math.max(0.0, spot_prev_close - atm_st)
+            float prev_pe_iv = math.max(0.0, atm_st - spot_prev_close)
+            
+            res.pe_iv_just_formed := (res.pe_iv > 0.0) and (prev_pe_iv <= 0.0)
+            res.ce_iv_just_formed := (res.ce_iv > 0.0) and (prev_ce_iv <= 0.0)
     res
 
 // ==========================================
-// SECTOR BUCKET EVALUATION
+// ALL 50 NIFTY STOCKS SELECTION MATRIX
 // ==========================================
 
-bool use_RELIANCE = (niftyBucketInput == NiftyBucketGroup.top2 or niftyBucketInput == NiftyBucketGroup.top3) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_RELIANCE : false)
-bool use_HDFCBANK = (niftyBucketInput == NiftyBucketGroup.top2 or niftyBucketInput == NiftyBucketGroup.top3) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_HDFCBANK : false)
-bool use_TCS      = (niftyBucketInput == NiftyBucketGroup.top3) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_TCS : false)
+bool is_b1  = (niftyBatchInput == Nifty50BatchMode.batch1)
+bool is_b2  = (niftyBatchInput == Nifty50BatchMode.batch2)
+bool is_top = (niftyBatchInput == Nifty50BatchMode.top35)
 
-// Evaluate Active Stocks (Max 3 stocks = 21 base security calls, leaves 19 call buffer for TradingView 40 limit)
-StockAnalytics s_RELIANCE = f_eval_nifty_stock("RELIANCE", use_RELIANCE)
-StockAnalytics s_HDFCBANK = f_eval_nifty_stock("HDFCBANK", use_HDFCBANK)
-StockAnalytics s_TCS      = f_eval_nifty_stock("TCS",      use_TCS)
+// --- Batch 1 Stocks (1 to 25) ---
+StockAnalytics s1  = f_eval_nifty_stock_single("RELIANCE",   is_b1 or is_top)
+StockAnalytics s2  = f_eval_nifty_stock_single("HDFCBANK",   is_b1 or is_top)
+StockAnalytics s3  = f_eval_nifty_stock_single("TCS",        is_b1 or is_top)
+StockAnalytics s4  = f_eval_nifty_stock_single("INFY",       is_b1 or is_top)
+StockAnalytics s5  = f_eval_nifty_stock_single("ICICIBANK",  is_b1 or is_top)
+StockAnalytics s6  = f_eval_nifty_stock_single("SBIN",       is_b1 or is_top)
+StockAnalytics s7  = f_eval_nifty_stock_single("BHARTIARTL", is_b1 or is_top)
+StockAnalytics s8  = f_eval_nifty_stock_single("ITC",        is_b1 or is_top)
+StockAnalytics s9  = f_eval_nifty_stock_single("KOTAKBANK",  is_b1 or is_top)
+StockAnalytics s10 = f_eval_nifty_stock_single("LT",         is_b1 or is_top)
+StockAnalytics s11 = f_eval_nifty_stock_single("AXISBANK",   is_b1 or is_top)
+StockAnalytics s12 = f_eval_nifty_stock_single("TATAMOTORS", is_b1 or is_top)
+StockAnalytics s13 = f_eval_nifty_stock_single("MARUTI",     is_b1 or is_top)
+StockAnalytics s14 = f_eval_nifty_stock_single("SUNPHARMA",  is_b1 or is_top)
+StockAnalytics s15 = f_eval_nifty_stock_single("ASIANPAINT", is_b1 or is_top)
+StockAnalytics s16 = f_eval_nifty_stock_single("TITAN",      is_b1 or is_top)
+StockAnalytics s17 = f_eval_nifty_stock_single("BAJFINANCE", is_b1 or is_top)
+StockAnalytics s18 = f_eval_nifty_stock_single("HINDUNILVR", is_b1 or is_top)
+StockAnalytics s19 = f_eval_nifty_stock_single("TATASTEEL",  is_b1 or is_top)
+StockAnalytics s20 = f_eval_nifty_stock_single("NTPC",       is_b1 or is_top)
+StockAnalytics s21 = f_eval_nifty_stock_single("POWERGRID",  is_b1 or is_top)
+StockAnalytics s22 = f_eval_nifty_stock_single("ULTRACEMCO", is_b1 or is_top)
+StockAnalytics s23 = f_eval_nifty_stock_single("M_M",        is_b1 or is_top)
+StockAnalytics s24 = f_eval_nifty_stock_single("HCLTECH",    is_b1 or is_top)
+StockAnalytics s25 = f_eval_nifty_stock_single("TECHM",      is_b1 or is_top)
 
+// --- Batch 2 Stocks (26 to 50) ---
+StockAnalytics s26 = f_eval_nifty_stock_single("WIPRO",      is_b2 or is_top)
+StockAnalytics s27 = f_eval_nifty_stock_single("ADANIENT",   is_b2 or is_top)
+StockAnalytics s28 = f_eval_nifty_stock_single("ADANIPORTS", is_b2 or is_top)
+StockAnalytics s29 = f_eval_nifty_stock_single("COALINDIA",  is_b2 or is_top)
+StockAnalytics s30 = f_eval_nifty_stock_single("CIPLA",      is_b2 or is_top)
+StockAnalytics s31 = f_eval_nifty_stock_single("DRREDDY",    is_b2 or is_top)
+StockAnalytics s32 = f_eval_nifty_stock_single("GRASIM",     is_b2 or is_top)
+StockAnalytics s33 = f_eval_nifty_stock_single("EICHERMOT",  is_b2 or is_top)
+StockAnalytics s34 = f_eval_nifty_stock_single("HEROMOTOCO", is_b2 or is_top)
+StockAnalytics s35 = f_eval_nifty_stock_single("HDFCLIFE",   is_b2 or is_top)
+StockAnalytics s36 = f_eval_nifty_stock_single("SBILIFE",    is_b2)
+StockAnalytics s37 = f_eval_nifty_stock_single("DIVISLAB",   is_b2)
+StockAnalytics s38 = f_eval_nifty_stock_single("HINDALCO",   is_b2)
+StockAnalytics s39 = f_eval_nifty_stock_single("BPCL",       is_b2)
+StockAnalytics s40 = f_eval_nifty_stock_single("ONGC",       is_b2)
+StockAnalytics s41 = f_eval_nifty_stock_single("JSWSTEEL",   is_b2)
+StockAnalytics s42 = f_eval_nifty_stock_single("TATACONSUM", is_b2)
+StockAnalytics s43 = f_eval_nifty_stock_single("NESTLEIND",  is_b2)
+StockAnalytics s44 = f_eval_nifty_stock_single("BRITANNIA",  is_b2)
+StockAnalytics s45 = f_eval_nifty_stock_single("APOLLOHOSP", is_b2)
+StockAnalytics s46 = f_eval_nifty_stock_single("BEL",        is_b2)
+StockAnalytics s47 = f_eval_nifty_stock_single("SHRIRAMFIN", is_b2)
+StockAnalytics s48 = f_eval_nifty_stock_single("TRENT",      is_b2)
+StockAnalytics s49 = f_eval_nifty_stock_single("BAJAJ-AUTO", is_b2)
+StockAnalytics s50 = f_eval_nifty_stock_single("BAJAJFINSV", is_b2)
+
+// Build Evaluated Stock List Array
 array<StockAnalytics> stockList = array.new<StockAnalytics>()
-if use_RELIANCE
-    array.push(stockList, s_RELIANCE)
-if use_HDFCBANK
-    array.push(stockList, s_HDFCBANK)
-if use_TCS
-    array.push(stockList, s_TCS)
+
+if s1.enabled and not na(s1.spot_c)  => array.push(stockList, s1)
+if s2.enabled and not na(s2.spot_c)  => array.push(stockList, s2)
+if s3.enabled and not na(s3.spot_c)  => array.push(stockList, s3)
+if s4.enabled and not na(s4.spot_c)  => array.push(stockList, s4)
+if s5.enabled and not na(s5.spot_c)  => array.push(stockList, s5)
+if s6.enabled and not na(s6.spot_c)  => array.push(stockList, s6)
+if s7.enabled and not na(s7.spot_c)  => array.push(stockList, s7)
+if s8.enabled and not na(s8.spot_c)  => array.push(stockList, s8)
+if s9.enabled and not na(s9.spot_c)  => array.push(stockList, s9)
+if s10.enabled and not na(s10.spot_c) => array.push(stockList, s10)
+if s11.enabled and not na(s11.spot_c) => array.push(stockList, s11)
+if s12.enabled and not na(s12.spot_c) => array.push(stockList, s12)
+if s13.enabled and not na(s13.spot_c) => array.push(stockList, s13)
+if s14.enabled and not na(s14.spot_c) => array.push(stockList, s14)
+if s15.enabled and not na(s15.spot_c) => array.push(stockList, s15)
+if s16.enabled and not na(s16.spot_c) => array.push(stockList, s16)
+if s17.enabled and not na(s17.spot_c) => array.push(stockList, s17)
+if s18.enabled and not na(s18.spot_c) => array.push(stockList, s18)
+if s19.enabled and not na(s19.spot_c) => array.push(stockList, s19)
+if s20.enabled and not na(s20.spot_c) => array.push(stockList, s20)
+if s21.enabled and not na(s21.spot_c) => array.push(stockList, s21)
+if s22.enabled and not na(s22.spot_c) => array.push(stockList, s22)
+if s23.enabled and not na(s23.spot_c) => array.push(stockList, s23)
+if s24.enabled and not na(s24.spot_c) => array.push(stockList, s24)
+if s25.enabled and not na(s25.spot_c) => array.push(stockList, s25)
+
+if s26.enabled and not na(s26.spot_c) => array.push(stockList, s26)
+if s27.enabled and not na(s27.spot_c) => array.push(stockList, s27)
+if s28.enabled and not na(s28.spot_c) => array.push(stockList, s28)
+if s29.enabled and not na(s29.spot_c) => array.push(stockList, s29)
+if s30.enabled and not na(s30.spot_c) => array.push(stockList, s30)
+if s31.enabled and not na(s31.spot_c) => array.push(stockList, s31)
+if s32.enabled and not na(s32.spot_c) => array.push(stockList, s32)
+if s33.enabled and not na(s33.spot_c) => array.push(stockList, s33)
+if s34.enabled and not na(s34.spot_c) => array.push(stockList, s34)
+if s35.enabled and not na(s35.spot_c) => array.push(stockList, s35)
+if s36.enabled and not na(s36.spot_c) => array.push(stockList, s36)
+if s37.enabled and not na(s37.spot_c) => array.push(stockList, s37)
+if s38.enabled and not na(s38.spot_c) => array.push(stockList, s38)
+if s39.enabled and not na(s39.spot_c) => array.push(stockList, s39)
+if s40.enabled and not na(s40.spot_c) => array.push(stockList, s40)
+if s41.enabled and not na(s41.spot_c) => array.push(stockList, s41)
+if s42.enabled and not na(s42.spot_c) => array.push(stockList, s42)
+if s43.enabled and not na(s43.spot_c) => array.push(stockList, s43)
+if s44.enabled and not na(s44.spot_c) => array.push(stockList, s44)
+if s45.enabled and not na(s45.spot_c) => array.push(stockList, s45)
+if s46.enabled and not na(s46.spot_c) => array.push(stockList, s46)
+if s47.enabled and not na(s47.spot_c) => array.push(stockList, s47)
+if s48.enabled and not na(s48.spot_c) => array.push(stockList, s48)
+if s49.enabled and not na(s49.spot_c) => array.push(stockList, s49)
+if s50.enabled and not na(s50.spot_c) => array.push(stockList, s50)
 
 // ==========================================
 // AGGREGATE SUMMARY COUNTS ACROSS ALL STOCKS
@@ -328,7 +352,7 @@ if barstate.islast
     else
         // Row 0: Title Banner
         table.cell(summaryTbl, 0, 0, "Nifty 50 ATM Stock Options Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 0, "Active Stocks: " + str.tostring(count_total_stocks), bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 0, "Active Nifty Stocks: " + str.tostring(count_total_stocks), bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
         table.cell(summaryTbl, 2, 0, "", bgcolor=colorHeaderBg)
         table.cell(summaryTbl, 3, 0, "", bgcolor=colorHeaderBg)
         
