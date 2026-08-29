@@ -19,20 +19,20 @@ enum TableSize
     large  = "Large"
 
 enum NiftyBucketGroup
-    top5     = "Top 5 Nifty Heavyweights (Day Open Anchored Strike - Zero Churn)"
-    top3_dyn = "Top 3 Core Nifty Heavyweights (Realtime Dynamic Strike)"
-    custom   = "Custom Selected Nifty 50 Stocks (Max 5 Active)"
+    top2     = "Top 2 Heavyweights (RELIANCE, HDFCBANK)"
+    top3     = "Top 3 Heavyweights (RELIANCE, HDFCBANK, TCS)"
+    custom   = "Custom 2-Stock Selection (Max 2 Active)"
 
 // --- Nifty 50 Bucket Selection ---
-niftyBucketInput   = input.enum(NiftyBucketGroup.top5, "Nifty 50 Stock Bucket", group="Nifty 50 Stock Basket Selection",
-  tooltip="Select Nifty 50 stock sector/bucket to analyze. Day Open Anchored Strike fixes option tickers at session open to eliminate TradingView 40 security call limit errors.")
+niftyBucketInput   = input.enum(NiftyBucketGroup.top2, "Nifty 50 Stock Bucket", group="Nifty 50 Stock Basket Selection",
+  tooltip="Select Nifty 50 stock sector/bucket to analyze. Evaluates 7 strikes (3 ITM, ATM, 3 OTM) for least CE/PE price difference while staying strictly under TradingView security quota limits.")
 
 // --- Custom Nifty 50 Stock Toggles (Used when Mode = Custom) ---
-enable_RELIANCE   = input.bool(true,  "RELIANCE",   group="Custom Nifty 50 Stock Selection")
-enable_HDFCBANK   = input.bool(true,  "HDFCBANK",   group="Custom Nifty 50 Stock Selection")
-enable_TCS        = input.bool(true,  "TCS",        group="Custom Nifty 50 Stock Selection")
-enable_INFY       = input.bool(true,  "INFY",       group="Custom Nifty 50 Stock Selection")
-enable_ICICIBANK  = input.bool(true,  "ICICIBANK",  group="Custom Nifty 50 Stock Selection")
+enable_RELIANCE   = input.bool(true,  "RELIANCE",   group="Custom Stock Selection (Max 2 Active)")
+enable_HDFCBANK   = input.bool(true,  "HDFCBANK",   group="Custom Stock Selection (Max 2 Active)")
+enable_TCS        = input.bool(false, "TCS",        group="Custom Stock Selection (Max 2 Active)")
+enable_INFY       = input.bool(false, "INFY",       group="Custom Stock Selection (Max 2 Active)")
+enable_ICICIBANK  = input.bool(false, "ICICIBANK",  group="Custom Stock Selection (Max 2 Active)")
 
 // --- Display Controls ---
 showSummaryTable   = input.bool(true, "Show Dashboard Summary Table", group="Display Controls")
@@ -126,22 +126,14 @@ f_eval_nifty_stock(string root_sym, bool is_enabled) =>
         res.spot_c := spot_close
         res.spot_o := spot_open
         
-        // Anchor center strike calculation to spot_open to eliminate ticker string churn across historical bars
-        float ref_price = (niftyBucketInput == NiftyBucketGroup.top3_dyn) ? spot_close : (na(spot_open) or spot_open <= 0 ? spot_close : spot_open)
+        float stepVal = f_get_strike_step(spot_close)
+        float k_center = f_calc_center_strike(spot_close)
         
-        float stepVal = f_get_strike_step(ref_price)
-        float k_center = f_calc_center_strike(ref_price)
-        
-        // 2. Generate 7 Strike Candidates (3 ITM, Center ATM, 3 OTM)
+        // 2. Generate Strike Candidates (Center ATM, -1 step, +1 step)
         float k_m1 = k_center - 1.0 * stepVal
-        float k_m2 = k_center - 2.0 * stepVal
-        float k_m3 = k_center - 3.0 * stepVal
-        
         float k_p1 = k_center + 1.0 * stepVal
-        float k_p2 = k_center + 2.0 * stepVal
-        float k_p3 = k_center + 3.0 * stepVal
         
-        // Fetch Option Data for Candidates
+        // Fetch Option Data for Candidates (7 security requests per stock)
         [ce_c_c, ce_p_c, ce_o_c] = request.security(f_build_opt_ticker(root_sym, k_center, true),  timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
         [pe_c_c, pe_p_c, pe_o_c] = request.security(f_build_opt_ticker(root_sym, k_center, false), timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
         
@@ -230,18 +222,14 @@ f_eval_nifty_stock(string root_sym, bool is_enabled) =>
 // SECTOR BUCKET EVALUATION
 // ==========================================
 
-bool use_RELIANCE  = (niftyBucketInput == NiftyBucketGroup.top5 or niftyBucketInput == NiftyBucketGroup.top3_dyn) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_RELIANCE : false)
-bool use_HDFCBANK  = (niftyBucketInput == NiftyBucketGroup.top5 or niftyBucketInput == NiftyBucketGroup.top3_dyn) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_HDFCBANK : false)
-bool use_TCS       = (niftyBucketInput == NiftyBucketGroup.top5 or niftyBucketInput == NiftyBucketGroup.top3_dyn) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_TCS : false)
-bool use_INFY      = (niftyBucketInput == NiftyBucketGroup.top5) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_INFY : false)
-bool use_ICICIBANK = (niftyBucketInput == NiftyBucketGroup.top5) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_ICICIBANK : false)
+bool use_RELIANCE = (niftyBucketInput == NiftyBucketGroup.top2 or niftyBucketInput == NiftyBucketGroup.top3) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_RELIANCE : false)
+bool use_HDFCBANK = (niftyBucketInput == NiftyBucketGroup.top2 or niftyBucketInput == NiftyBucketGroup.top3) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_HDFCBANK : false)
+bool use_TCS      = (niftyBucketInput == NiftyBucketGroup.top3) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_TCS : false)
 
-// Evaluate Active Stocks
-StockAnalytics s_RELIANCE  = f_eval_nifty_stock("RELIANCE",  use_RELIANCE)
-StockAnalytics s_HDFCBANK  = f_eval_nifty_stock("HDFCBANK",  use_HDFCBANK)
-StockAnalytics s_TCS       = f_eval_nifty_stock("TCS",       use_TCS)
-StockAnalytics s_INFY      = f_eval_nifty_stock("INFY",      use_INFY)
-StockAnalytics s_ICICIBANK = f_eval_nifty_stock("ICICIBANK", use_ICICIBANK)
+// Evaluate Active Stocks (Max 3 stocks = 21 base security calls, leaves 19 call buffer for TradingView 40 limit)
+StockAnalytics s_RELIANCE = f_eval_nifty_stock("RELIANCE", use_RELIANCE)
+StockAnalytics s_HDFCBANK = f_eval_nifty_stock("HDFCBANK", use_HDFCBANK)
+StockAnalytics s_TCS      = f_eval_nifty_stock("TCS",      use_TCS)
 
 array<StockAnalytics> stockList = array.new<StockAnalytics>()
 if use_RELIANCE
@@ -250,10 +238,6 @@ if use_HDFCBANK
     array.push(stockList, s_HDFCBANK)
 if use_TCS
     array.push(stockList, s_TCS)
-if use_INFY
-    array.push(stockList, s_INFY)
-if use_ICICIBANK
-    array.push(stockList, s_ICICIBANK)
 
 // ==========================================
 // AGGREGATE SUMMARY COUNTS ACROSS ALL STOCKS
