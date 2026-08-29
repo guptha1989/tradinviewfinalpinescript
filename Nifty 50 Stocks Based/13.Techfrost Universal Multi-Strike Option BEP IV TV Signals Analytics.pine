@@ -186,9 +186,14 @@ float ref_low  = highLowSrcInput == HighLowSource.min5 ? (not na(low_5m) ? low_5
 // CONSOLIDATED BUY / SELL SIGNAL ENGINE
 // ==========================================
 
-// 1. Crossover of ATM CE / PE price over Realtime BEP (or Spot Crossover of ATM Strike)
-bool atm_ce_cross_bep = ta.crossover(eval_spot, atm_ce_bep_rt) or ta.crossover(eval_spot, atm_strike)
-bool atm_pe_cross_bep = ta.crossunder(eval_spot, atm_pe_bep_rt) or ta.crossunder(eval_spot, atm_strike)
+// Top-Level Unconditional Crossover & Crossunder Series Calculations (Fixes CW10002)
+bool ce_cross_bep_raw    = ta.crossover(eval_spot, atm_ce_bep_rt)
+bool ce_cross_strike_raw = ta.crossover(eval_spot, atm_strike)
+bool pe_cross_bep_raw    = ta.crossunder(eval_spot, atm_pe_bep_rt)
+bool pe_cross_strike_raw = ta.crossunder(eval_spot, atm_strike)
+
+bool atm_ce_cross_bep = ce_cross_bep_raw or ce_cross_strike_raw
+bool atm_pe_cross_bep = pe_cross_bep_raw or pe_cross_strike_raw
 
 // 2. Standard Buy CE Conditions:
 bool buy_ce_cond = atm_ce_cross_bep and (itm_ce_price > itm_ce_iv_rt) and (itm_pe_price < itm_pe_iv_rt) and (otm_ce_price < otm_ce_tv_rt) and (otm_pe_price > otm_pe_tv_rt)
@@ -238,16 +243,19 @@ else if buy_pe_cond
     signalBg      := #FF1744
     signalTxtColor:= color.white
 
-// Chart Plot Shapes
-plotshape(showSignalsOnChart and (strong_buy_ce_cond or buy_ce_cond), title="Buy CE Signal", style=shape.triangleup, position=position.belowbar, color=color.green, size=size.small)
-plotshape(showSignalsOnChart and (strong_buy_pe_cond or buy_pe_cond), title="Buy PE Signal", style=shape.triangledown, position=position.abovebar, color=color.red, size=size.small)
+// Chart Plot Shapes (Fixes CE10120 & CE10272: location=location.belowbar / location=location.abovebar)
+plotshape(showSignalsOnChart and (strong_buy_ce_cond or buy_ce_cond), title="Buy CE Signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(showSignalsOnChart and (strong_buy_pe_cond or buy_pe_cond), title="Buy PE Signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
 
 // ==========================================
 // LAST 5 DAYS SWING PERFORMANCE TRACKER
 // ==========================================
 
+// Top-Level Unconditional Day Change Series Calculation (Fixes CW10002)
+bool is_new_day = ta.change(time("D")) != 0
+
 var int day_count = 0
-if ta.change(time("D")) != 0
+if is_new_day
     day_count += 1
 
 // Active Swing Trade State Variables
@@ -270,7 +278,7 @@ var int strong_loss_entries   = 0
 bool has_new_signal = signal_std_buy_ce or signal_std_buy_pe or signal_strong_buy_ce or signal_strong_buy_pe
 
 // Process and Finalize Trade Swings
-if has_new_signal or (ta.change(time("D")) != 0 and active_signal_type != 0)
+if has_new_signal or (is_new_day and active_signal_type != 0)
     if active_signal_type != 0
         // Calculate Maximum Points Captured during Swing
         float pts_gained = 0.0
