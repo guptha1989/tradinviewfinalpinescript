@@ -235,38 +235,52 @@ if count_total_stocks > 0
         StockAnalytics item = array.get(stockList, i)
         evaluatedSymbolsList += (i > 0 ? ", " : "") + item.symbol
         
-        if item.ce_above_real_bep => count_ce_above_real_bep += 1
-        if item.pe_above_real_bep => count_pe_above_real_bep += 1
+        if item.ce_above_real_bep
+            count_ce_above_real_bep += 1
+        if item.pe_above_real_bep
+            count_pe_above_real_bep += 1
         
-        if item.ce_above_open_bep => count_ce_above_open_bep += 1
-        if item.pe_above_open_bep => count_pe_above_open_bep += 1
-        if item.neutral_open_bep  => count_neutral_open_bep  += 1
+        if item.ce_above_open_bep
+            count_ce_above_open_bep += 1
+        if item.pe_above_open_bep
+            count_pe_above_open_bep += 1
+        if item.neutral_open_bep
+            count_neutral_open_bep  += 1
         
-        if item.ce_cross_above_real_bep => count_ce_cross_above_real_bep += 1
-        if item.ce_cross_below_real_bep => count_ce_cross_below_real_bep += 1
-        if item.pe_cross_above_real_bep => count_pe_cross_above_real_bep += 1
-        if item.pe_cross_below_real_bep => count_pe_cross_below_real_bep += 1
+        if item.ce_cross_above_real_bep
+            count_ce_cross_above_real_bep += 1
+        if item.ce_cross_below_real_bep
+            count_ce_cross_below_real_bep += 1
+        if item.pe_cross_above_real_bep
+            count_pe_cross_above_real_bep += 1
+        if item.pe_cross_below_real_bep
+            count_pe_cross_below_real_bep += 1
         
-        if item.is_pe_iv_only => count_pe_iv_only += 1
-        if item.is_ce_iv_only => count_ce_iv_only += 1
-        if item.is_neutral_iv => count_neutral_iv += 1
+        if item.is_pe_iv_only
+            count_pe_iv_only += 1
+        if item.is_ce_iv_only
+            count_ce_iv_only += 1
+        if item.is_neutral_iv
+            count_neutral_iv += 1
         
-        if item.pe_iv_just_formed => count_pe_iv_just_fmt += 1
-        if item.ce_iv_just_formed => count_ce_iv_just_fmt += 1
+        if item.pe_iv_just_formed
+            count_pe_iv_just_fmt += 1
+        if item.ce_iv_just_formed
+            count_ce_iv_just_fmt += 1
 
 // --- PLOTS FOR CONSOLIDATED SCRIPT ---
 plot(count_ce_above_real_bep, "B2_CE_RealBEP", display=display.none)
 plot(count_pe_above_real_bep, "B2_PE_RealBEP", display=display.none)
 plot(count_ce_above_open_bep, "B2_CE_OpenBEP", display=display.none)
 plot(count_pe_above_open_bep, "B2_PE_OpenBEP", display=display.none)
-plot(count_neutral_open_bep,  "B2_Neutral_OpenBEP", display=display.none)
+plot(count_neutral_open_bep,  "B2_Neut_OpenBEP", display=display.none)
 plot(count_ce_cross_above_real_bep, "B2_CE_CrossUp", display=display.none)
-plot(count_ce_cross_below_real_bep, "B2_CE_CrossDown", display=display.none)
+plot(count_ce_cross_below_real_bep, "B2_CE_CrossDn", display=display.none)
 plot(count_pe_cross_above_real_bep, "B2_PE_CrossUp", display=display.none)
-plot(count_pe_cross_below_real_bep, "B2_PE_CrossDown", display=display.none)
+plot(count_pe_cross_below_real_bep, "B2_PE_CrossDn", display=display.none)
 plot(count_pe_iv_only,     "B2_PE_IV_Only", display=display.none)
 plot(count_ce_iv_only,     "B2_CE_IV_Only", display=display.none)
-plot(count_neutral_iv,     "B2_Neutral_IV", display=display.none)
+plot(count_neutral_iv,     "B2_Neut_IV", display=display.none)
 plot(count_pe_iv_just_fmt, "B2_PE_IV_JustFmt", display=display.none)
 plot(count_ce_iv_just_fmt, "B2_CE_IV_JustFmt", display=display.none)
 
