@@ -131,7 +131,7 @@ float ref_static_spot = switch staticAnchorInput
 // Strike Step Resolution
 float strike_step = useAutoStrikeStep ? f_get_strike_step(eval_spot) : manualStrikeStep
 
-// ATM & Offset Strike Calculations
+// ATM & Offset Strike Calculations (Actual Strike Numbers)
 float atm_strike = f_calc_atm_strike(eval_spot, strike_step)
 float itm_ce_strike = atm_strike - (offsetValInput * strike_step)
 float otm_ce_strike = atm_strike + (offsetValInput * strike_step)
@@ -188,14 +188,31 @@ f_calc_leg(float spot_p, float K, bool is_ce, float step_val, float base_tv) =>
 [otm_ce_premium_st, otm_ce_iv_st, otm_ce_tv_st, otm_ce_above_st] = f_calc_leg(ref_static_spot, otm_ce_strike, true, strike_step, base_tv_atm)
 [otm_pe_premium_st, otm_pe_iv_st, otm_pe_tv_st, otm_pe_above_st] = f_calc_leg(ref_static_spot, otm_pe_strike, false, strike_step, base_tv_atm)
 
-// --- Break-Even Price (BEP) = (CE Option Premium + PE Option Premium) / 2.0 (Non-Negative Clamped) ---
+// --- Real Break-Even Prices (BEP) on Price Scale ---
+// For Call (CE): BEP = Strike + CE Premium
+// For Put (PE): BEP = Strike - PE Premium
+float atm_ce_bep_rt = math.max(0.0, atm_strike + atm_ce_premium_rt)
+float atm_pe_bep_rt = math.max(0.0, atm_strike - atm_pe_premium_rt)
+
+float itm_ce_bep_rt = math.max(0.0, itm_ce_strike + itm_ce_premium_rt)
+float itm_pe_bep_rt = math.max(0.0, itm_pe_strike - itm_pe_premium_rt)
+
+float otm_ce_bep_rt = math.max(0.0, otm_ce_strike + otm_ce_premium_rt)
+float otm_pe_bep_rt = math.max(0.0, otm_pe_strike - otm_pe_premium_rt)
+
+float atm_ce_bep_st = math.max(0.0, atm_strike + atm_ce_premium_st)
+float atm_pe_bep_st = math.max(0.0, atm_strike - atm_pe_premium_st)
+
+float itm_ce_bep_st = math.max(0.0, itm_ce_strike + itm_ce_premium_st)
+float itm_pe_bep_st = math.max(0.0, itm_pe_strike - itm_pe_premium_st)
+
+float otm_ce_bep_st = math.max(0.0, otm_ce_strike + otm_ce_premium_st)
+float otm_pe_bep_st = math.max(0.0, otm_pe_strike - otm_pe_premium_st)
+
+// Paired Average BEP levels for Signal cross evaluation
 float atm_bep_rt  = math.max(0.0, (atm_ce_premium_rt + atm_pe_premium_rt) / 2.0)
 float itm1_bep_rt = math.max(0.0, (itm_ce_premium_rt + otm_pe_premium_rt) / 2.0)
 float otm1_bep_rt = math.max(0.0, (otm_ce_premium_rt + itm_pe_premium_rt) / 2.0)
-
-float atm_bep_st  = math.max(0.0, (atm_ce_premium_st + atm_pe_premium_st) / 2.0)
-float itm1_bep_st = math.max(0.0, (itm_ce_premium_st + otm_pe_premium_st) / 2.0)
-float otm1_bep_st = math.max(0.0, (otm_ce_premium_st + itm_pe_premium_st) / 2.0)
 
 // High & Low Reference Values
 float ref_high = math.max(0.0, highLowSrcInput == HighLowSource.min5 ? (not na(high_5m) ? high_5m : high) : (not na(prev_day_high) ? prev_day_high : high))
@@ -388,7 +405,7 @@ if barstate.islast
     if not showSummaryTable
         table.delete(summaryTbl)
     else
-        // Row 0: Column Headers displaying Selected ITM & OTM Strikes
+        // Row 0: Column Headers displaying Selected Actual Strike Prices
         string atm_ce_hdr = showStrikeInHeader ? "ATM CE (" + str.tostring(atm_strike, "#.##") + ")" : "ATM CE"
         string atm_pe_hdr = showStrikeInHeader ? "ATM PE (" + str.tostring(atm_strike, "#.##") + ")" : "ATM PE"
         string itm_ce_hdr = showStrikeInHeader ? "ITM CE (" + str.tostring(itm_ce_strike, "#.##") + ")" : "ITM CE"
@@ -413,23 +430,23 @@ if barstate.islast
         table.cell(summaryTbl, 5, 1, otm_ce_above ? "Above" : "Below", bgcolor=color.black, text_color=otm_ce_above ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 1, otm_pe_above ? "Above" : "Below", bgcolor=color.black, text_color=otm_pe_above ? colorCEColor : colorPEColor, text_size=curTextSize)
 
-        // Row 2: Realtime BEP (RT BEP) = (CE Option Premium + PE Option Premium) / 2.0
+        // Row 2: Realtime BEP (RT BEP) - Real Break-Even Price Level (CE: Strike + Premium, PE: Strike - Premium)
         table.cell(summaryTbl, 0, 2, "RT BEP", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 2, f_fmt_val_cell(atm_bep_rt, eval_spot > atm_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > atm_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 2, f_fmt_val_cell(atm_bep_rt, eval_spot < atm_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < atm_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 2, f_fmt_val_cell(itm1_bep_rt, eval_spot > itm1_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > itm1_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 2, f_fmt_val_cell(otm1_bep_rt, eval_spot < otm1_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < otm1_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 2, f_fmt_val_cell(otm1_bep_rt, eval_spot > otm1_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > otm1_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 2, f_fmt_val_cell(itm1_bep_rt, eval_spot < itm1_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < itm1_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 2, f_fmt_val_cell(atm_ce_bep_rt, eval_spot > atm_ce_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > atm_ce_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 2, f_fmt_val_cell(atm_pe_bep_rt, eval_spot < atm_pe_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < atm_pe_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 2, f_fmt_val_cell(itm_ce_bep_rt, eval_spot > itm_ce_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > itm_ce_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 2, f_fmt_val_cell(itm_pe_bep_rt, eval_spot < itm_pe_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < itm_pe_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 2, f_fmt_val_cell(otm_ce_bep_rt, eval_spot > otm_ce_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > otm_ce_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 2, f_fmt_val_cell(otm_pe_bep_rt, eval_spot < otm_pe_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < otm_pe_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
 
-        // Row 3: Static BEP (ST BEP)
+        // Row 3: Static BEP (ST BEP) - Real Static Break-Even Price Level (CE: Strike + Premium, PE: Strike - Premium)
         table.cell(summaryTbl, 0, 3, "ST BEP", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 3, f_fmt_val_cell(atm_bep_st, eval_spot > atm_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > atm_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 2, 3, f_fmt_val_cell(atm_bep_st, eval_spot < atm_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < atm_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 3, 3, f_fmt_val_cell(itm1_bep_st, eval_spot > itm1_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > itm1_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 4, 3, f_fmt_val_cell(otm1_bep_st, eval_spot < otm1_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < otm1_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 5, 3, f_fmt_val_cell(otm1_bep_st, eval_spot > otm1_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > otm1_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
-        table.cell(summaryTbl, 6, 3, f_fmt_val_cell(itm1_bep_st, eval_spot < itm1_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < itm1_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 3, f_fmt_val_cell(atm_ce_bep_st, eval_spot > atm_ce_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > atm_ce_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 3, f_fmt_val_cell(atm_pe_bep_st, eval_spot < atm_pe_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < atm_pe_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 3, f_fmt_val_cell(itm_ce_bep_st, eval_spot > itm_ce_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > itm_ce_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 4, 3, f_fmt_val_cell(itm_pe_bep_st, eval_spot < itm_pe_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < itm_pe_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 5, 3, f_fmt_val_cell(otm_ce_bep_st, eval_spot > otm_ce_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > otm_ce_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 6, 3, f_fmt_val_cell(otm_pe_bep_st, eval_spot < otm_pe_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < otm_pe_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
 
         // Row 4: Static IV (ST IV) - CE = max(0, Spot - K), PE = max(0, K - Spot)
         table.cell(summaryTbl, 0, 4, "ST IV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
