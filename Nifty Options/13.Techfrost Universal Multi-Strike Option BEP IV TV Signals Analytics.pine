@@ -89,38 +89,83 @@ f_get_strike_step(float spot_price) =>
 f_calc_atm_strike(float spot_price, float step) =>
     math.round(spot_price / step) * step
 
+f_is_digit(string c) =>
+    str.contains("0123456789", c)
+
+// Universal Option Ticker Parser to extract actual underlying & strike price from Option Symbols
+f_parse_ticker() =>
+    string cleanTicker = syminfo.ticker
+    int colonPos = str.pos(cleanTicker, ":")
+    if colonPos != -1
+        cleanTicker := str.substring(cleanTicker, colonPos + 1)
+    cleanTicker := str.replace_all(cleanTicker, " ", "")
+    
+    int tickerLen = str.length(cleanTicker)
+    string parsed_root = syminfo.tickerid
+    float parsed_strk = 0.0
+    bool is_opt = false
+    
+    if tickerLen > 7
+        int idx = tickerLen - 1
+        string strike_str = ""
+        while idx >= 0 and f_is_digit(str.substring(cleanTicker, idx, idx + 1))
+            strike_str := str.substring(cleanTicker, idx, idx + 1) + strike_str
+            idx := idx - 1
+            
+        if idx > 2 and str.length(strike_str) > 0
+            string opt_char = str.substring(cleanTicker, idx, idx + 1)
+            if opt_char == "C" or opt_char == "P" or opt_char == "E"
+                parsed_strk := str.tonumber(strike_str)
+                int exp_len = 5
+                if idx >= 3 and f_is_digit(str.substring(cleanTicker, idx - 3, idx - 2))
+                    exp_len := 6
+                if idx >= exp_len
+                    string root_name = str.substring(cleanTicker, 0, idx - exp_len)
+                    parsed_root := syminfo.prefix + ":" + root_name
+                    is_opt := true
+    [is_opt, parsed_root, parsed_strk]
+
 // ==========================================
 // ANCHOR PRICES & MULTI-TIMEFRAME DATA
 // ==========================================
+
+[is_option_chart, underlying_spot_ticker, chart_parsed_strike] = f_parse_ticker()
+
+// Live Underlying Spot Price Resolution
+float chart_spot = close
+if is_option_chart
+    float fetched_spot = request.security(underlying_spot_ticker, timeframe.period, close, ignore_invalid_symbol=true)
+    if not na(fetched_spot) and fetched_spot > 0
+        chart_spot := fetched_spot
+
+float eval_spot = chart_spot
 
 // Intraday Day Open Anchor
 var float day_open_spot = na
 if session.isfirstbar and timeframe.isintraday
     day_open_spot := open
 if na(day_open_spot)
-    day_open_spot := request.security(syminfo.tickerid, "D", open, ignore_invalid_symbol=true)
+    day_open_spot := request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "D", open, ignore_invalid_symbol=true)
 
 // Previous Day Close, High, Low
-float prev_day_close = request.security(syminfo.tickerid, "D", close[1], ignore_invalid_symbol=true)
-float prev_day_high  = request.security(syminfo.tickerid, "D", high[1],  ignore_invalid_symbol=true)
-float prev_day_low   = request.security(syminfo.tickerid, "D", low[1],   ignore_invalid_symbol=true)
+float prev_day_close = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "D", close[1], ignore_invalid_symbol=true)
+float prev_day_high  = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "D", high[1],  ignore_invalid_symbol=true)
+float prev_day_low   = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "D", low[1],   ignore_invalid_symbol=true)
+
+if useOffHoursPrevClose and (na(eval_spot) or eval_spot <= 0 or not barstate.isrealtime)
+    if not na(prev_day_close) and prev_day_close > 0
+        eval_spot := prev_day_close
 
 // First 5-Minute Candle Close of the day
 var float first_5m_close_val = na
-[f5_c, f5_is_first] = request.security(syminfo.tickerid, "5", [close, session.isfirstbar], ignore_invalid_symbol=true)
+[f5_c, f5_is_first] = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "5", [close, session.isfirstbar], ignore_invalid_symbol=true)
 if f5_is_first
     first_5m_close_val := f5_c
 if na(first_5m_close_val)
     first_5m_close_val := day_open_spot
 
 // 5-Min High & Low
-[high_5m, low_5m] = request.security(syminfo.tickerid, "5", [high, low], ignore_invalid_symbol=true)
-
-// Live Spot Price Resolution
-float spot_close = close
-float eval_spot = spot_close
-if useOffHoursPrevClose and (na(spot_close) or spot_close <= 0 or not barstate.isrealtime)
-    eval_spot := not na(prev_day_close) and prev_day_close > 0 ? prev_day_close : spot_close
+[high_5m, low_5m] = request.security(is_option_chart ? underlying_spot_ticker : syminfo.tickerid, "5", [high, low], ignore_invalid_symbol=true)
 
 // Determine Static Reference Spot Price (Anchor: Day Open, Prev Close, or First 5m Close)
 float ref_static_spot = switch staticAnchorInput
@@ -131,8 +176,8 @@ float ref_static_spot = switch staticAnchorInput
 // Strike Step Resolution
 float strike_step = useAutoStrikeStep ? f_get_strike_step(eval_spot) : manualStrikeStep
 
-// ATM & Offset Strike Calculations (Actual Strike Numbers)
-float atm_strike = f_calc_atm_strike(eval_spot, strike_step)
+// Actual Option Strike Calculations
+float atm_strike = (is_option_chart and chart_parsed_strike > 0) ? chart_parsed_strike : f_calc_atm_strike(eval_spot, strike_step)
 float itm_ce_strike = atm_strike - (offsetValInput * strike_step)
 float otm_ce_strike = atm_strike + (offsetValInput * strike_step)
 
