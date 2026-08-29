@@ -19,14 +19,13 @@ enum TableSize
     large  = "Large"
 
 enum NiftyBucketGroup
-    heavyweights = "Nifty 50 Top Heavyweights (RELIANCE, HDFCBANK, TCS, INFY, ICICIBANK)"
-    banking      = "Nifty Banking Stocks (HDFCBANK, ICICIBANK, SBIN, KOTAKBANK, AXISBANK)"
-    it_tech      = "Nifty IT & Tech Stocks (TCS, INFY, HCLTECH, TECHM, WIPRO)"
-    custom       = "Custom Selected Nifty 50 Stocks (Max 5 Active)"
+    top5     = "Top 5 Nifty Heavyweights (Day Open Anchored Strike - Zero Churn)"
+    top3_dyn = "Top 3 Core Nifty Heavyweights (Realtime Dynamic Strike)"
+    custom   = "Custom Selected Nifty 50 Stocks (Max 5 Active)"
 
 // --- Nifty 50 Bucket Selection ---
-niftyBucketInput   = input.enum(NiftyBucketGroup.heavyweights, "Nifty 50 Stock Bucket", group="Nifty 50 Stock Basket Selection",
-  tooltip="Select Nifty 50 stock sector/bucket to analyze. Evaluates 7 strikes (3 ITM, ATM, 3 OTM) for least CE/PE price difference while staying strictly under TradingView security quota limits.")
+niftyBucketInput   = input.enum(NiftyBucketGroup.top5, "Nifty 50 Stock Bucket", group="Nifty 50 Stock Basket Selection",
+  tooltip="Select Nifty 50 stock sector/bucket to analyze. Day Open Anchored Strike fixes option tickers at session open to eliminate TradingView 40 security call limit errors.")
 
 // --- Custom Nifty 50 Stock Toggles (Used when Mode = Custom) ---
 enable_RELIANCE   = input.bool(true,  "RELIANCE",   group="Custom Nifty 50 Stock Selection")
@@ -127,8 +126,11 @@ f_eval_nifty_stock(string root_sym, bool is_enabled) =>
         res.spot_c := spot_close
         res.spot_o := spot_open
         
-        float stepVal = f_get_strike_step(spot_close)
-        float k_center = f_calc_center_strike(spot_close)
+        // Anchor center strike calculation to spot_open to eliminate ticker string churn across historical bars
+        float ref_price = (niftyBucketInput == NiftyBucketGroup.top3_dyn) ? spot_close : (na(spot_open) or spot_open <= 0 ? spot_close : spot_open)
+        
+        float stepVal = f_get_strike_step(ref_price)
+        float k_center = f_calc_center_strike(ref_price)
         
         // 2. Generate 7 Strike Candidates (3 ITM, Center ATM, 3 OTM)
         float k_m1 = k_center - 1.0 * stepVal
@@ -228,11 +230,11 @@ f_eval_nifty_stock(string root_sym, bool is_enabled) =>
 // SECTOR BUCKET EVALUATION
 // ==========================================
 
-bool use_RELIANCE  = (niftyBucketInput == NiftyBucketGroup.heavyweights) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_RELIANCE : false)
-bool use_HDFCBANK  = (niftyBucketInput == NiftyBucketGroup.heavyweights or niftyBucketInput == NiftyBucketGroup.banking) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_HDFCBANK : false)
-bool use_TCS       = (niftyBucketInput == NiftyBucketGroup.heavyweights or niftyBucketInput == NiftyBucketGroup.it_tech) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_TCS : false)
-bool use_INFY      = (niftyBucketInput == NiftyBucketGroup.heavyweights or niftyBucketInput == NiftyBucketGroup.it_tech) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_INFY : false)
-bool use_ICICIBANK = (niftyBucketInput == NiftyBucketGroup.heavyweights or niftyBucketInput == NiftyBucketGroup.banking) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_ICICIBANK : false)
+bool use_RELIANCE  = (niftyBucketInput == NiftyBucketGroup.top5 or niftyBucketInput == NiftyBucketGroup.top3_dyn) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_RELIANCE : false)
+bool use_HDFCBANK  = (niftyBucketInput == NiftyBucketGroup.top5 or niftyBucketInput == NiftyBucketGroup.top3_dyn) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_HDFCBANK : false)
+bool use_TCS       = (niftyBucketInput == NiftyBucketGroup.top5 or niftyBucketInput == NiftyBucketGroup.top3_dyn) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_TCS : false)
+bool use_INFY      = (niftyBucketInput == NiftyBucketGroup.top5) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_INFY : false)
+bool use_ICICIBANK = (niftyBucketInput == NiftyBucketGroup.top5) ? true : (niftyBucketInput == NiftyBucketGroup.custom ? enable_ICICIBANK : false)
 
 // Evaluate Active Stocks
 StockAnalytics s_RELIANCE  = f_eval_nifty_stock("RELIANCE",  use_RELIANCE)
