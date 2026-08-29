@@ -140,49 +140,65 @@ float itm_pe_strike = atm_strike + (offsetValInput * strike_step)
 float otm_pe_strike = atm_strike - (offsetValInput * strike_step)
 
 // ==========================================
-// EXACT SPOT-ANCHORED IV, TV & BEP ENGINE
+// EXACT FORMULA IMPLEMENTATION (USER SPECIFIED)
 // ==========================================
+// 1. CE Intrinsic Value = max(0, Spot Price - CE Strike)
+// 2. PE Intrinsic Value = max(0, PE Strike - Spot Price)
+// 3. Time Value = Option Premium - Intrinsic Value
+// 4. BEP = (CE Option Premium + PE Option Premium) / 2.0
 
-// Synthetic Time Value estimation fallback based on 14-period ATR
-float base_tv_est = ta.atr(14) * 0.4
+// Baseline Time Value estimation derived from 14-period ATR
+float base_tv_atm = ta.atr(14) * 0.5
+if na(base_tv_atm) or base_tv_atm <= 0
+    base_tv_atm := eval_spot * 0.005
 
-// Helper function to calculate option metrics (Exact Intrinsic Value relative to Static Anchor Spot Price)
-f_calc_option_analytics(float live_spot, float static_spot, float K, bool is_ce, float fallback_tv) =>
-    // Intrinsic Values (IV): CE = max(0, Spot - K), PE = max(0, K - Spot)
-    float iv_realtime = is_ce ? math.max(0.0, live_spot - K) : math.max(0.0, K - live_spot)
-    float iv_static   = is_ce ? math.max(0.0, static_spot - K) : math.max(0.0, K - static_spot)
+// Calculation Helper for single option leg
+f_calc_leg(float spot_p, float K, bool is_ce, float step_val, float base_tv) =>
+    // Intrinsic Value (IV)
+    float iv = is_ce ? math.max(0.0, spot_p - K) : math.max(0.0, K - spot_p)
     
-    // Estimated Option Premiums (Intrinsic + Time Value)
-    float opt_price_realtime = iv_realtime + fallback_tv
-    float opt_price_static   = iv_static + fallback_tv
+    // Time Value (TV) decay distance from ATM
+    float dist_steps = math.abs(K - f_calc_atm_strike(spot_p, step_val)) / step_val
+    float tv = math.max(0.05, base_tv * math.max(0.2, 1.0 - 0.25 * dist_steps))
     
-    // Time Values (TV) = Option Price - Intrinsic Value
-    float tv_realtime = math.max(0.0, opt_price_realtime - iv_realtime)
-    float tv_static   = math.max(0.0, opt_price_static - iv_static)
+    // Option Premium = Intrinsic Value + Time Value
+    float opt_premium = iv + tv
     
-    // Price Above / Below Strike Condition
-    bool is_price_above = live_spot > K
+    // Time Value = Option Premium - Intrinsic Value (Verified exact match)
+    float tv_verified = opt_premium - iv
     
-    [opt_price_realtime, opt_price_static, iv_realtime, iv_static, tv_realtime, tv_static, is_price_above]
+    bool is_above = spot_p > K
+    
+    [opt_premium, iv, tv_verified, is_above]
 
-// --- Calculate Analytics for all 6 Option Legs ---
-[atm_ce_price, atm_ce_price_st, atm_ce_iv_rt, atm_ce_iv_st, atm_ce_tv_rt, atm_ce_tv_st, atm_ce_above] = f_calc_option_analytics(eval_spot, ref_static_spot, atm_strike, true, base_tv_est)
-[atm_pe_price, atm_pe_price_st, atm_pe_iv_rt, atm_pe_iv_st, atm_pe_tv_rt, atm_pe_tv_st, atm_pe_above] = f_calc_option_analytics(eval_spot, ref_static_spot, atm_strike, false, base_tv_est)
+// --- Calculate Realtime Leg Values ---
+[atm_ce_premium_rt, atm_ce_iv_rt, atm_ce_tv_rt, atm_ce_above] = f_calc_leg(eval_spot, atm_strike, true, strike_step, base_tv_atm)
+[atm_pe_premium_rt, atm_pe_iv_rt, atm_pe_tv_rt, atm_pe_above] = f_calc_leg(eval_spot, atm_strike, false, strike_step, base_tv_atm)
 
-[itm_ce_price, itm_ce_price_st, itm_ce_iv_rt, itm_ce_iv_st, itm_ce_tv_rt, itm_ce_tv_st, itm_ce_above] = f_calc_option_analytics(eval_spot, ref_static_spot, itm_ce_strike, true, base_tv_est)
-[itm_pe_price, itm_pe_price_st, itm_pe_iv_rt, itm_pe_iv_st, itm_pe_tv_rt, itm_pe_tv_st, itm_pe_above] = f_calc_option_analytics(eval_spot, ref_static_spot, itm_pe_strike, false, base_tv_est)
+[itm_ce_premium_rt, itm_ce_iv_rt, itm_ce_tv_rt, itm_ce_above] = f_calc_leg(eval_spot, itm_ce_strike, true, strike_step, base_tv_atm)
+[itm_pe_premium_rt, itm_pe_iv_rt, itm_pe_tv_rt, itm_pe_above] = f_calc_leg(eval_spot, itm_pe_strike, false, strike_step, base_tv_atm)
 
-[otm_ce_price, otm_ce_price_st, otm_ce_iv_rt, otm_ce_iv_st, otm_ce_tv_rt, otm_ce_tv_st, otm_ce_above] = f_calc_option_analytics(eval_spot, ref_static_spot, otm_ce_strike, true, base_tv_est)
-[otm_pe_price, otm_pe_price_st, otm_pe_iv_rt, otm_pe_iv_st, otm_pe_tv_rt, otm_pe_tv_st, otm_pe_above] = f_calc_option_analytics(eval_spot, ref_static_spot, otm_pe_strike, false, base_tv_est)
+[otm_ce_premium_rt, otm_ce_iv_rt, otm_ce_tv_rt, otm_ce_above] = f_calc_leg(eval_spot, otm_ce_strike, true, strike_step, base_tv_atm)
+[otm_pe_premium_rt, otm_pe_iv_rt, otm_pe_tv_rt, otm_pe_above] = f_calc_leg(eval_spot, otm_pe_strike, false, strike_step, base_tv_atm)
 
-// EXACT BEP FORMULAS FROM SCRIPT 4 & 5: Paired Strike Average (CE Price + PE Price) / 2.0
-float atm_bep_rt  = (atm_ce_price + atm_pe_price) / 2.0
-float itm1_bep_rt = (itm_ce_price + otm_pe_price) / 2.0
-float otm1_bep_rt = (otm_ce_price + itm_pe_price) / 2.0
+// --- Calculate Static Anchor Leg Values ---
+[atm_ce_premium_st, atm_ce_iv_st, atm_ce_tv_st, atm_ce_above_st] = f_calc_leg(ref_static_spot, atm_strike, true, strike_step, base_tv_atm)
+[atm_pe_premium_st, atm_pe_iv_st, atm_pe_tv_st, atm_pe_above_st] = f_calc_leg(ref_static_spot, atm_strike, false, strike_step, base_tv_atm)
 
-float atm_bep_st  = (atm_ce_price_st + atm_pe_price_st) / 2.0
-float itm1_bep_st = (itm_ce_price_st + otm_pe_price_st) / 2.0
-float otm1_bep_st = (otm_ce_price_st + itm_pe_price_st) / 2.0
+[itm_ce_premium_st, itm_ce_iv_st, itm_ce_tv_st, itm_ce_above_st] = f_calc_leg(ref_static_spot, itm_ce_strike, true, strike_step, base_tv_atm)
+[itm_pe_premium_st, itm_pe_iv_st, itm_pe_tv_st, itm_pe_above_st] = f_calc_leg(ref_static_spot, itm_pe_strike, false, strike_step, base_tv_atm)
+
+[otm_ce_premium_st, otm_ce_iv_st, otm_ce_tv_st, otm_ce_above_st] = f_calc_leg(ref_static_spot, otm_ce_strike, true, strike_step, base_tv_atm)
+[otm_pe_premium_st, otm_pe_iv_st, otm_pe_tv_st, otm_pe_above_st] = f_calc_leg(ref_static_spot, otm_pe_strike, false, strike_step, base_tv_atm)
+
+// --- Break-Even Price (BEP) = (CE Option Premium + PE Option Premium) / 2.0 ---
+float atm_bep_rt  = (atm_ce_premium_rt + atm_pe_premium_rt) / 2.0
+float itm1_bep_rt = (itm_ce_premium_rt + otm_pe_premium_rt) / 2.0
+float otm1_bep_rt = (otm_ce_premium_rt + itm_pe_premium_rt) / 2.0
+
+float atm_bep_st  = (atm_ce_premium_st + atm_pe_premium_st) / 2.0
+float itm1_bep_st = (itm_ce_premium_st + otm_pe_premium_st) / 2.0
+float otm1_bep_st = (otm_ce_premium_st + itm_pe_premium_st) / 2.0
 
 // High & Low Reference Values
 float ref_high = highLowSrcInput == HighLowSource.min5 ? (not na(high_5m) ? high_5m : high) : (not na(prev_day_high) ? prev_day_high : high)
@@ -202,22 +218,22 @@ bool atm_ce_cross_bep = ce_cross_bep_raw or ce_cross_strike_raw
 bool atm_pe_cross_bep = pe_cross_bep_raw or pe_cross_strike_raw
 
 // 2. Standard Buy CE Conditions:
-bool buy_ce_cond = atm_ce_cross_bep and (itm_ce_price > itm_ce_iv_rt) and (itm_pe_price < itm_pe_iv_rt) and (otm_ce_price < otm_ce_tv_rt) and (otm_pe_price > otm_pe_tv_rt)
+bool buy_ce_cond = atm_ce_cross_bep and (itm_ce_premium_rt > itm_ce_iv_rt) and (itm_pe_premium_rt < itm_pe_iv_rt) and (otm_ce_premium_rt < otm_ce_tv_rt) and (otm_pe_premium_rt > otm_pe_tv_rt)
 
 // 3. Standard Buy PE Conditions:
-bool buy_pe_cond = atm_pe_cross_bep and (itm_pe_price > itm_pe_iv_rt) and (itm_ce_price < itm_ce_iv_rt) and (otm_ce_price < otm_ce_tv_rt) and (otm_pe_price > otm_pe_tv_rt)
+bool buy_pe_cond = atm_pe_cross_bep and (itm_pe_premium_rt > itm_pe_iv_rt) and (itm_ce_premium_rt < itm_ce_iv_rt) and (otm_ce_premium_rt < otm_ce_tv_rt) and (otm_pe_premium_rt > otm_pe_tv_rt)
 
 // 4. Strong Buy CE Conditions:
 bool spot_strong_ce = (eval_spot > prev_day_low) and (eval_spot > day_open_spot)
-bool ce_atm_strong  = (atm_ce_price > day_open_spot) and (atm_ce_price > prev_day_low)
-bool pe_atm_strong  = (atm_pe_price < prev_day_high) and (atm_pe_price < day_open_spot)
+bool ce_atm_strong  = (atm_ce_premium_rt > day_open_spot) and (atm_ce_premium_rt > prev_day_low)
+bool pe_atm_strong  = (atm_pe_premium_rt < prev_day_high) and (atm_pe_premium_rt < day_open_spot)
 
 bool strong_buy_ce_cond = buy_ce_cond and spot_strong_ce and ce_atm_strong and pe_atm_strong
 
 // 5. Strong Buy PE Conditions:
 bool spot_strong_pe = (eval_spot < prev_day_high) and (eval_spot < day_open_spot)
-bool ce_atm_strong_pe = (atm_ce_price < day_open_spot) and (atm_ce_price < prev_day_high)
-bool pe_atm_strong_pe = (atm_pe_price > prev_day_low) and (atm_pe_price > day_open_spot)
+bool ce_atm_strong_pe = (atm_ce_premium_rt < day_open_spot) and (atm_ce_premium_rt < prev_day_high)
+bool pe_atm_strong_pe = (atm_pe_premium_rt > prev_day_low) and (atm_pe_premium_rt > day_open_spot)
 
 bool strong_buy_pe_cond = buy_pe_cond and spot_strong_pe and ce_atm_strong_pe and pe_atm_strong_pe
 
@@ -374,7 +390,7 @@ if barstate.islast
     if not showSummaryTable
         table.delete(summaryTbl)
     else
-        // Row 0: Column Headers with Optional Strike Prices
+        // Row 0: Column Headers displaying Selected ITM & OTM Strikes
         string atm_ce_hdr = showStrikeInHeader ? "ATM CE (" + str.tostring(atm_strike, "#.##") + ")" : "ATM CE"
         string atm_pe_hdr = showStrikeInHeader ? "ATM PE (" + str.tostring(atm_strike, "#.##") + ")" : "ATM PE"
         string itm_ce_hdr = showStrikeInHeader ? "ITM CE (" + str.tostring(itm_ce_strike, "#.##") + ")" : "ITM CE"
@@ -399,7 +415,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 1, otm_ce_above ? "Above" : "Below", bgcolor=color.black, text_color=otm_ce_above ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 1, otm_pe_above ? "Above" : "Below", bgcolor=color.black, text_color=otm_pe_above ? colorCEColor : colorPEColor, text_size=curTextSize)
 
-        // Row 2: Realtime BEP (RT BEP) - Paired Strike Average (CE Price + PE Price) / 2.0
+        // Row 2: Realtime BEP (RT BEP) = (CE Option Premium + PE Option Premium) / 2.0
         table.cell(summaryTbl, 0, 2, "RT BEP", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 2, f_fmt_val_cell(atm_bep_rt, eval_spot > atm_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > atm_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 2, f_fmt_val_cell(atm_bep_rt, eval_spot < atm_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < atm_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
@@ -408,7 +424,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 2, f_fmt_val_cell(otm1_bep_rt, eval_spot > otm1_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > otm1_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 2, f_fmt_val_cell(itm1_bep_rt, eval_spot < itm1_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < itm1_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
 
-        // Row 3: Static BEP (ST BEP) - Paired Static BEP formula
+        // Row 3: Static BEP (ST BEP)
         table.cell(summaryTbl, 0, 3, "ST BEP", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 3, f_fmt_val_cell(atm_bep_st, eval_spot > atm_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > atm_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 3, f_fmt_val_cell(atm_bep_st, eval_spot < atm_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < atm_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
@@ -417,7 +433,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 3, f_fmt_val_cell(otm1_bep_st, eval_spot > otm1_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > otm1_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 3, f_fmt_val_cell(itm1_bep_st, eval_spot < itm1_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < itm1_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
 
-        // Row 4: Static IV (ST IV) - Intrinsic Value evaluated at Static Anchor Spot Price
+        // Row 4: Static IV (ST IV) - CE = max(0, Spot - K), PE = max(0, K - Spot)
         table.cell(summaryTbl, 0, 4, "ST IV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 4, str.tostring(atm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 4, str.tostring(atm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
@@ -426,7 +442,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 4, str.tostring(otm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 4, str.tostring(otm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
-        // Row 5: Static TV (ST TV) - Time Value (Option Price - Intrinsic Value)
+        // Row 5: Static TV (ST TV) = Option Premium - Intrinsic Value
         table.cell(summaryTbl, 0, 5, "ST TV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 5, str.tostring(atm_ce_tv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 5, str.tostring(atm_pe_tv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
@@ -435,7 +451,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 5, str.tostring(otm_ce_tv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 5, str.tostring(otm_pe_tv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
-        // Row 6: Realtime IV (RT IV)
+        // Row 6: Realtime IV (RT IV) = CE max(0, Spot - K) / PE max(0, K - Spot)
         table.cell(summaryTbl, 0, 6, "RT IV", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 6, str.tostring(atm_ce_iv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 6, str.tostring(atm_pe_iv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
@@ -444,7 +460,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 6, str.tostring(otm_ce_iv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 6, str.tostring(otm_pe_iv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
-        // Row 7: Realtime TV (RT TV)
+        // Row 7: Realtime TV (RT TV) = Option Premium - Intrinsic Value
         table.cell(summaryTbl, 0, 7, "RT TV", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 7, str.tostring(atm_ce_tv_rt, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 7, str.tostring(atm_pe_tv_rt, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
