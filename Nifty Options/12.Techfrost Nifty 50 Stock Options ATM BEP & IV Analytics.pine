@@ -19,13 +19,19 @@ enum TableSize
     large  = "Large"
 
 enum BasketPreset
-    top10  = "Top 10 Nifty Heavyweights (RELIANCE, TCS, INFY, HDFCBANK...)"
-    top12  = "Top 12 Nifty Stocks (Heavyweights + AXISBANK, TATAMOTORS)"
-    custom = "Custom Stock Selection (Max 12 Active Stocks)"
+    top6   = "Top 6 Nifty Heavyweights (RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK, SBIN)"
+    top5   = "Top 5 Core Heavyweights (RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK)"
+    custom = "Custom Stock Selection (Max 6 Active Stocks)"
 
-// --- Basket Selection ---
-basketPresetInput  = input.enum(BasketPreset.top10, "Stock Basket Selection Mode", group="Nifty 50 Stock Basket Selection",
-  tooltip="TradingView limits security requests to 40 calls per script. Select Top 10 / 12 or Custom (Max 12 stocks evaluated simultaneously).")
+enum StrikeAnchorMode
+    dayOpen = "Day Open Fixed ATM Strike (Zero Ticker Churn)"
+    dynamic = "Realtime Dynamic ATM Strike"
+
+// --- Basket & Strike Selection ---
+basketPresetInput  = input.enum(BasketPreset.top6, "Stock Basket Selection Mode", group="Nifty 50 Stock Basket Selection",
+  tooltip="TradingView limits total unique security requests to 40 across historical bars. Select Top 6, Top 5 or Custom (Max 6 stocks).")
+strikeAnchorInput  = input.enum(StrikeAnchorMode.dayOpen, "ATM Strike Anchor Mode", group="Nifty 50 Stock Basket Selection",
+  tooltip="Day Open Fixed ATM Strike anchors the ATM strike at session open to eliminate security call quota errors across historical bars.")
 
 // --- Display & Controls ---
 showSummaryTable   = input.bool(true, "Show Dashboard Summary Table", group="Display Controls")
@@ -42,20 +48,14 @@ colorNeutralColor  = input.color(#FFD600, "Neutral Accent Color", group="Styling
 colorCrossColor    = input.color(#00B0FF, "Crossover / Formation Highlight Color", group="Styling & Colors")
 
 // --- Custom Stock Selection Toggles (Used when Mode = Custom) ---
-enable_RELIANCE   = input.bool(true,  "RELIANCE",   group="Custom Stock Selection (Max 12 Active)")
-enable_TCS        = input.bool(true,  "TCS",        group="Custom Stock Selection (Max 12 Active)")
-enable_INFY       = input.bool(true,  "INFY",       group="Custom Stock Selection (Max 12 Active)")
-enable_HDFCBANK   = input.bool(true,  "HDFCBANK",   group="Custom Stock Selection (Max 12 Active)")
-enable_ICICIBANK  = input.bool(true,  "ICICIBANK",  group="Custom Stock Selection (Max 12 Active)")
-enable_SBIN       = input.bool(true,  "SBIN",       group="Custom Stock Selection (Max 12 Active)")
-enable_BHARTIARTL = input.bool(true,  "BHARTIARTL", group="Custom Stock Selection (Max 12 Active)")
-enable_ITC        = input.bool(true,  "ITC",        group="Custom Stock Selection (Max 12 Active)")
-enable_KOTAKBANK  = input.bool(true,  "KOTAKBANK",  group="Custom Stock Selection (Max 12 Active)")
-enable_LT         = input.bool(true,  "LT",         group="Custom Stock Selection (Max 12 Active)")
-enable_AXISBANK   = input.bool(false, "AXISBANK",   group="Custom Stock Selection (Max 12 Active)")
-enable_TATAMOTORS = input.bool(false, "TATAMOTORS", group="Custom Stock Selection (Max 12 Active)")
-enable_MARUTI     = input.bool(false, "MARUTI",     group="Custom Stock Selection (Max 12 Active)")
-enable_SUNPHARMA  = input.bool(false, "SUNPHARMA",  group="Custom Stock Selection (Max 12 Active)")
+enable_RELIANCE   = input.bool(true,  "RELIANCE",   group="Custom Stock Selection (Max 6 Active)")
+enable_TCS        = input.bool(true,  "TCS",        group="Custom Stock Selection (Max 6 Active)")
+enable_INFY       = input.bool(true,  "INFY",       group="Custom Stock Selection (Max 6 Active)")
+enable_HDFCBANK   = input.bool(true,  "HDFCBANK",   group="Custom Stock Selection (Max 6 Active)")
+enable_ICICIBANK  = input.bool(true,  "ICICIBANK",  group="Custom Stock Selection (Max 6 Active)")
+enable_SBIN       = input.bool(true,  "SBIN",       group="Custom Stock Selection (Max 6 Active)")
+enable_BHARTIARTL = input.bool(false, "BHARTIARTL", group="Custom Stock Selection (Max 6 Active)")
+enable_ITC        = input.bool(false, "ITC",        group="Custom Stock Selection (Max 6 Active)")
 
 // ==========================================
 // HELPER FUNCTIONS & STRIKE AUTO-DETECTION
@@ -130,13 +130,16 @@ f_eval_stock(string root_sym, bool is_enabled) =>
     res.enabled := is_enabled
     
     if is_enabled
-        // 1. Fetch Spot Data (Current Close, Previous Close, Current Open)
+        // 1. Fetch Spot Data (Current Close, Previous Close, Session Open)
         [spot_close, spot_prev_close, spot_open] = request.security(syminfo.prefix + ":" + root_sym, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
         res.spot_c := spot_close
         res.spot_o := spot_open
         
-        // 2. Determine ATM Strike
-        float atm_st = f_calc_atm_strike(spot_close)
+        // 2. Determine ATM Strike (Day Open Fixed or Realtime Dynamic)
+        float dyn_atm_st = f_calc_atm_strike(spot_close)
+        float open_atm_st = f_calc_atm_strike(spot_open)
+        
+        float atm_st = strikeAnchorInput == StrikeAnchorMode.dayOpen ? (na(open_atm_st) or open_atm_st <= 0 ? dyn_atm_st : open_atm_st) : dyn_atm_st
         res.atm_strike := atm_st
         
         // 3. Fetch ATM CE and PE Data
@@ -187,23 +190,19 @@ f_eval_stock(string root_sym, bool is_enabled) =>
     res
 
 // ==========================================
-// PRESET VS CUSTOM BASKET SELECTION (MAX 12 STOCKS = 36 CALLS <= 40)
+// PRESET VS CUSTOM BASKET SELECTION (MAX 6 STOCKS = 18 CALLS <= 40)
 // ==========================================
 
-bool use_RELIANCE   = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_RELIANCE
-bool use_TCS        = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_TCS
-bool use_INFY       = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_INFY
-bool use_HDFCBANK   = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_HDFCBANK
-bool use_ICICIBANK  = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_ICICIBANK
-bool use_SBIN       = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_SBIN
-bool use_BHARTIARTL = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_BHARTIARTL
-bool use_ITC        = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_ITC
-bool use_KOTAKBANK  = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_KOTAKBANK
-bool use_LT         = (basketPresetInput == BasketPreset.top10 or basketPresetInput == BasketPreset.top12) ? true : enable_LT
-bool use_AXISBANK   = (basketPresetInput == BasketPreset.top12) ? true : (basketPresetInput == BasketPreset.custom ? enable_AXISBANK : false)
-bool use_TATAMOTORS = (basketPresetInput == BasketPreset.top12) ? true : (basketPresetInput == BasketPreset.custom ? enable_TATAMOTORS : false)
+bool use_RELIANCE   = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_RELIANCE
+bool use_TCS        = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_TCS
+bool use_INFY       = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_INFY
+bool use_HDFCBANK   = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_HDFCBANK
+bool use_ICICIBANK  = (basketPresetInput == BasketPreset.top6 or basketPresetInput == BasketPreset.top5) ? true : enable_ICICIBANK
+bool use_SBIN       = (basketPresetInput == BasketPreset.top6) ? true : (basketPresetInput == BasketPreset.custom ? enable_SBIN : false)
+bool use_BHARTIARTL = (basketPresetInput == BasketPreset.custom) ? enable_BHARTIARTL : false
+bool use_ITC        = (basketPresetInput == BasketPreset.custom) ? enable_ITC : false
 
-// Evaluate exactly up to 12 stocks (12 * 3 = 36 security calls, perfectly <= 40 limit)
+// Evaluate up to 6 stocks (6 * 3 = 18 security calls, leaves 22 call buffer below TradingView 40 limit)
 StockAnalytics s_RELIANCE   = f_eval_stock("RELIANCE",   use_RELIANCE)
 StockAnalytics s_TCS        = f_eval_stock("TCS",        use_TCS)
 StockAnalytics s_INFY       = f_eval_stock("INFY",       use_INFY)
@@ -212,10 +211,6 @@ StockAnalytics s_ICICIBANK  = f_eval_stock("ICICIBANK",  use_ICICIBANK)
 StockAnalytics s_SBIN       = f_eval_stock("SBIN",       use_SBIN)
 StockAnalytics s_BHARTIARTL = f_eval_stock("BHARTIARTL", use_BHARTIARTL)
 StockAnalytics s_ITC        = f_eval_stock("ITC",        use_ITC)
-StockAnalytics s_KOTAKBANK  = f_eval_stock("KOTAKBANK",  use_KOTAKBANK)
-StockAnalytics s_LT         = f_eval_stock("LT",         use_LT)
-StockAnalytics s_AXISBANK   = f_eval_stock("AXISBANK",   use_AXISBANK)
-StockAnalytics s_TATAMOTORS = f_eval_stock("TATAMOTORS", use_TATAMOTORS)
 
 // Array of evaluated Stock Analytics Objects
 array<StockAnalytics> stockList = array.new<StockAnalytics>()
@@ -235,14 +230,6 @@ if use_BHARTIARTL
     array.push(stockList, s_BHARTIARTL)
 if use_ITC
     array.push(stockList, s_ITC)
-if use_KOTAKBANK
-    array.push(stockList, s_KOTAKBANK)
-if use_LT
-    array.push(stockList, s_LT)
-if use_AXISBANK
-    array.push(stockList, s_AXISBANK)
-if use_TATAMOTORS
-    array.push(stockList, s_TATAMOTORS)
 
 // ==========================================
 // AGGREGATE SUMMARY COUNTS ACROSS ALL STOCKS
@@ -334,7 +321,7 @@ if barstate.islast
     else
         // Row 0: Title Banner
         table.cell(summaryTbl, 0, 0, "Nifty 50 ATM Stock Options Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTbl, 1, 0, "Active Stocks: " + str.tostring(count_total_stocks) + " / 12", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 0, "Active Stocks: " + str.tostring(count_total_stocks) + " / 6", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
         table.cell(summaryTbl, 2, 0, "", bgcolor=colorHeaderBg)
         table.cell(summaryTbl, 3, 0, "", bgcolor=colorHeaderBg)
         
