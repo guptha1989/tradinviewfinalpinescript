@@ -404,6 +404,9 @@ float pe_otm_iv_rt = math.max(0.0, otm_pe_strike - spot_ltp)
 float itm_avg_iv_rt = (ce_itm_iv_rt + pe_itm_iv_rt) / 2.0
 float otm_avg_iv_rt = (ce_otm_iv_rt + pe_otm_iv_rt) / 2.0
 
+float itm_avg_iv_d0 = (ce_itm_iv_d0 + pe_itm_iv_d0) / 2.0
+float otm_avg_iv_d0 = (ce_otm_iv_d0 + pe_otm_iv_d0) / 2.0
+
 // 5-Day Static Intrinsic Values (Day 0 to Day 4)
 float ce_iv_d0 = math.max(0.0, spot_r0 - ce_strike)
 float pe_iv_d0 = math.max(0.0, pe_strike - spot_r0)
@@ -445,8 +448,12 @@ float pe_itm_tv_rt = math.max(0.0, pe_itm_ltp - pe_itm_iv_rt)
 float ce_otm_tv_rt = math.max(0.0, ce_otm_ltp - ce_otm_iv_rt)
 float pe_otm_tv_rt = math.max(0.0, pe_otm_ltp - pe_otm_iv_rt)
 
-// OTM Average Time Value: (OTM CE Time Value + OTM PE Time Value) / 2.0
+// ITM & OTM Average Time Values
+float itm_avg_tv_rt = (ce_itm_tv_rt + pe_itm_tv_rt) / 2.0
 float otm_avg_tv_rt = (ce_otm_tv_rt + pe_otm_tv_rt) / 2.0
+
+float itm_avg_tv_d0 = (ce_itm_tv_d0 + pe_itm_tv_d0) / 2.0
+float otm_avg_tv_d0 = (ce_otm_tv_d0 + pe_otm_tv_d0) / 2.0
 
 // 5-Day Static Time Values (Day 0 to Day 4)
 float ce_tv_d0 = timeValueFormulaInput == TimeValueFormula.standard ? (ce_r0 - ce_iv_d0) : (ce_strike - ce_iv_d0)
@@ -664,36 +671,26 @@ if showITMOTMTableInput and barstate.islast
            
     basisTag = staticBasisInput == StaticBasis.prevClose ? "Prev Close" : (staticBasisInput == StaticBasis.first5Min ? "First 5m Close" : "Day Open")
 
-    itmotmTable := table.new(itmotm_pos, 5, 3, border_width=1, border_color=color.gray)
+    itmotmTable := table.new(itmotm_pos, 3, 3, border_width=1, border_color=color.gray)
 
     // Header Row 0
     table.cell(itmotmTable, 0, 0, "ITM & OTM Static Analytics (Offset: " + str.tostring(rawOffsetPts, "#") + " pts)", bgcolor=#1A237E, text_color=color.white, text_size=t_sz)
-    table.cell(itmotmTable, 1, 0, "ITM CE (" + str.tostring(itm_ce_strike, "#.##") + ")", bgcolor=#1A237E, text_color=#00E676, text_size=t_sz)
-    table.cell(itmotmTable, 2, 0, "ITM PE (" + str.tostring(itm_pe_strike, "#.##") + ")", bgcolor=#1A237E, text_color=#FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 3, 0, "OTM CE (" + str.tostring(otm_ce_strike, "#.##") + ")", bgcolor=#1A237E, text_color=#00E676, text_size=t_sz)
-    table.cell(itmotmTable, 4, 0, "OTM PE (" + str.tostring(otm_pe_strike, "#.##") + ")", bgcolor=#1A237E, text_color=#FF1744, text_size=t_sz)
+    table.cell(itmotmTable, 1, 0, "ITM Average (CE: " + str.tostring(itm_ce_strike, "#.##") + " / PE: " + str.tostring(itm_pe_strike, "#.##") + ")", bgcolor=#1A237E, text_color=#00E676, text_size=t_sz)
+    table.cell(itmotmTable, 2, 0, "OTM Average (CE: " + str.tostring(otm_ce_strike, "#.##") + " / PE: " + str.tostring(otm_pe_strike, "#.##") + ")", bgcolor=#1A237E, text_color=#FF1744, text_size=t_sz)
 
-    // Realtime LTP vs Reference Comparisons
-    bool ce_itm_above_iv = ce_itm_ltp >= ce_itm_iv_d0
-    bool pe_itm_above_iv = pe_itm_ltp >= pe_itm_iv_d0
-    bool ce_otm_above_iv = ce_otm_ltp >= ce_otm_iv_d0
-    bool pe_otm_above_iv = pe_otm_ltp >= pe_otm_iv_d0
+    // Realtime LTP vs Reference Comparisons for Average Values
+    bool itm_avg_above_iv = itm_avg_iv_rt >= itm_avg_iv_d0
+    bool otm_avg_above_iv = otm_avg_iv_rt >= otm_avg_iv_d0
 
-    bool ce_itm_above_tv = ce_itm_ltp >= ce_itm_tv_d0
-    bool pe_itm_above_tv = pe_itm_ltp >= pe_itm_tv_d0
-    bool ce_otm_above_tv = ce_otm_ltp >= ce_otm_tv_d0
-    bool pe_otm_above_tv = pe_otm_ltp >= pe_otm_tv_d0
+    bool itm_avg_above_tv = itm_avg_tv_rt >= itm_avg_tv_d0
+    bool otm_avg_above_tv = otm_avg_tv_rt >= otm_avg_tv_d0
 
-    // Row 1: Static Intrinsic Value (with Realtime Premium Above / Below Suffix)
-    table.cell(itmotmTable, 0, 1, "Static Intrinsic (" + basisTag + ")", bgcolor=#263238, text_color=color.white, text_size=t_sz)
-    table.cell(itmotmTable, 1, 1, str.tostring(ce_itm_iv_d0, "#.##") + " (" + (ce_itm_above_iv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=ce_itm_above_iv ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 2, 1, str.tostring(pe_itm_iv_d0, "#.##") + " (" + (pe_itm_above_iv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=pe_itm_above_iv ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 3, 1, str.tostring(ce_otm_iv_d0, "#.##") + " (" + (ce_otm_above_iv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=ce_otm_above_iv ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 4, 1, str.tostring(pe_otm_iv_d0, "#.##") + " (" + (pe_otm_above_iv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=pe_otm_above_iv ? #00E676 : #FF1744, text_size=t_sz)
+    // Row 1: Static Avg Intrinsic Value (with Realtime Premium Above / Below Suffix)
+    table.cell(itmotmTable, 0, 1, "Static Avg Intrinsic (" + basisTag + ")", bgcolor=#263238, text_color=color.white, text_size=t_sz)
+    table.cell(itmotmTable, 1, 1, str.tostring(itm_avg_iv_d0, "#.##") + " (" + (itm_avg_above_iv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=itm_avg_above_iv ? #00E676 : #FF1744, text_size=t_sz)
+    table.cell(itmotmTable, 2, 1, str.tostring(otm_avg_iv_d0, "#.##") + " (" + (otm_avg_above_iv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=otm_avg_above_iv ? #00E676 : #FF1744, text_size=t_sz)
 
-    // Row 2: Static Time Value (with Realtime Premium Above / Below Suffix)
-    table.cell(itmotmTable, 0, 2, "Static Time Value (" + basisTag + ")", bgcolor=#263238, text_color=color.white, text_size=t_sz)
-    table.cell(itmotmTable, 1, 2, str.tostring(ce_itm_tv_d0, "#.##") + " (" + (ce_itm_above_tv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=ce_itm_above_tv ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 2, 2, str.tostring(pe_itm_tv_d0, "#.##") + " (" + (pe_itm_above_tv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=pe_itm_above_tv ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 3, 2, str.tostring(ce_otm_tv_d0, "#.##") + " (" + (ce_otm_above_tv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=ce_otm_above_tv ? #00E676 : #FF1744, text_size=t_sz)
-    table.cell(itmotmTable, 4, 2, str.tostring(pe_otm_tv_d0, "#.##") + " (" + (pe_otm_above_tv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=pe_otm_above_tv ? #00E676 : #FF1744, text_size=t_sz)
+    // Row 2: Static Avg Time Value (with Realtime Premium Above / Below Suffix)
+    table.cell(itmotmTable, 0, 2, "Static Avg Time Value (" + basisTag + ")", bgcolor=#263238, text_color=color.white, text_size=t_sz)
+    table.cell(itmotmTable, 1, 2, str.tostring(itm_avg_tv_d0, "#.##") + " (" + (itm_avg_above_tv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=itm_avg_above_tv ? #00E676 : #FF1744, text_size=t_sz)
+    table.cell(itmotmTable, 2, 2, str.tostring(otm_avg_tv_d0, "#.##") + " (" + (otm_avg_above_tv ? "Above" : "Below") + ")", bgcolor=color.black, text_color=otm_avg_above_tv ? #00E676 : #FF1744, text_size=t_sz)
