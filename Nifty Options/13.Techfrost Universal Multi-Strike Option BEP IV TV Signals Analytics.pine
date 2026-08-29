@@ -122,7 +122,7 @@ float eval_spot = spot_close
 if useOffHoursPrevClose and (na(spot_close) or spot_close <= 0 or not barstate.isrealtime)
     eval_spot := not na(prev_day_close) and prev_day_close > 0 ? prev_day_close : spot_close
 
-// Determine Static Reference Spot Price
+// Determine Static Reference Spot Price (Anchor: Day Open, Prev Close, or First 5m Close)
 float ref_static_spot = switch staticAnchorInput
     StaticAnchor.dayOpen   => not na(day_open_spot) ? day_open_spot : eval_spot
     StaticAnchor.prevClose => not na(prev_day_close) ? prev_day_close : eval_spot
@@ -140,21 +140,21 @@ float itm_pe_strike = atm_strike + (offsetValInput * strike_step)
 float otm_pe_strike = atm_strike - (offsetValInput * strike_step)
 
 // ==========================================
-// EXACT FORMULAS (FROM SCRIPT 4 & 5)
+// EXACT SPOT-ANCHORED IV, TV & BEP ENGINE
 // ==========================================
 
-// Synthetic Time Value estimation based on 14-period ATR
+// Synthetic Time Value estimation fallback based on 14-period ATR
 float base_tv_est = ta.atr(14) * 0.4
 
-// Helper function to calculate option metrics (Intrinsic & Time Value)
-f_calc_option_analytics(float live_spot, float static_spot, float K, bool is_ce, float tv_est) =>
+// Helper function to calculate option metrics (Exact Intrinsic Value relative to Static Anchor Spot Price)
+f_calc_option_analytics(float live_spot, float static_spot, float K, bool is_ce, float fallback_tv) =>
     // Intrinsic Values (IV): CE = max(0, Spot - K), PE = max(0, K - Spot)
     float iv_realtime = is_ce ? math.max(0.0, live_spot - K) : math.max(0.0, K - live_spot)
     float iv_static   = is_ce ? math.max(0.0, static_spot - K) : math.max(0.0, K - static_spot)
     
-    // Estimated Option Premiums
-    float opt_price_realtime = iv_realtime + tv_est
-    float opt_price_static   = iv_static + tv_est
+    // Estimated Option Premiums (Intrinsic + Time Value)
+    float opt_price_realtime = iv_realtime + fallback_tv
+    float opt_price_static   = iv_static + fallback_tv
     
     // Time Values (TV) = Option Price - Intrinsic Value
     float tv_realtime = math.max(0.0, opt_price_realtime - iv_realtime)
@@ -175,7 +175,7 @@ f_calc_option_analytics(float live_spot, float static_spot, float K, bool is_ce,
 [otm_ce_price, otm_ce_price_st, otm_ce_iv_rt, otm_ce_iv_st, otm_ce_tv_rt, otm_ce_tv_st, otm_ce_above] = f_calc_option_analytics(eval_spot, ref_static_spot, otm_ce_strike, true, base_tv_est)
 [otm_pe_price, otm_pe_price_st, otm_pe_iv_rt, otm_pe_iv_st, otm_pe_tv_rt, otm_pe_tv_st, otm_pe_above] = f_calc_option_analytics(eval_spot, ref_static_spot, otm_pe_strike, false, base_tv_est)
 
-// EXACT BEP FORMULAS FROM SCRIPT 4: Paired Strike Average (CE Price + PE Price) / 2.0
+// EXACT BEP FORMULAS FROM SCRIPT 4 & 5: Paired Strike Average (CE Price + PE Price) / 2.0
 float atm_bep_rt  = (atm_ce_price + atm_pe_price) / 2.0
 float itm1_bep_rt = (itm_ce_price + otm_pe_price) / 2.0
 float otm1_bep_rt = (otm_ce_price + itm_pe_price) / 2.0
@@ -399,7 +399,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 1, otm_ce_above ? "Above" : "Below", bgcolor=color.black, text_color=otm_ce_above ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 1, otm_pe_above ? "Above" : "Below", bgcolor=color.black, text_color=otm_pe_above ? colorCEColor : colorPEColor, text_size=curTextSize)
 
-        // Row 2: Realtime BEP (RT BEP) - EXACT Script 4 Paired BEP formula
+        // Row 2: Realtime BEP (RT BEP) - Paired Strike Average (CE Price + PE Price) / 2.0
         table.cell(summaryTbl, 0, 2, "RT BEP", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 2, f_fmt_val_cell(atm_bep_rt, eval_spot > atm_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > atm_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 2, f_fmt_val_cell(atm_bep_rt, eval_spot < atm_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < atm_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
@@ -408,7 +408,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 2, f_fmt_val_cell(otm1_bep_rt, eval_spot > otm1_bep_rt, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > otm1_bep_rt ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 2, f_fmt_val_cell(itm1_bep_rt, eval_spot < itm1_bep_rt, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < itm1_bep_rt ? colorPEColor : colorCEColor, text_size=curTextSize)
 
-        // Row 3: Static BEP (ST BEP) - EXACT Script 4 Paired Static BEP formula
+        // Row 3: Static BEP (ST BEP) - Paired Static BEP formula
         table.cell(summaryTbl, 0, 3, "ST BEP", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 3, f_fmt_val_cell(atm_bep_st, eval_spot > atm_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > atm_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 3, f_fmt_val_cell(atm_bep_st, eval_spot < atm_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < atm_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
@@ -417,7 +417,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 3, f_fmt_val_cell(otm1_bep_st, eval_spot > otm1_bep_st, "Above", "Below"), bgcolor=color.black, text_color=eval_spot > otm1_bep_st ? colorCEColor : colorPEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 3, f_fmt_val_cell(itm1_bep_st, eval_spot < itm1_bep_st, "Below", "Above"), bgcolor=color.black, text_color=eval_spot < itm1_bep_st ? colorPEColor : colorCEColor, text_size=curTextSize)
 
-        // Row 4: Static IV (ST IV) - EXACT Script 5 Intrinsic Value formula
+        // Row 4: Static IV (ST IV) - Intrinsic Value evaluated at Static Anchor Spot Price
         table.cell(summaryTbl, 0, 4, "ST IV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 4, str.tostring(atm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 4, str.tostring(atm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
@@ -426,7 +426,7 @@ if barstate.islast
         table.cell(summaryTbl, 5, 4, str.tostring(otm_ce_iv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 6, 4, str.tostring(otm_pe_iv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
 
-        // Row 5: Static TV (ST TV) - EXACT Script 5 Time Value formula (Option Price - Intrinsic Value)
+        // Row 5: Static TV (ST TV) - Time Value (Option Price - Intrinsic Value)
         table.cell(summaryTbl, 0, 5, "ST TV", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
         table.cell(summaryTbl, 1, 5, str.tostring(atm_ce_tv_st, "#.##"), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
         table.cell(summaryTbl, 2, 5, str.tostring(atm_pe_tv_st, "#.##"), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
