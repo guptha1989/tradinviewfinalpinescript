@@ -1,5 +1,5 @@
 //@version=6
-indicator("13.Techfrost Universal Multi-Strike Option BEP IV TV Signals Analytics", shorttitle="TF Universal Options Analytics", overlay=true, precision=2)
+indicator("13.Techfrost Universal Multi-Strike Option BEP IV TV Signals Analytics", overlay=true, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
