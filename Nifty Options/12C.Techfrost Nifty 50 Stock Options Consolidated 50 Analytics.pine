@@ -1,5 +1,5 @@
 //@version=6
-indicator("Techfrost Nifty 50 Stock Options Consolidated 50 Analytics", shorttitle="TF Nifty50 Consolidated", overlay=false, precision=2)
+indicator("Techfrost Nifty 50 Stock Options Consolidated 50 Analytics", shorttitle="TF Nifty50 Consolidated", overlay=true, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
