@@ -91,17 +91,29 @@ f_eval_nifty_stock_single(string root_sym, bool is_enabled) =>
     if is_enabled
         [spot_close, spot_prev_close, spot_open] = request.security("NSE:" + root_sym, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
         
-        float eval_spot = spot_close
-        if useOffHoursPrevClose and (na(spot_close) or spot_close <= 0 or not barstate.isrealtime)
-            eval_spot := not na(spot_prev_close) and spot_prev_close > 0 ? spot_prev_close : spot_close
+        float s_close = spot_close
+        float s_prev_close = spot_prev_close
+        float s_open = spot_open
+        
+        if na(s_close) or s_close <= 0
+            string alt_sym = root_sym == "BAJAJ-AUTO" ? "BAJAJ_AUTO" : (root_sym == "BAJAJ_AUTO" ? "BAJAJ-AUTO" : (root_sym == "M_M" ? "M&M" : (root_sym == "M&M" ? "M_M" : root_sym)))
+            [alt_c, alt_pc, alt_o] = request.security("NSE:" + alt_sym, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
+            if not na(alt_c) and alt_c > 0
+                s_close := alt_c
+                s_prev_close := alt_pc
+                s_open := alt_o
+        
+        float eval_spot = s_close
+        if useOffHoursPrevClose and (na(s_close) or s_close <= 0 or not barstate.isrealtime)
+            eval_spot := not na(s_prev_close) and s_prev_close > 0 ? s_prev_close : s_close
             
         if not na(eval_spot) and eval_spot > 0
             res.spot_c      := eval_spot
-            res.spot_o      := spot_open
-            res.spot_prev_c := spot_prev_close
+            res.spot_o      := s_open
+            res.spot_prev_c := s_prev_close
             
             float atm_st  = f_calc_atm_strike(eval_spot)
-            float open_st = f_calc_atm_strike(spot_open)
+            float open_st = f_calc_atm_strike(s_open)
             res.atm_strike      := atm_st
             res.open_atm_strike := open_st
             
