@@ -24,18 +24,6 @@ enum StrikeMode
     otm  = "OTM (Out of The Money)"
     both = "Both ITM & OTM"
 
-enum OffsetChoice
-    offset5   = "5 Points"
-    offset10  = "10 Points"
-    offset15  = "15 Points"
-    offset20  = "20 Points"
-    offset25  = "25 Points"
-    offset40  = "40 Points"
-    offset50  = "50 Points"
-    offset100 = "100 Points"
-    offset150 = "150 Points"
-    offset200 = "200 Points"
-
 enum StaticBasis
     dayOpen   = "Day Open Price (9:15 AM Open)"
     prevClose = "Previous Day Close / Settlement Price"
@@ -56,7 +44,7 @@ strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group
 // --- Strike & Calculation Basis Settings ---
 strikeModeInput       = input.enum(StrikeMode.atm, "Strike Selection Mode", group="Calculation Settings",
   tooltip="Choose whether to calculate metrics for ATM, ITM, OTM, or Both ITM & OTM strikes relative to selected chart option.")
-offsetChoiceInput     = input.enum(OffsetChoice.offset100, "Strike Offset Points", group="Calculation Settings",
+offsetChoiceInput     = input.string("100 Points", "Strike Offset Points", options=["5 Points", "10 Points", "15 Points", "20 Points", "25 Points", "40 Points", "50 Points", "100 Points", "150 Points", "200 Points"], group="Calculation Settings",
   tooltip="Offset points used to determine ITM / OTM strike levels (e.g. 50, 100, 150, 200).")
 strikeOffsetPtsInput  = input.float(100.0, "ITM / OTM Strike Offset (Points)", minval=1.0, group="Calculation Settings",
   tooltip="Direct point distance offset for ITM and OTM strikes (e.g. 50, 100, 150, 200).")
@@ -236,16 +224,16 @@ f_build_option_symbol(float target_strike, bool target_is_ce) =>
 // ==========================================
 
 float rawOffsetPts = strikeOffsetPtsInput > 0 ? strikeOffsetPtsInput : (switch offsetChoiceInput
-    OffsetChoice.offset5   => 5.0
-    OffsetChoice.offset10  => 10.0
-    OffsetChoice.offset15  => 15.0
-    OffsetChoice.offset20  => 20.0
-    OffsetChoice.offset25  => 25.0
-    OffsetChoice.offset40  => 40.0
-    OffsetChoice.offset50  => 50.0
-    OffsetChoice.offset100 => 100.0
-    OffsetChoice.offset150 => 150.0
-    OffsetChoice.offset200 => 200.0
+    "5 Points"   => 5.0
+    "10 Points"  => 10.0
+    "15 Points"  => 15.0
+    "20 Points"  => 20.0
+    "25 Points"  => 25.0
+    "40 Points"  => 40.0
+    "50 Points"  => 50.0
+    "100 Points" => 100.0
+    "150 Points" => 150.0
+    "200 Points" => 200.0
     => 100.0)
 
 float offsetPts = (strikeModeInput == StrikeMode.atm) ? 0.0 : rawOffsetPts
@@ -307,7 +295,7 @@ string opp_ticker = f_build_option_symbol(base_strike, not isCall)
 
 bool opp_is_bull   = nz(opp_c) >= nz(opp_o)
 color opp_body_col = opp_is_bull ? colorOppBull : colorOppBear
-color opp_wick_col = opp_is_bull ? color.new(colorOppBull, 40) : color.new(colorOppBear, 40)
+color opp_wick_col = opp_is_bull ? color.new(colorOppBull, 30) : color.new(colorOppBear, 30)
 
 plotcandle(showOppCandlesInput ? opp_o : na,
            showOppCandlesInput ? opp_h : na,
