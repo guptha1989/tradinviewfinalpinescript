@@ -46,9 +46,12 @@ showSummaryTable   = input.bool(true, "Show Dashboard Analytics Table", group="D
 showDetailedValues = input.bool(true, "Show All Numeric Calculation Values (Detailed vs Simple Mode)", group="Display Controls",
   tooltip="When enabled, displays exact numeric prices & values in the table. When disabled, displays clean status text e.g. 'Price Above'.")
 showSignalsOnChart = input.bool(true, "Plot Buy / Sell Signal Arrows on Chart", group="Display Controls")
+tablePosInput      = input.enum(TablePos.topRight, "Dashboard Table Position", group="Display Controls")
 
-tablePosInput      = input.enum(TablePos.topRight, "Table Position", group="Display Controls")
-tableTextSizeInput = input.enum(TableSize.small, "Table Text Size", group="Display Controls")
+// --- Performance Table Controls ---
+showPerfTable         = input.bool(true, "Show Last 5 Days Performance Summary Table", group="Last 5 Days Performance Table")
+perfTablePosInput     = input.enum(TablePos.bottomRight, "Performance Table Position", group="Last 5 Days Performance Table")
+tableTextSizeInput    = input.enum(TableSize.small, "Table Text Size", group="Display Controls")
 
 // --- Styling & Colors ---
 colorHeaderBg      = input.color(#1A237E, "Header Banner Background", group="Styling & Colors")
@@ -188,25 +191,12 @@ bool atm_ce_cross_bep = ta.crossover(eval_spot, atm_ce_bep_rt) or ta.crossover(e
 bool atm_pe_cross_bep = ta.crossunder(eval_spot, atm_pe_bep_rt) or ta.crossunder(eval_spot, atm_strike)
 
 // 2. Standard Buy CE Conditions:
-// - ATM CE crossover Realtime BEP
-// - ITM CE price > CE IV
-// - ITM PE price < PE IV
-// - OTM CE price < Time Value (TV)
-// - OTM PE price > Time Value (TV)
 bool buy_ce_cond = atm_ce_cross_bep and (itm_ce_price > itm_ce_iv_rt) and (itm_pe_price < itm_pe_iv_rt) and (otm_ce_price < otm_ce_tv_rt) and (otm_pe_price > otm_pe_tv_rt)
 
 // 3. Standard Buy PE Conditions:
-// - ATM PE crossover Realtime BEP
-// - ITM PE price > PE IV
-// - ITM CE price < CE IV
-// - OTM CE price < Time Value (TV)
-// - OTM PE price > Time Value (TV)
 bool buy_pe_cond = atm_pe_cross_bep and (itm_pe_price > itm_pe_iv_rt) and (itm_ce_price < itm_ce_iv_rt) and (otm_ce_price < otm_ce_tv_rt) and (otm_pe_price > otm_pe_tv_rt)
 
 // 4. Strong Buy CE Conditions:
-// - Spot > Previous Day Low AND Spot > Day Open
-// - CE ATM Price > Day Open AND CE ATM Price > Previous Day Low
-// - PE ATM Price < Previous Day High AND PE ATM Price < Day Open
 bool spot_strong_ce = (eval_spot > prev_day_low) and (eval_spot > day_open_spot)
 bool ce_atm_strong  = (atm_ce_price > day_open_spot) and (atm_ce_price > prev_day_low)
 bool pe_atm_strong  = (atm_pe_price < prev_day_high) and (atm_pe_price < day_open_spot)
@@ -214,14 +204,17 @@ bool pe_atm_strong  = (atm_pe_price < prev_day_high) and (atm_pe_price < day_ope
 bool strong_buy_ce_cond = buy_ce_cond and spot_strong_ce and ce_atm_strong and pe_atm_strong
 
 // 5. Strong Buy PE Conditions:
-// - Spot < Previous Day High AND Spot < Day Open
-// - CE ATM Price < Day Open AND CE ATM Price < Previous Day High
-// - PE ATM Price > Previous Day Low AND PE ATM Price > Day Open
 bool spot_strong_pe = (eval_spot < prev_day_high) and (eval_spot < day_open_spot)
 bool ce_atm_strong_pe = (atm_ce_price < day_open_spot) and (atm_ce_price < prev_day_high)
 bool pe_atm_strong_pe = (atm_pe_price > prev_day_low) and (atm_pe_price > day_open_spot)
 
 bool strong_buy_pe_cond = buy_pe_cond and spot_strong_pe and ce_atm_strong_pe and pe_atm_strong_pe
+
+// Separate Standard vs Strong Signals
+bool signal_std_buy_ce    = buy_ce_cond and not strong_buy_ce_cond
+bool signal_std_buy_pe    = buy_pe_cond and not strong_buy_pe_cond
+bool signal_strong_buy_ce = strong_buy_ce_cond
+bool signal_strong_buy_pe = strong_buy_pe_cond
 
 // Final Signal Classification
 string signalText    = "NEUTRAL / WAIT 🟡"
@@ -250,7 +243,93 @@ plotshape(showSignalsOnChart and (strong_buy_ce_cond or buy_ce_cond), title="Buy
 plotshape(showSignalsOnChart and (strong_buy_pe_cond or buy_pe_cond), title="Buy PE Signal", style=shape.triangledown, position=position.abovebar, color=color.red, size=size.small)
 
 // ==========================================
-// RENDER DASHBOARD ANALYTICS TABLE
+// LAST 5 DAYS SWING PERFORMANCE TRACKER
+// ==========================================
+
+var int day_count = 0
+if ta.change(time("D")) != 0
+    day_count += 1
+
+// Active Swing Trade State Variables
+var int active_signal_type = 0 // 0=None, 1=Std CE, 2=Std PE, 3=Strong CE, 4=Strong PE
+var float entry_price      = 0.0
+var float swing_max_fav    = 0.0
+
+// Last 5 Days Performance Aggregators (Standard Buy vs Strong Buy)
+var int std_alerts_count      = 0
+var float std_pts_captured    = 0.0
+var int std_profit_entries    = 0
+var int std_loss_entries      = 0
+
+var int strong_alerts_count   = 0
+var float strong_pts_captured = 0.0
+var int strong_profit_entries = 0
+var int strong_loss_entries   = 0
+
+// Trigger Detection
+bool has_new_signal = signal_std_buy_ce or signal_std_buy_pe or signal_strong_buy_ce or signal_strong_buy_pe
+
+// Process and Finalize Trade Swings
+if has_new_signal or (ta.change(time("D")) != 0 and active_signal_type != 0)
+    if active_signal_type != 0
+        // Calculate Maximum Points Captured during Swing
+        float pts_gained = 0.0
+        if active_signal_type == 1 or active_signal_type == 3 // Bullish CE
+            pts_gained := math.max(0.0, swing_max_fav - entry_price)
+        else if active_signal_type == 2 or active_signal_type == 4 // Bearish PE
+            pts_gained := math.max(0.0, entry_price - swing_max_fav)
+            
+        bool is_profit = pts_gained > 0.0
+        
+        if active_signal_type == 1 or active_signal_type == 2 // Standard Buy
+            std_alerts_count   += 1
+            std_pts_captured   += pts_gained
+            if is_profit
+                std_profit_entries += 1
+            else
+                std_loss_entries   += 1
+        else if active_signal_type == 3 or active_signal_type == 4 // Strong Buy
+            strong_alerts_count   += 1
+            strong_pts_captured   += pts_gained
+            if is_profit
+                strong_profit_entries += 1
+            else
+                strong_loss_entries   += 1
+
+    // Initialize New Swing Trade State
+    if signal_strong_buy_ce
+        active_signal_type := 3
+        entry_price        := eval_spot
+        swing_max_fav      := high
+    else if signal_strong_buy_pe
+        active_signal_type := 4
+        entry_price        := eval_spot
+        swing_max_fav      := low
+    else if signal_std_buy_ce
+        active_signal_type := 1
+        entry_price        := eval_spot
+        swing_max_fav      := high
+    else if signal_std_buy_pe
+        active_signal_type := 2
+        entry_price        := eval_spot
+        swing_max_fav      := low
+    else
+        active_signal_type := 0
+
+// Track Maximum Price Range Expansion during Active Swing
+if active_signal_type == 1 or active_signal_type == 3 // Bullish CE
+    swing_max_fav := math.max(swing_max_fav, high)
+else if active_signal_type == 2 or active_signal_type == 4 // Bearish PE
+    swing_max_fav := math.min(swing_max_fav, low)
+
+// Total Consolidated Aggregates
+int total_all_alerts   = std_alerts_count + strong_alerts_count
+float total_all_pts    = std_pts_captured + strong_pts_captured
+int total_all_profits  = std_profit_entries + strong_profit_entries
+int total_all_losses   = std_loss_entries + strong_loss_entries
+
+// ==========================================
+// RENDER TABLES (MAIN & PERFORMANCE)
 // ==========================================
 
 f_get_table_pos(TablePos pos) =>
@@ -269,6 +348,8 @@ f_get_table_text_size(TableSize sz) =>
         TableSize.large  => size.large
 
 var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 7, 12, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table perfTbl    = table.new(f_get_table_pos(perfTablePosInput), 4, 7, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+
 string curTextSize = f_get_table_text_size(tableTextSizeInput)
 
 // Helper formatting function for table cells based on showDetailedValues mode
@@ -279,6 +360,7 @@ f_fmt_val_cell(float numVal, bool condition, string trueTxt, string falseTxt) =>
         condition ? trueTxt : falseTxt
 
 if barstate.islast
+    // --- Render Main Analytics Table ---
     if not showSummaryTable
         table.delete(summaryTbl)
     else
@@ -380,3 +462,53 @@ if barstate.islast
         table.cell(summaryTbl, 4, 10, "", bgcolor=signalBg)
         table.cell(summaryTbl, 5, 10, "", bgcolor=signalBg)
         table.cell(summaryTbl, 6, 10, "", bgcolor=signalBg)
+
+    // --- Render Separate Last 5 Days Performance Summary Table ---
+    if not showPerfTable
+        table.delete(perfTbl)
+    else
+        // Row 0: Performance Table Header
+        table.cell(perfTbl, 0, 0, "Last 5 Days Signal Performance Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
+        table.cell(perfTbl, 1, 0, "Standard Buy", bgcolor=colorHeaderBg, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(perfTbl, 2, 0, "Strong Buy", bgcolor=colorHeaderBg, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(perfTbl, 3, 0, "TOTAL (All Signals)", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
+
+        // Row 1: Banner
+        table.cell(perfTbl, 0, 1, "--- 5-DAY SWING PERFORMANCE METRICS ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(perfTbl, 1, 1, "", bgcolor=colorSectionBg)
+        table.cell(perfTbl, 2, 1, "", bgcolor=colorSectionBg)
+        table.cell(perfTbl, 3, 1, "", bgcolor=colorSectionBg)
+
+        // Row 2: No of Alerts
+        table.cell(perfTbl, 0, 2, "No of Alerts Triggered", bgcolor=color.black, text_color=color.white, text_size=curTextSize)
+        table.cell(perfTbl, 1, 2, str.tostring(std_alerts_count), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(perfTbl, 2, 2, str.tostring(strong_alerts_count), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(perfTbl, 3, 2, str.tostring(total_all_alerts), bgcolor=color.black, text_color=color.yellow, text_size=curTextSize)
+
+        // Row 3: Points Captured (Max Swing Points)
+        table.cell(perfTbl, 0, 3, "Points Captured (Max Swing)", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(perfTbl, 1, 3, str.tostring(std_pts_captured, "#.2f") + " pts", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(perfTbl, 2, 3, str.tostring(strong_pts_captured, "#.2f") + " pts", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(perfTbl, 3, 3, str.tostring(total_all_pts, "#.2f") + " pts", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+
+        // Row 4: Profit Making Entries
+        table.cell(perfTbl, 0, 4, "Profit Making Entries (Gain > 0)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(perfTbl, 1, 4, str.tostring(std_profit_entries), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(perfTbl, 2, 4, str.tostring(strong_profit_entries), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(perfTbl, 3, 4, str.tostring(total_all_profits), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+
+        // Row 5: Loss Making Entries
+        table.cell(perfTbl, 0, 5, "Loss Making Entries (Gain <= 0)", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(perfTbl, 1, 5, str.tostring(std_loss_entries), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(perfTbl, 2, 5, str.tostring(strong_loss_entries), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(perfTbl, 3, 5, str.tostring(total_all_losses), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+
+        // Row 6: Win Rate (%)
+        float std_win_rate    = std_alerts_count > 0 ? (std_profit_entries / float(std_alerts_count)) * 100.0 : 0.0
+        float strong_win_rate = strong_alerts_count > 0 ? (strong_profit_entries / float(strong_alerts_count)) * 100.0 : 0.0
+        float total_win_rate  = total_all_alerts > 0 ? (total_all_profits / float(total_all_alerts)) * 100.0 : 0.0
+
+        table.cell(perfTbl, 0, 6, "Win Rate (%)", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(perfTbl, 1, 6, str.tostring(std_win_rate, "#.1f") + "%", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(perfTbl, 2, 6, str.tostring(strong_win_rate, "#.1f") + "%", bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        table.cell(perfTbl, 3, 6, str.tostring(total_win_rate, "#.1f") + "%", bgcolor=color.black, text_color=color.yellow, text_size=curTextSize)
