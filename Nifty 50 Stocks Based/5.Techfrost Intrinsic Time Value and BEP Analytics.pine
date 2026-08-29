@@ -504,14 +504,14 @@ float bar_pe_pdc      = request.security(pe_ticker, "D", close[1], lookahead=bar
 // PLOTTING ALL METRICS (EXPOSED IN TRADINGVIEW STYLE TAB)
 // ==========================================
 
-// --- Realtime Intrinsic Plots: Only Plot ITM & OTM Average Intrinsic Value ---
-plot(showAvg_IV_RT_Input and itm_avg_iv_rt > 0 ? itm_avg_iv_rt : na, "ITM Avg Intrinsic", color=#00E676, linewidth=2)
-plot(showAvg_IV_RT_Input and otm_avg_iv_rt > 0 ? otm_avg_iv_rt : na, "OTM Avg Intrinsic", color=#FF5252, linewidth=2)
+// --- Realtime Intrinsic Plots: Always Plot ITM & OTM Average Intrinsic Value ---
+plot(showAvg_IV_RT_Input ? itm_avg_iv_rt : na, "ITM Avg Intrinsic", color=#00E676, linewidth=2)
+plot(showAvg_IV_RT_Input ? otm_avg_iv_rt : na, "OTM Avg Intrinsic", color=#FF5252, linewidth=2)
 
-// --- Realtime Time Value Plots ---
+// --- Realtime Time Value Plots: Plot OTM Avg Time Value & leg Time Values ---
 plot(showCE_TV_RT_Input and ce_tv_rt > 0 ? ce_tv_rt : na, "CE Realtime Time Value", color=#76FF03, linewidth=2)
 plot(showPE_TV_RT_Input and pe_tv_rt > 0 ? pe_tv_rt : na, "PE Realtime Time Value", color=#FF6E40, linewidth=2)
-plot(showAvg_TV_RT_Input and avg_tv_rt > 0 ? avg_tv_rt : na, "Avg Realtime Time Value", color=#FFD700, linewidth=2)
+plot(showAvg_TV_RT_Input ? otm_avg_tv_rt : na, "OTM Avg Time Value", color=#FFD700, linewidth=2)
 
 // --- Static Level Plots (Exposed Directly in TradingView Style Tab) ---
 plot(show5D_Static_CE_IV and bar_ce_iv_stat > 0 ? bar_ce_iv_stat : na, "CE Static Intrinsic", color=#00E676, style=plot.style_linebr)
@@ -532,26 +532,30 @@ plot(showPD_PE_CloseInput and bar_pe_pdc > 0 ? bar_pe_pdc : na, "PE Prev Day Clo
 // ==========================================
 
 // OTM CE Price vs OTM Avg Time Value & OTM PE Price vs OTM Avg Time Value
-bool ce_above_otm_tv = ce_otm_ltp > otm_avg_tv_rt
-bool pe_below_otm_tv = pe_otm_ltp < otm_avg_tv_rt
+bool ce_above_tv = ce_otm_ltp > otm_avg_tv_rt
+bool pe_below_tv = pe_otm_ltp < otm_avg_tv_rt
 
-bool pe_above_otm_tv = pe_otm_ltp > otm_avg_tv_rt
-bool ce_below_otm_tv = ce_otm_ltp < otm_avg_tv_rt
+bool pe_above_tv = pe_otm_ltp > otm_avg_tv_rt
+bool ce_below_tv = ce_otm_ltp < otm_avg_tv_rt
 
-// 3-4 Candles Window Evaluation (bars 0 to 4)
-bool ce_above_win = ce_above_otm_tv or ce_above_otm_tv[1] or ce_above_otm_tv[2] or ce_above_otm_tv[3] or ce_above_otm_tv[4]
-bool pe_below_win = pe_below_otm_tv or pe_below_otm_tv[1] or pe_below_otm_tv[2] or pe_below_otm_tv[3] or pe_below_otm_tv[4]
+bool ce_cross_above = ta.crossover(ce_otm_ltp, otm_avg_tv_rt)
+bool pe_cross_below = ta.crossunder(pe_otm_ltp, otm_avg_tv_rt)
 
-bool pe_above_win = pe_above_otm_tv or pe_above_otm_tv[1] or pe_above_otm_tv[2] or pe_above_otm_tv[3] or pe_above_otm_tv[4]
-bool ce_below_win = ce_below_otm_tv or ce_below_otm_tv[1] or ce_below_otm_tv[2] or ce_below_otm_tv[3] or ce_below_otm_tv[4]
+bool pe_cross_above = ta.crossover(pe_otm_ltp, otm_avg_tv_rt)
+bool ce_cross_below = ta.crossunder(ce_otm_ltp, otm_avg_tv_rt)
+
+// 3-4 Candles Window (bars 0 to 4)
+bool pe_was_below = pe_below_tv[0] or pe_below_tv[1] or pe_below_tv[2] or pe_below_tv[3] or pe_below_tv[4]
+bool ce_was_above = ce_above_tv[0] or ce_above_tv[1] or ce_above_tv[2] or ce_above_tv[3] or ce_above_tv[4]
+
+bool ce_was_below = ce_below_tv[0] or ce_below_tv[1] or ce_below_tv[2] or ce_below_tv[3] or ce_below_tv[4]
+bool pe_was_above = pe_above_tv[0] or pe_above_tv[1] or pe_above_tv[2] or pe_above_tv[3] or pe_above_tv[4]
 
 // Trigger OTM Buy CE (BC)
-bool otm_buy_ce_cond = ce_above_win and pe_below_win
-bool bc_signal       = otm_buy_ce_cond and not otm_buy_ce_cond[1]
+bool bc_signal = (ce_cross_above and pe_was_below) or (pe_cross_below and ce_was_above) or (ce_above_tv and pe_below_tv and not (ce_above_tv[1] and pe_below_tv[1]))
 
 // Trigger OTM Buy PE (BP)
-bool otm_buy_pe_cond = pe_above_win and ce_below_win
-bool bp_signal       = otm_buy_pe_cond and not otm_buy_pe_cond[1]
+bool bp_signal = (pe_cross_above and ce_was_below) or (ce_cross_below and pe_was_above) or (pe_above_tv and ce_below_tv and not (pe_above_tv[1] and ce_below_tv[1]))
 
 // Visual Signal Plotshapes: Plot BC for Buy CE & BP for Buy PE
 plotshape(showSignalPlotsInput and bc_signal, title="Buy CE (BC)", style=shape.labelup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="BC")
