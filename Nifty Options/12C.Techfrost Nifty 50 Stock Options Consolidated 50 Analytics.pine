@@ -1,0 +1,411 @@
+//@version=6
+indicator("Techfrost Nifty 50 Stock Options Consolidated 50 Analytics", shorttitle="TF Nifty50 Consolidated", overlay=false, precision=2)
+
+// ==========================================
+// ENUMS & INPUTS
+// ==========================================
+
+enum TablePos
+    topRight   = "Top Right"
+    topLeft    = "Top Left"
+    bottomRight= "Bottom Right"
+    bottomLeft = "Bottom Left"
+
+enum TableSize
+    auto   = "Auto"
+    tiny   = "Tiny"
+    small  = "Small"
+    normal = "Normal"
+    large  = "Large"
+
+// --- Inputs to Connect Plots from Indicator 12A & 12B ---
+b1_ce_real_bep_src  = input.source(close, "Batch 1 CEs Above Real BEP (From 12A)",  group="Consolidated Data Link (Indicator 12A)")
+b1_pe_real_bep_src  = input.source(close, "Batch 1 PEs Above Real BEP (From 12A)",  group="Consolidated Data Link (Indicator 12A)")
+b1_ce_open_bep_src  = input.source(close, "Batch 1 CEs Above Open BEP (From 12A)",  group="Consolidated Data Link (Indicator 12A)")
+b1_pe_open_bep_src  = input.source(close, "Batch 1 PEs Above Open BEP (From 12A)",  group="Consolidated Data Link (Indicator 12A)")
+b1_neut_open_bep_src= input.source(close, "Batch 1 Neutral Open BEP (From 12A)",    group="Consolidated Data Link (Indicator 12A)")
+
+b2_ce_real_bep_src  = input.source(close, "Batch 2 CEs Above Real BEP (From 12B)",  group="Consolidated Data Link (Indicator 12B)")
+b2_pe_real_bep_src  = input.source(close, "Batch 2 PEs Above Real BEP (From 12B)",  group="Consolidated Data Link (Indicator 12B)")
+b2_ce_open_bep_src  = input.source(close, "Batch 2 CEs Above Open BEP (From 12B)",  group="Consolidated Data Link (Indicator 12B)")
+b2_pe_open_bep_src  = input.source(close, "Batch 2 PEs Above Open BEP (From 12B)",  group="Consolidated Data Link (Indicator 12B)")
+b2_neut_open_bep_src= input.source(close, "Batch 2 Neutral Open BEP (From 12B)",    group="Consolidated Data Link (Indicator 12B)")
+
+useOffHoursPrevClose = input.bool(true, "Use Previous Day Close When Market Is Closed", group="Data Source Settings",
+  tooltip="When checked, automatically uses Previous Day Close price outside market hours so the table displays valid analytics 24/7.")
+
+// --- Display Controls ---
+showSummaryTable   = input.bool(true, "Show Dashboard Summary Table", group="Display Controls")
+tablePosInput      = input.enum(TablePos.topRight, "Table Position", group="Display Controls")
+tableTextSizeInput = input.enum(TableSize.small, "Table Text Size", group="Display Controls")
+
+// --- Styling & Colors ---
+colorHeaderBg      = input.color(#1A237E, "Header Banner Background", group="Styling & Colors")
+colorSectionBg     = input.color(#263238, "Section Banner Background", group="Styling & Colors")
+colorCEColor       = input.color(#00E676, "CE / Bullish Accent Color", group="Styling & Colors")
+colorPEColor       = input.color(#FF1744, "PE / Bearish Accent Color", group="Styling & Colors")
+colorNeutralColor  = input.color(#FFD600, "Neutral Accent Color", group="Styling & Colors")
+colorTotalColor    = input.color(#00E5FF, "Total / Consolidated Accent Color", group="Styling & Colors")
+
+// ==========================================
+// HELPER FUNCTIONS & STRIKE AUTO-DETECTION
+// ==========================================
+
+f_get_strike_step(float spot_price) =>
+    float s = 50.0
+    if na(spot_price) or spot_price <= 0
+        s := 50.0
+    else if spot_price < 100
+        s := 1.0
+    else if spot_price < 250
+        s := 2.5
+    else if spot_price < 500
+        s := 5.0
+    else if spot_price < 1200
+        s := 10.0
+    else if spot_price < 2500
+        s := 20.0
+    else if spot_price < 5000
+        s := 50.0
+    else
+        s := 100.0
+    s
+
+f_calc_atm_strike(float spot_price) =>
+    float step = f_get_strike_step(spot_price)
+    math.round(spot_price / step) * step
+
+type StockAnalytics
+    string symbol
+    bool enabled
+    float spot_c
+    float spot_o
+    float spot_prev_c
+    float atm_strike
+    float open_atm_strike
+    bool ce_above_real_bep
+    bool pe_above_real_bep
+    bool ce_above_open_bep
+    bool pe_above_open_bep
+    bool neutral_open_bep
+    bool ce_cross_above_real_bep
+    bool ce_cross_below_real_bep
+    bool pe_cross_above_real_bep
+    bool pe_cross_below_real_bep
+    float ce_iv
+    float pe_iv
+    bool is_pe_iv_only
+    bool is_ce_iv_only
+    bool is_neutral_iv
+    bool pe_iv_just_formed
+    bool ce_iv_just_formed
+
+f_eval_nifty_stock_single(string root_sym, bool is_enabled) =>
+    StockAnalytics res = StockAnalytics.new()
+    res.symbol := root_sym
+    res.enabled := is_enabled
+    
+    if is_enabled
+        [spot_close, spot_prev_close, spot_open] = request.security("NSE:" + root_sym, timeframe.period, [close, close[1], open], ignore_invalid_symbol=true)
+        
+        float eval_spot = spot_close
+        if useOffHoursPrevClose and (na(spot_close) or spot_close <= 0 or not barstate.isrealtime)
+            eval_spot := not na(spot_prev_close) and spot_prev_close > 0 ? spot_prev_close : spot_close
+            
+        if not na(eval_spot) and eval_spot > 0
+            res.spot_c      := eval_spot
+            res.spot_o      := spot_open
+            res.spot_prev_c := spot_prev_close
+            
+            float atm_st  = f_calc_atm_strike(eval_spot)
+            float open_st = f_calc_atm_strike(spot_open)
+            res.atm_strike      := atm_st
+            res.open_atm_strike := open_st
+            
+            res.ce_above_real_bep := eval_spot > atm_st
+            res.pe_above_real_bep := eval_spot < atm_st
+            
+            res.ce_above_open_bep := eval_spot > open_st
+            res.pe_above_open_bep := eval_spot < open_st
+            res.neutral_open_bep  := (eval_spot == open_st)
+            
+            float prev_spot = not na(spot_prev_close) and spot_prev_close > 0 ? spot_prev_close : eval_spot
+            float prev_atm  = f_calc_atm_strike(prev_spot)
+            
+            res.ce_cross_above_real_bep := (prev_spot <= prev_atm) and (eval_spot > atm_st)
+            res.ce_cross_below_real_bep := (prev_spot >= prev_atm) and (eval_spot < atm_st)
+            
+            res.pe_cross_above_real_bep := (prev_spot >= prev_atm) and (eval_spot < atm_st)
+            res.pe_cross_below_real_bep := (prev_spot <= prev_atm) and (eval_spot > atm_st)
+            
+            res.ce_iv := math.max(0.0, eval_spot - atm_st)
+            res.pe_iv := math.max(0.0, atm_st - eval_spot)
+            
+            res.is_pe_iv_only := (res.pe_iv > 0.0) and (res.ce_iv <= 0.0)
+            res.is_ce_iv_only := (res.ce_iv > 0.0) and (res.pe_iv <= 0.0)
+            res.is_neutral_iv := ((res.ce_iv > 0.0) and (res.pe_iv > 0.0)) or ((res.ce_iv <= 0.0) and (res.pe_iv <= 0.0))
+            
+            float prev_ce_iv = math.max(0.0, prev_spot - prev_atm)
+            float prev_pe_iv = math.max(0.0, prev_atm - prev_spot)
+            
+            res.pe_iv_just_formed := (res.pe_iv > 0.0) and (prev_pe_iv <= 0.0)
+            res.ce_iv_just_formed := (res.ce_iv > 0.0) and (prev_ce_iv <= 0.0)
+    res
+
+// --- BATCH 1 EVALUATION (STOCKS 1-25) ---
+StockAnalytics b1_1  = f_eval_nifty_stock_single("RELIANCE",   true)
+StockAnalytics b1_2  = f_eval_nifty_stock_single("HDFCBANK",   true)
+StockAnalytics b1_3  = f_eval_nifty_stock_single("ICICIBANK",  true)
+StockAnalytics b1_4  = f_eval_nifty_stock_single("INFY",       true)
+StockAnalytics b1_5  = f_eval_nifty_stock_single("TCS",        true)
+StockAnalytics b1_6  = f_eval_nifty_stock_single("ITC",        true)
+StockAnalytics b1_7  = f_eval_nifty_stock_single("BHARTIARTL", true)
+StockAnalytics b1_8  = f_eval_nifty_stock_single("LT",         true)
+StockAnalytics b1_9  = f_eval_nifty_stock_single("KOTAKBANK",  true)
+StockAnalytics b1_10 = f_eval_nifty_stock_single("AXISBANK",   true)
+StockAnalytics b1_11 = f_eval_nifty_stock_single("SBIN",       true)
+StockAnalytics b1_12 = f_eval_nifty_stock_single("HINDUNILVR", true)
+StockAnalytics b1_13 = f_eval_nifty_stock_single("BAJFINANCE", true)
+StockAnalytics b1_14 = f_eval_nifty_stock_single("MARUTI",     true)
+StockAnalytics b1_15 = f_eval_nifty_stock_single("HCLTECH",    true)
+StockAnalytics b1_16 = f_eval_nifty_stock_single("SUNPHARMA",  true)
+StockAnalytics b1_17 = f_eval_nifty_stock_single("TATAMOTORS", true)
+StockAnalytics b1_18 = f_eval_nifty_stock_single("NTPC",       true)
+StockAnalytics b1_19 = f_eval_nifty_stock_single("M_M",        true)
+StockAnalytics b1_20 = f_eval_nifty_stock_single("POWERGRID",  true)
+
+// --- BATCH 2 EVALUATION (STOCKS 26-45) ---
+StockAnalytics b2_1  = f_eval_nifty_stock_single("ULTRACEMCO", true)
+StockAnalytics b2_2  = f_eval_nifty_stock_single("TITAN",      true)
+StockAnalytics b2_3  = f_eval_nifty_stock_single("ASIANPAINT", true)
+StockAnalytics b2_4  = f_eval_nifty_stock_single("TATASTEEL",  true)
+StockAnalytics b2_5  = f_eval_nifty_stock_single("COALINDIA",  true)
+StockAnalytics b2_6  = f_eval_nifty_stock_single("ADANIENT",   true)
+StockAnalytics b2_7  = f_eval_nifty_stock_single("ADANIPORTS", true)
+StockAnalytics b2_8  = f_eval_nifty_stock_single("BAJAJFINSV", true)
+StockAnalytics b2_9  = f_eval_nifty_stock_single("BAJAJ-AUTO", true)
+StockAnalytics b2_10 = f_eval_nifty_stock_single("TRENT",      true)
+StockAnalytics b2_11 = f_eval_nifty_stock_single("ONGC",       true)
+StockAnalytics b2_12 = f_eval_nifty_stock_single("HINDALCO",   true)
+StockAnalytics b2_13 = f_eval_nifty_stock_single("GRASIM",     true)
+StockAnalytics b2_14 = f_eval_nifty_stock_single("JSWSTEEL",   true)
+StockAnalytics b2_15 = f_eval_nifty_stock_single("BEL",        true)
+
+array<StockAnalytics> listB1 = array.new<StockAnalytics>()
+array<StockAnalytics> listB2 = array.new<StockAnalytics>()
+
+f_push_valid_stock(array<StockAnalytics> arr, StockAnalytics item) =>
+    if item.enabled and not na(item.spot_c)
+        array.push(arr, item)
+
+f_push_valid_stock(listB1, b1_1)
+f_push_valid_stock(listB1, b1_2)
+f_push_valid_stock(listB1, b1_3)
+f_push_valid_stock(listB1, b1_4)
+f_push_valid_stock(listB1, b1_5)
+f_push_valid_stock(listB1, b1_6)
+f_push_valid_stock(listB1, b1_7)
+f_push_valid_stock(listB1, b1_8)
+f_push_valid_stock(listB1, b1_9)
+f_push_valid_stock(listB1, b1_10)
+f_push_valid_stock(listB1, b1_11)
+f_push_valid_stock(listB1, b1_12)
+f_push_valid_stock(listB1, b1_13)
+f_push_valid_stock(listB1, b1_14)
+f_push_valid_stock(listB1, b1_15)
+f_push_valid_stock(listB1, b1_16)
+f_push_valid_stock(listB1, b1_17)
+f_push_valid_stock(listB1, b1_18)
+f_push_valid_stock(listB1, b1_19)
+f_push_valid_stock(listB1, b1_20)
+
+f_push_valid_stock(listB2, b2_1)
+f_push_valid_stock(listB2, b2_2)
+f_push_valid_stock(listB2, b2_3)
+f_push_valid_stock(listB2, b2_4)
+f_push_valid_stock(listB2, b2_5)
+f_push_valid_stock(listB2, b2_6)
+f_push_valid_stock(listB2, b2_7)
+f_push_valid_stock(listB2, b2_8)
+f_push_valid_stock(listB2, b2_9)
+f_push_valid_stock(listB2, b2_10)
+f_push_valid_stock(listB2, b2_11)
+f_push_valid_stock(listB2, b2_12)
+f_push_valid_stock(listB2, b2_13)
+f_push_valid_stock(listB2, b2_14)
+f_push_valid_stock(listB2, b2_15)
+
+// Aggregate Metrics
+int b1_count_ce_real_bep = 0, int b1_count_pe_real_bep = 0
+int b1_count_ce_open_bep = 0, int b1_count_pe_open_bep = 0, int b1_count_neut_open_bep = 0
+int b1_count_ce_cross_up = 0, int b1_count_ce_cross_dn = 0
+int b1_count_pe_cross_up = 0, int b1_count_pe_cross_dn = 0
+int b1_count_pe_iv_only  = 0, int b1_count_ce_iv_only  = 0, int b1_count_neut_iv = 0
+int b1_count_pe_iv_fmt   = 0, int b1_count_ce_iv_fmt   = 0
+
+for i = 0 to array.size(listB1) - 1
+    StockAnalytics item = array.get(listB1, i)
+    if item.ce_above_real_bep => b1_count_ce_real_bep += 1
+    if item.pe_above_real_bep => b1_count_pe_real_bep += 1
+    if item.ce_above_open_bep => b1_count_ce_open_bep += 1
+    if item.pe_above_open_bep => b1_count_pe_open_bep += 1
+    if item.neutral_open_bep  => b1_count_neut_open_bep += 1
+    if item.ce_cross_above_real_bep => b1_count_ce_cross_up += 1
+    if item.ce_cross_below_real_bep => b1_count_ce_cross_dn += 1
+    if item.pe_cross_above_real_bep => b1_count_pe_cross_up += 1
+    if item.pe_cross_below_real_bep => b1_count_pe_cross_dn += 1
+    if item.is_pe_iv_only => b1_count_pe_iv_only += 1
+    if item.is_ce_iv_only => b1_count_ce_iv_only += 1
+    if item.is_neutral_iv => b1_count_neut_iv += 1
+    if item.pe_iv_just_formed => b1_count_pe_iv_fmt += 1
+    if item.ce_iv_just_formed => b1_count_ce_iv_fmt += 1
+
+int b2_count_ce_real_bep = 0, int b2_count_pe_real_bep = 0
+int b2_count_ce_open_bep = 0, int b2_count_pe_open_bep = 0, int b2_count_neut_open_bep = 0
+int b2_count_ce_cross_up = 0, int b2_count_ce_cross_dn = 0
+int b2_count_pe_cross_up = 0, int b2_count_pe_cross_dn = 0
+int b2_count_pe_iv_only  = 0, int b2_count_ce_iv_only  = 0, int b2_count_neut_iv = 0
+int b2_count_pe_iv_fmt   = 0, int b2_count_ce_iv_fmt   = 0
+
+for i = 0 to array.size(listB2) - 1
+    StockAnalytics item = array.get(listB2, i)
+    if item.ce_above_real_bep => b2_count_ce_real_bep += 1
+    if item.pe_above_real_bep => b2_count_pe_real_bep += 1
+    if item.ce_above_open_bep => b2_count_ce_open_bep += 1
+    if item.pe_above_open_bep => b2_count_pe_open_bep += 1
+    if item.neutral_open_bep  => b2_count_neut_open_bep += 1
+    if item.ce_cross_above_real_bep => b2_count_ce_cross_up += 1
+    if item.ce_cross_below_real_bep => b2_count_ce_cross_dn += 1
+    if item.pe_cross_above_real_bep => b2_count_pe_cross_up += 1
+    if item.pe_cross_below_real_bep => b2_count_pe_cross_dn += 1
+    if item.is_pe_iv_only => b2_count_pe_iv_only += 1
+    if item.is_ce_iv_only => b2_count_ce_iv_only += 1
+    if item.is_neutral_iv => b2_count_neut_iv += 1
+    if item.pe_iv_just_formed => b2_count_pe_iv_fmt += 1
+    if item.ce_iv_just_formed => b2_count_ce_iv_fmt += 1
+
+// CONSOLIDATED TOTALS
+int tot_ce_real_bep  = b1_count_ce_real_bep + b2_count_ce_real_bep
+int tot_pe_real_bep  = b1_count_pe_real_bep + b2_count_pe_real_bep
+int tot_ce_open_bep  = b1_count_ce_open_bep + b2_count_ce_open_bep
+int tot_pe_open_bep  = b1_count_pe_open_bep + b2_count_pe_open_bep
+int tot_neut_open_bep= b1_count_neut_open_bep + b2_count_neut_open_bep
+
+int tot_ce_cross_up = b1_count_ce_cross_up + b2_count_ce_cross_up
+int tot_ce_cross_dn = b1_count_ce_cross_dn + b2_count_ce_cross_dn
+int tot_pe_cross_up = b1_count_pe_cross_up + b2_count_pe_cross_up
+int tot_pe_cross_dn = b1_count_pe_cross_dn + b2_count_pe_cross_dn
+
+int tot_pe_iv_only  = b1_count_pe_iv_only + b2_count_pe_iv_only
+int tot_ce_iv_only  = b1_count_ce_iv_only + b2_count_ce_iv_only
+int tot_neut_iv     = b1_count_neut_iv + b2_count_neut_iv
+int tot_pe_iv_fmt   = b1_count_pe_iv_fmt + b2_count_pe_iv_fmt
+int tot_ce_iv_fmt   = b1_count_ce_iv_fmt + b2_count_ce_iv_fmt
+
+// ==========================================
+// RENDER CONSOLIDATED MASTER DASHBOARD TABLE
+// ==========================================
+
+f_get_table_pos(TablePos pos) =>
+    switch pos
+        TablePos.topRight    => position.top_right
+        TablePos.topLeft     => position.top_left
+        TablePos.bottomRight => position.bottom_right
+        TablePos.bottomLeft  => position.bottom_left
+
+f_get_table_text_size(TableSize sz) =>
+    switch sz
+        TableSize.auto   => size.auto
+        TableSize.tiny   => size.tiny
+        TableSize.small  => size.small
+        TableSize.normal => size.normal
+        TableSize.large  => size.large
+
+var table summaryTbl = table.new(f_get_table_pos(tablePosInput), 4, 15, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+string curTextSize = f_get_table_text_size(tableTextSizeInput)
+
+if barstate.islast
+    if not showSummaryTable
+        table.delete(summaryTbl)
+    else
+        // Header
+        table.cell(summaryTbl, 0, 0, "Nifty 50 ATM Options CONSOLIDATED Master Analytics", bgcolor=colorHeaderBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 0, "Batch 1 (1-25)", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 0, "Batch 2 (26-50)", bgcolor=colorHeaderBg, text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 0, "TOTAL (ALL STOCKS)", bgcolor=colorHeaderBg, text_color=colorTotalColor, text_size=curTextSize)
+        
+        // BEP Banner
+        table.cell(summaryTbl, 0, 1, "--- REALTIME & DAY OPEN BEP ANALYTICS ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 1, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 2, 1, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 3, 1, "", bgcolor=colorSectionBg)
+        
+        // Realtime BEP
+        table.cell(summaryTbl, 0, 2, "ATM CEs Above Realtime BEP", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 2, str.tostring(b1_count_ce_real_bep), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 2, str.tostring(b2_count_ce_real_bep), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 2, str.tostring(tot_ce_real_bep), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        table.cell(summaryTbl, 0, 3, "ATM PEs Above Realtime BEP", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 3, str.tostring(b1_count_pe_real_bep), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 3, str.tostring(b2_count_pe_real_bep), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 3, str.tostring(tot_pe_real_bep), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        // Day Open BEP
+        table.cell(summaryTbl, 0, 4, "CEs Above Day Open BEP", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 4, str.tostring(b1_count_ce_open_bep), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 4, str.tostring(b2_count_ce_open_bep), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 4, str.tostring(tot_ce_open_bep), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        table.cell(summaryTbl, 0, 5, "PEs Above Day Open BEP", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 5, str.tostring(b1_count_pe_open_bep), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 5, str.tostring(b2_count_pe_open_bep), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 5, str.tostring(tot_pe_open_bep), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        table.cell(summaryTbl, 0, 6, "Neutral (Both Below Day Open BEP)", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 6, str.tostring(b1_count_neut_open_bep), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 6, str.tostring(b2_count_neut_open_bep), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 6, str.tostring(tot_neut_open_bep), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        // Crossovers
+        table.cell(summaryTbl, 0, 7, "CE Just Crossed Realtime BEP", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 7, "+" + str.tostring(b1_count_ce_cross_up) + " / -" + str.tostring(b1_count_ce_cross_dn), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 7, "+" + str.tostring(b2_count_ce_cross_up) + " / -" + str.tostring(b2_count_ce_cross_dn), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 7, "+" + str.tostring(tot_ce_cross_up) + " / -" + str.tostring(tot_ce_cross_dn), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        table.cell(summaryTbl, 0, 8, "PE Just Crossed Realtime BEP", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 8, "+" + str.tostring(b1_count_pe_cross_up) + " / -" + str.tostring(b1_count_pe_cross_dn), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 8, "+" + str.tostring(b2_count_pe_cross_up) + " / -" + str.tostring(b2_count_pe_cross_dn), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 8, "+" + str.tostring(tot_pe_cross_up) + " / -" + str.tostring(tot_pe_cross_dn), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        // IV Banner
+        table.cell(summaryTbl, 0, 9, "--- REALTIME INTRINSIC VALUE (IV) ANALYTICS ---", bgcolor=colorSectionBg, text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 9, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 2, 9, "", bgcolor=colorSectionBg)
+        table.cell(summaryTbl, 3, 9, "", bgcolor=colorSectionBg)
+        
+        // IV Segregation
+        table.cell(summaryTbl, 0, 10, "PE IV Only (PE IV > 0)", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 10, str.tostring(b1_count_pe_iv_only), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 10, str.tostring(b2_count_pe_iv_only), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 10, str.tostring(tot_pe_iv_only), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        table.cell(summaryTbl, 0, 11, "CE IV Only (CE IV > 0)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 11, str.tostring(b1_count_ce_iv_only), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 11, str.tostring(b2_count_ce_iv_only), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 11, str.tostring(tot_ce_iv_only), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        table.cell(summaryTbl, 0, 12, "Neutral IV (Both IVs Exist or Zero)", bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 12, str.tostring(b1_count_neut_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 12, str.tostring(b2_count_neut_iv), bgcolor=color.black, text_color=colorNeutralColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 12, str.tostring(tot_neut_iv), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        table.cell(summaryTbl, 0, 13, "PE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 13, str.tostring(b1_count_pe_iv_fmt), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 13, str.tostring(b2_count_pe_iv_fmt), bgcolor=color.black, text_color=colorPEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 13, str.tostring(tot_pe_iv_fmt), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
+        
+        table.cell(summaryTbl, 0, 14, "CE IV Just Formed (Prev Candle)", bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 1, 14, str.tostring(b1_count_ce_iv_fmt), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 2, 14, str.tostring(b2_count_ce_iv_fmt), bgcolor=color.black, text_color=colorCEColor, text_size=curTextSize)
+        table.cell(summaryTbl, 3, 14, str.tostring(tot_ce_iv_fmt), bgcolor=color.black, text_color=colorTotalColor, text_size=curTextSize)
