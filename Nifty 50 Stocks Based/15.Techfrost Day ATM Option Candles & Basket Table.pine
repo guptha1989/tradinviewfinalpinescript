@@ -41,16 +41,23 @@ strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group
 strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
   tooltip="Set to Auto for auto-detection based on underlying stock/index (Auto-detects 1, 2.5, 5, 10, 20, 50, 100).")
 
-// --- Realtime Day Open ATM Option Candles ---
-G_CANDLES            = "Realtime Day Open ATM Option Candles"
-showCEATM_Candles    = input.bool(true, "Show Realtime Day Open ATM Call (CE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of the Day Open ATM Call option.")
-showPEATMCandles     = input.bool(true, "Show Realtime Day Open ATM Put (PE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of the Day Open ATM Put option.")
-plot_candle_mode     = input.string("Overlay on Spot (Strike +/- Premium)", "Candle Scaling Mode", options=["Overlay on Spot (Strike +/- Premium)", "Direct Option Premium Values"], group=G_CANDLES, tooltip="Select how option candles are scaled on chart.")
+// --- Realtime ATM Option Candles Controls ---
+G_CANDLES            = "Realtime ATM Option Candles Controls"
+atm_candle_source    = input.string("Both (Day Open & Current ATM)", "ATM Candle Selection Source", options=["Both (Day Open & Current ATM)", "Day Open ATM Only", "Current Realtime ATM Only"], group=G_CANDLES, tooltip="Select whether to plot candles for Day Open ATM, Current Realtime ATM, or Both simultaneously.")
+showCE_Candles       = input.bool(true, "Show Call (CE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Call (CE) options.")
+showPE_Candles       = input.bool(true, "Show Put (PE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Put (PE) options.")
+plot_candle_mode     = input.string("Auto-Detect (Direct on Option Chart, Overlay on Spot)", "Candle Scaling Mode", options=["Auto-Detect (Direct on Option Chart, Overlay on Spot)", "Direct Option Premium Values", "Overlay on Spot (Strike +/- Premium)"], group=G_CANDLES, tooltip="Auto-Detect automatically plots direct premium on Option charts and scaled overlay on Spot charts.")
 
-color_atm_ce_bull    = input.color(#26A69A, "ATM CE Bullish Candle Body", group=G_CANDLES)
-color_atm_ce_bear    = input.color(#EF5350, "ATM CE Bearish Candle Body", group=G_CANDLES)
-color_atm_pe_bull    = input.color(#00B0FF, "ATM PE Bullish Candle Body", group=G_CANDLES)
-color_atm_pe_bear    = input.color(#FF9100, "ATM PE Bearish Candle Body", group=G_CANDLES)
+color_day_ce_bull    = input.color(#26A69A, "Day ATM CE Bullish Candle Body", group=G_CANDLES)
+color_day_ce_bear    = input.color(#EF5350, "Day ATM CE Bearish Candle Body", group=G_CANDLES)
+color_day_pe_bull    = input.color(#00B0FF, "Day ATM PE Bullish Candle Body", group=G_CANDLES)
+color_day_pe_bear    = input.color(#FF9100, "Day ATM PE Bearish Candle Body", group=G_CANDLES)
+
+color_cur_ce_bull    = input.color(#76FF03, "Cur ATM CE Bullish Candle Body", group=G_CANDLES)
+color_cur_ce_bear    = input.color(#FF1744, "Cur ATM CE Bearish Candle Body", group=G_CANDLES)
+color_cur_pe_bull    = input.color(#00E5FF, "Cur ATM PE Bullish Candle Body", group=G_CANDLES)
+color_cur_pe_bear    = input.color(#F57C00, "Cur ATM PE Bearish Candle Body", group=G_CANDLES)
+
 show_candle_labels   = input.bool(true, "Show Floating Right-Side LTP Labels", group=G_CANDLES)
 
 // --- Dashboard Table Controls ---
@@ -128,6 +135,9 @@ else if tickerWithoutCEPE != ""
     detectedStrike := str.tonumber(strikeDigits)
 
 float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : detectedStrike
+
+// Check if current active chart is an Option contract chart
+bool isChartAnOptionContract = isCall or isPut or not na(detectedStrike)
 
 // ==========================================
 // SPOT TICKER RESOLUTION & STRICT DAY OPEN ATM CENTER ANCHORING
@@ -347,91 +357,114 @@ else if minDiffCur == diff_cur_m4
     curATMStrike := k_m4
 
 // ==========================================
-// REALTIME DAY OPEN ATM CE & PE CANDLE OHLC EXTRACTION (UPDATES TICK-BY-TICK)
+// OHLC EXTRACTION FOR DAY OPEN ATM & CURRENT REALTIME ATM CONTRACTS
 // ==========================================
 
-float atm_ce_o = na, float atm_ce_h = na, float atm_ce_l = na, float atm_ce_c = na
-float atm_pe_o = na, float atm_pe_h = na, float atm_pe_l = na, float atm_pe_c = na
+f_extract_strike_ohlc(float target_st) =>
+    float c_o = na, float c_h = na, float c_l = na, float c_c = na
+    float p_o = na, float p_h = na, float p_l = na, float p_c = na
+    if target_st == k_p4
+        c_o := ce_opn_p4, c_h := ce_h_p4, c_l := ce_l_p4, c_c := ce_c_p4
+        p_o := pe_opn_p4, p_h := pe_h_p4, p_l := pe_l_p4, p_c := pe_c_p4
+    else if target_st == k_p3
+        c_o := ce_opn_p3, c_h := ce_h_p3, c_l := ce_l_p3, c_c := ce_c_p3
+        p_o := pe_opn_p3, p_h := pe_h_p3, p_l := pe_l_p3, p_c := pe_c_p3
+    else if target_st == k_p2
+        c_o := ce_opn_p2, c_h := ce_h_p2, c_l := ce_l_p2, c_c := ce_c_p2
+        p_o := pe_opn_p2, p_h := pe_h_p2, p_l := pe_l_p2, p_c := pe_c_p2
+    else if target_st == k_p1
+        c_o := ce_opn_p1, c_h := ce_h_p1, c_l := ce_l_p1, c_c := ce_c_p1
+        p_o := pe_opn_p1, p_h := pe_h_p1, p_l := pe_l_p1, p_c := pe_c_p1
+    else if target_st == k_0
+        c_o := ce_opn_0,  c_h := ce_h_0,  c_l := ce_l_0,  c_c := ce_c_0
+        p_o := pe_opn_0,  p_h := pe_h_0,  p_l := pe_l_0,  p_c := pe_c_0
+    else if target_st == k_m1
+        c_o := ce_opn_m1, c_h := ce_h_m1, c_l := ce_l_m1, c_c := ce_c_m1
+        p_o := pe_opn_m1, p_h := pe_h_m1, p_l := pe_l_m1, p_c := pe_c_m1
+    else if target_st == k_m2
+        c_o := ce_opn_m2, c_h := ce_h_m2, c_l := ce_l_m2, c_c := ce_c_m2
+        p_o := pe_opn_m2, p_h := pe_h_m2, p_l := pe_l_m2, p_c := pe_c_m2
+    else if target_st == k_m3
+        c_o := ce_opn_m3, c_h := ce_h_m3, c_l := ce_l_m3, c_c := ce_c_m3
+        p_o := pe_opn_m3, p_h := pe_h_m3, p_l := pe_l_m3, p_c := pe_c_m3
+    else if target_st == k_m4
+        c_o := ce_opn_m4, c_h := ce_h_m4, c_l := ce_l_m4, c_c := ce_c_m4
+        p_o := pe_opn_m4, p_h := pe_h_m4, p_l := pe_l_m4, p_c := pe_c_m4
+    [c_o, c_h, c_l, c_c, p_o, p_h, p_l, p_c]
 
-if dayOpenATMStrike == k_p4
-    atm_ce_o := ce_opn_p4, atm_ce_h := ce_h_p4, atm_ce_l := ce_l_p4, atm_ce_c := ce_c_p4
-    atm_pe_o := pe_opn_p4, atm_pe_h := pe_h_p4, atm_pe_l := pe_l_p4, atm_pe_c := pe_c_p4
-else if dayOpenATMStrike == k_p3
-    atm_ce_o := ce_opn_p3, atm_ce_h := ce_h_p3, atm_ce_l := ce_l_p3, atm_ce_c := ce_c_p3
-    atm_pe_o := pe_opn_p3, atm_pe_h := pe_h_p3, atm_pe_l := pe_l_p3, atm_pe_c := pe_c_p3
-else if dayOpenATMStrike == k_p2
-    atm_ce_o := ce_opn_p2, atm_ce_h := ce_h_p2, atm_ce_l := ce_l_p2, atm_ce_c := ce_c_p2
-    atm_pe_o := pe_opn_p2, atm_pe_h := pe_h_p2, atm_pe_l := pe_l_p2, atm_pe_c := pe_c_p2
-else if dayOpenATMStrike == k_p1
-    atm_ce_o := ce_opn_p1, atm_ce_h := ce_h_p1, atm_ce_l := ce_l_p1, atm_ce_c := ce_c_p1
-    atm_pe_o := pe_opn_p1, atm_pe_h := pe_h_p1, atm_pe_l := pe_l_p1, atm_pe_c := pe_c_p1
-else if dayOpenATMStrike == k_0
-    atm_ce_o := ce_opn_0,  atm_ce_h := ce_h_0,  atm_ce_l := ce_l_0,  atm_ce_c := ce_c_0
-    atm_pe_o := pe_opn_0,  atm_pe_h := pe_h_0,  atm_pe_l := pe_l_0,  atm_pe_c := pe_c_0
-else if dayOpenATMStrike == k_m1
-    atm_ce_o := ce_opn_m1, atm_ce_h := ce_h_m1, atm_ce_l := ce_l_m1, atm_ce_c := ce_c_m1
-    atm_pe_o := pe_opn_m1, atm_pe_h := pe_h_m1, atm_pe_l := pe_l_m1, atm_pe_c := pe_c_m1
-else if dayOpenATMStrike == k_m2
-    atm_ce_o := ce_opn_m2, atm_ce_h := ce_h_m2, atm_ce_l := ce_l_m2, atm_ce_c := ce_c_m2
-    atm_pe_o := pe_opn_m2, atm_pe_h := pe_h_m2, atm_pe_l := pe_l_m2, atm_pe_c := pe_c_m2
-else if dayOpenATMStrike == k_m3
-    atm_ce_o := ce_opn_m3, atm_ce_h := ce_h_m3, atm_ce_l := ce_l_m3, atm_ce_c := ce_c_m3
-    atm_pe_o := pe_opn_m3, atm_pe_h := pe_h_m3, atm_pe_l := pe_l_m3, atm_pe_c := pe_c_m3
-else if dayOpenATMStrike == k_m4
-    atm_ce_o := ce_opn_m4, atm_ce_h := ce_h_m4, atm_ce_l := ce_l_m4, atm_ce_c := ce_c_m4
-    atm_pe_o := pe_opn_m4, atm_pe_h := pe_h_m4, atm_pe_l := pe_l_m4, atm_pe_c := pe_c_m4
+[day_ce_o, day_ce_h, day_ce_l, day_ce_c, day_pe_o, day_pe_h, day_pe_l, day_pe_c] = f_extract_strike_ohlc(dayOpenATMStrike)
+[cur_ce_o, cur_ce_h, cur_ce_l, cur_ce_c, cur_pe_o, cur_pe_h, cur_pe_l, cur_pe_c] = f_extract_strike_ohlc(curATMStrike)
 
-// Scaling Day Open ATM CE & PE Candle OHLC depending on plot mode
-float ce_candle_o = na, float ce_candle_h = na, float ce_candle_l = na, float ce_candle_c = na
-float pe_candle_o = na, float pe_candle_h = na, float pe_candle_l = na, float pe_candle_c = na
+// Smart Scaling Resolution: If on Option Chart, ALWAYS use direct raw premium values
+bool useDirectPremium = plot_candle_mode == "Direct Option Premium Values" or (plot_candle_mode == "Auto-Detect (Direct on Option Chart, Overlay on Spot)" and isChartAnOptionContract)
 
-if plot_candle_mode == "Overlay on Spot (Strike +/- Premium)"
-    ce_candle_o := dayOpenATMStrike + atm_ce_o
-    ce_candle_h := dayOpenATMStrike + atm_ce_h
-    ce_candle_l := dayOpenATMStrike + atm_ce_l
-    ce_candle_c := dayOpenATMStrike + atm_ce_c
+f_scale_candle(float target_st, float o_raw, float h_raw, float l_raw, float c_raw, bool is_ce, bool direct_flag) =>
+    float o_res = na, float h_res = na, float l_res = na, float c_res = na
+    if direct_flag
+        o_res := o_raw, h_res := h_raw, l_res := l_raw, c_res := c_raw
+    else
+        float st_offset = is_ce ? target_st : target_st
+        // Overlay mode: On Spot chart, plot Strike + CE Premium for CE, and Strike - PE Premium for PE
+        o_res := is_ce ? (target_st + o_raw) : (target_st - o_raw)
+        h_res := is_ce ? (target_st + h_raw) : (target_st - h_raw)
+        l_res := is_ce ? (target_st + l_raw) : (target_st - l_raw)
+        c_res := is_ce ? (target_st + c_raw) : (target_st - c_raw)
+    [o_res, h_res, l_res, c_res]
 
-    pe_candle_o := dayOpenATMStrike - atm_pe_o
-    pe_candle_h := dayOpenATMStrike - atm_pe_h
-    pe_candle_l := dayOpenATMStrike - atm_pe_l
-    pe_candle_c := dayOpenATMStrike - atm_pe_c
-else
-    ce_candle_o := atm_ce_o
-    ce_candle_h := atm_ce_h
-    ce_candle_l := atm_ce_l
-    ce_candle_c := atm_ce_c
+[d_ce_o_plot, d_ce_h_plot, d_ce_l_plot, d_ce_c_plot] = f_scale_candle(dayOpenATMStrike, day_ce_o, day_ce_h, day_ce_l, day_ce_c, true, useDirectPremium)
+[d_pe_o_plot, d_pe_h_plot, d_pe_l_plot, d_pe_c_plot] = f_scale_candle(dayOpenATMStrike, day_pe_o, day_pe_h, day_pe_l, day_pe_c, false, useDirectPremium)
 
-    pe_candle_o := atm_pe_o
-    pe_candle_h := atm_pe_h
-    pe_candle_l := atm_pe_l
-    pe_candle_c := atm_pe_c
+[c_ce_o_plot, c_ce_h_plot, c_ce_l_plot, c_ce_c_plot] = f_scale_candle(curATMStrike, cur_ce_o, cur_ce_h, cur_ce_l, cur_ce_c, true, useDirectPremium)
+[c_pe_o_plot, c_pe_h_plot, c_pe_l_plot, c_pe_c_plot] = f_scale_candle(curATMStrike, cur_pe_o, cur_pe_h, cur_pe_l, cur_pe_c, false, useDirectPremium)
 
-// Colors for CE and PE candles
-color ce_body_col = atm_ce_c >= atm_ce_o ? color_atm_ce_bull : color_atm_ce_bear
-color ce_wick_col = atm_ce_c >= atm_ce_o ? color_atm_ce_bull : color_atm_ce_bear
+// Active Plot Flags
+bool renderDayATM = (atm_candle_source == "Both (Day Open & Current ATM)" or atm_candle_source == "Day Open ATM Only")
+bool renderCurATM = (atm_candle_source == "Both (Day Open & Current ATM)" or atm_candle_source == "Current Realtime ATM Only")
 
-color pe_body_col = atm_pe_c >= atm_pe_o ? color_atm_pe_bull : color_atm_pe_bear
-color pe_wick_col = atm_pe_c >= atm_pe_o ? color_atm_pe_bull : color_atm_pe_bear
+// Avoid duplicate candle plots if Current ATM equals Day Open ATM when "Both" is selected
+bool renderCurATM_CE = renderCurATM and (atm_candle_source != "Both (Day Open & Current ATM)" or curATMStrike != dayOpenATMStrike)
+bool renderCurATM_PE = renderCurATM and (atm_candle_source != "Both (Day Open & Current ATM)" or curATMStrike != dayOpenATMStrike)
 
-// Plot Realtime Day Open ATM Option Candles on the Main Chart
-plotcandle(showCEATM_Candles ? ce_candle_o : na, showCEATM_Candles ? ce_candle_h : na, showCEATM_Candles ? ce_candle_l : na, showCEATM_Candles ? ce_candle_c : na, title="Day Open ATM CE Realtime Candle", color=ce_body_col, wickcolor=ce_wick_col, bordercolor=ce_wick_col)
-plotcandle(showPEATMCandles ? pe_candle_o : na, showPEATMCandles ? pe_candle_h : na, showPEATMCandles ? pe_candle_l : na, showPEATMCandles ? pe_candle_c : na, title="Day Open ATM PE Realtime Candle", color=pe_body_col, wickcolor=pe_wick_col, bordercolor=pe_wick_col)
+// Candle Colors
+color day_ce_body = day_ce_c >= day_ce_o ? color_day_ce_bull : color_day_ce_bear
+color day_pe_body = day_pe_c >= day_pe_o ? color_day_pe_bull : color_day_pe_bear
+
+color cur_ce_body = cur_ce_c >= cur_ce_o ? color_cur_ce_bull : color_cur_ce_bear
+color cur_pe_body = cur_pe_c >= cur_pe_o ? color_cur_pe_bull : color_cur_pe_bear
+
+// Plot Realtime Day Open ATM Option Candles
+plotcandle(renderDayATM and showCE_Candles ? d_ce_o_plot : na, renderDayATM and showCE_Candles ? d_ce_h_plot : na, renderDayATM and showCE_Candles ? d_ce_l_plot : na, renderDayATM and showCE_Candles ? d_ce_c_plot : na, title="Day ATM CE Realtime Candle", color=day_ce_body, wickcolor=day_ce_body, bordercolor=day_ce_body)
+plotcandle(renderDayATM and showPE_Candles ? d_pe_o_plot : na, renderDayATM and showPE_Candles ? d_pe_h_plot : na, renderDayATM and showPE_Candles ? d_pe_l_plot : na, renderDayATM and showPE_Candles ? d_pe_c_plot : na, title="Day ATM PE Realtime Candle", color=day_pe_body, wickcolor=day_pe_body, bordercolor=day_pe_body)
+
+// Plot Realtime Current Realtime ATM Option Candles
+plotcandle(renderCurATM_CE and showCE_Candles ? c_ce_o_plot : na, renderCurATM_CE and showCE_Candles ? c_ce_h_plot : na, renderCurATM_CE and showCE_Candles ? c_ce_l_plot : na, renderCurATM_CE and showCE_Candles ? c_ce_c_plot : na, title="Cur ATM CE Realtime Candle", color=cur_ce_body, wickcolor=cur_ce_body, bordercolor=cur_ce_body)
+plotcandle(renderCurATM_PE and showPE_Candles ? c_pe_o_plot : na, renderCurATM_PE and showPE_Candles ? c_pe_h_plot : na, renderCurATM_PE and showPE_Candles ? c_pe_l_plot : na, renderCurATM_PE and showPE_Candles ? c_pe_c_plot : na, title="Cur ATM PE Realtime Candle", color=cur_pe_body, wickcolor=cur_pe_body, bordercolor=cur_pe_body)
 
 // Realtime Floating Right-Edge Price Labels
-var label lbl_atm_ce = na
-var label lbl_atm_pe = na
+var label lbl_day_ce = na
+var label lbl_day_pe = na
+var label lbl_cur_ce = na
+var label lbl_cur_pe = na
 
 if barstate.islast and show_candle_labels
-    label.delete(lbl_atm_ce)
-    label.delete(lbl_atm_pe)
+    label.delete(lbl_day_ce)
+    label.delete(lbl_day_pe)
+    label.delete(lbl_cur_ce)
+    label.delete(lbl_cur_pe)
     
     int label_x = bar_index + 10
     string dayAtmStr = dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")
+    string curAtmStr = curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")
     
-    if showCEATM_Candles and not na(ce_candle_c)
-        lbl_atm_ce := label.new(label_x, ce_candle_c, "Day ATM (" + dayAtmStr + ") CE LTP: " + str.tostring(atm_ce_c, "#.##"), color=color_atm_ce_bull, textcolor=color.white, style=label.style_label_left, size=size.small)
-    if showPEATMCandles and not na(pe_candle_c)
-        lbl_atm_pe := label.new(label_x, pe_candle_c, "Day ATM (" + dayAtmStr + ") PE LTP: " + str.tostring(atm_pe_c, "#.##"), color=color_atm_pe_bull, textcolor=color.white, style=label.style_label_left, size=size.small)
+    if renderDayATM and showCE_Candles and not na(d_ce_c_plot)
+        lbl_day_ce := label.new(label_x, d_ce_c_plot, "Day ATM (" + dayAtmStr + ") CE LTP: " + str.tostring(day_ce_c, "#.##"), color=color_day_ce_bull, textcolor=color.white, style=label.style_label_left, size=size.small)
+    if renderDayATM and showPE_Candles and not na(d_pe_c_plot)
+        lbl_day_pe := label.new(label_x, d_pe_c_plot, "Day ATM (" + dayAtmStr + ") PE LTP: " + str.tostring(day_pe_c, "#.##"), color=color_day_pe_bull, textcolor=color.white, style=label.style_label_left, size=size.small)
+
+    if renderCurATM_CE and showCE_Candles and not na(c_ce_c_plot)
+        lbl_cur_ce := label.new(label_x, c_ce_c_plot, "Cur ATM (" + curAtmStr + ") CE LTP: " + str.tostring(cur_ce_c, "#.##"), color=color_cur_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+    if renderCurATM_PE and showPE_Candles and not na(c_pe_c_plot)
+        lbl_cur_pe := label.new(label_x, c_pe_c_plot, "Cur ATM (" + curAtmStr + ") PE LTP: " + str.tostring(cur_pe_c, "#.##"), color=color_cur_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
 
 // ==========================================
 // BASKET AVERAGE CALCULATIONS FOR DASHBOARD TABLE
