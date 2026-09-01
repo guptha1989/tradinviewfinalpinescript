@@ -1,0 +1,460 @@
+//@version=6
+indicator("14. Techfrost Spot Option BEP Framework & Confluence Analytics", shorttitle="TF Spot BEP Matrix", overlay=true, precision=2, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+
+// =========================================================================
+// ENUMS & INPUTS
+// =========================================================================
+enum ATMSelectionMode
+    auto   = "Auto-Detect (Chart Ticker)"
+    manual = "Manual Strike Entry"
+
+enum PresetStock
+    custom     = "Custom"
+    nifty      = "NIFTY"
+    banknifty  = "BANKNIFTY"
+    finnifty   = "FINNIFTY"
+    midcpnifty = "MIDCPNIFTY"
+    crudeoil   = "CRUDEOIL"
+
+enum BEPBasis
+    dayOpen   = "Day Open Price"
+    prevClose = "Previous Day Close"
+    first5Min = "First 5 Min Close"
+
+// --- Settings Groups ---
+G_INST  = "Instrument & Strike Selection"
+G_CALC  = "BEP Calculation Settings"
+G_CONF  = "Golden Confluence Matrix Settings"
+G_PLOTS = "Plot Controls & Signal Display"
+G_COLORS= "Styling & Display"
+
+// 1. Instrument & Strike Selection
+atm_select_mode    = input.string("Auto-Detect (Chart Ticker)", "ATM Strike Selection Mode", options=["Auto-Detect (Chart Ticker)", "Manual Strike Entry"], group=G_INST, tooltip="Auto-Detect rounds the current spot price to the nearest strike step (e.g. Nifty step 50). Manual lets you input a custom strike.")
+manual_strike_val  = input.int(24000, "Manual ATM Strike Price", group=G_INST)
+stock_name_preset  = input.string("NIFTY", "Preset Underlying", options=["Custom", "NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "CRUDEOIL"], group=G_INST)
+underlying_ticker  = input.string("NIFTY", "Custom Underlying Ticker", group=G_INST)
+exchange           = input.string("NSE", "Exchange", group=G_INST)
+expiry_input       = input.string("260804", "Option Expiry String (YYMMDD/Code)", group=G_INST, tooltip="Expiry date string format like 260804 (YYMMDD) or 24JUN. Used in contract symbol building.")
+suffixStyle        = input.string("C/P (e.g. C24100)", "Option Symbol Format", options=["C/P (e.g. C24100)", "CE/PE (e.g. 24100CE)"], group=G_INST, tooltip="Select option contract symbol format for exchange.")
+strike_step_input  = input.int(50, "Custom Strike Step", group=G_INST)
+
+// 2. BEP Calculation Settings
+offset_choice_str  = input.string("100 Points", "ITM/OTM Strike Offset Points", options=["5 Points", "10 Points", "15 Points", "20 Points", "25 Points", "40 Points", "50 Points", "100 Points", "150 Points", "200 Points"], group=G_CALC)
+standard_bep_basis = input.string("Day Open Price", "Static BEP Calculation Basis", options=["Day Open Price", "Previous Day Close", "First 5 Min Close"], group=G_CALC)
+
+// 3. Golden Confluence Matrix Settings
+confluence_tol     = input.float(15.0, "Confluence Alignment Tolerance (Points)", minval=1.0, group=G_CONF, tooltip="Point distance tolerance to trigger Golden Confluence signals.")
+
+// 4. Plot Controls & Signal Display
+show_atm_pivot     = input.bool(true, "Show ATM Strike Pivot Level Line", group=G_PLOTS)
+show_rt_atm_bep    = input.bool(true, "Show Realtime ATM Straddle BEP Lines (Layer 1)", group=G_PLOTS)
+show_rt_otm_bep    = input.bool(true, "Show Realtime OTM Strangle BEP Lines (Layer 2)", group=G_PLOTS)
+show_rt_itm_bep    = input.bool(true, "Show Realtime ITM Gamma Trap BEP Lines (Layer 3)", group=G_PLOTS)
+
+show_stat_atm_bep  = input.bool(false, "Show Static ATM Straddle BEP Lines", group=G_PLOTS)
+show_stat_otm_bep  = input.bool(false, "Show Static OTM Strangle BEP Lines", group=G_PLOTS)
+show_stat_itm_bep  = input.bool(false, "Show Static ITM Gamma Trap BEP Lines", group=G_PLOTS)
+
+show_spot_pdh_pdl  = input.bool(true, "Show Spot Previous Day High (PDH) & Low (PDL)", group=G_PLOTS)
+show_signals       = input.bool(true, "Show Golden Confluence Signal Shapes", group=G_PLOTS)
+sig_plot_mode      = input.string("Initial Trigger Only", "Signal Shape Frequency", options=["Initial Trigger Only", "Every Candle (Raw)"], group=G_PLOTS, tooltip="Initial Trigger Only plots the shape ONCE when the confluence signal first forms to keep chart clean and un-cluttered.")
+
+// 5. Styling & Colors
+c_atm_pivot        = input.color(#FFEA00, "ATM Strike Pivot Line Color", group=G_COLORS)
+c_atm_upper        = input.color(#00E676, "ATM Straddle Upper Resistance BEP Color", group=G_COLORS)
+c_atm_lower        = input.color(#FF1744, "ATM Straddle Lower Support BEP Color", group=G_COLORS)
+
+c_otm_call         = input.color(#00B0FF, "OTM Call Resistance BEP Color", group=G_COLORS)
+c_otm_put          = input.color(#FF9100, "OTM Put Support BEP Color", group=G_COLORS)
+
+c_itm_call         = input.color(#AA00FF, "ITM Call Gamma Trap BEP Color", group=G_COLORS)
+c_itm_put          = input.color(#FFD600, "ITM Put Gamma Trap BEP Color", group=G_COLORS)
+
+c_spot_pdh         = input.color(color.new(#00E676, 30), "Spot PDH Line Color", group=G_COLORS)
+c_spot_pdl         = input.color(color.new(#FF1744, 30), "Spot PDL Line Color", group=G_COLORS)
+
+show_options_table = input.bool(true, "Show BEP & Confluence Dashboard Table", group=G_COLORS)
+table_pos_str      = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_COLORS)
+table_size_str     = input.string("Small", "Table Text Size", options=["Tiny", "Small", "Normal", "Large"], group=G_COLORS)
+
+// =========================================================================
+// HELPER FUNCTIONS (GLOBAL SCOPE)
+// =========================================================================
+f_is_digit(string c) =>
+    str.contains("0123456789", c)
+
+// =========================================================================
+// OPTION CONTRACT PARSER & UNIVERSAL TICKER BUILDER
+// =========================================================================
+string cleanTicker = syminfo.ticker
+int colonPos = str.pos(cleanTicker, ":")
+if colonPos != -1
+    cleanTicker := str.substring(cleanTicker, colonPos + 1)
+cleanTicker := str.replace_all(cleanTicker, " ", "")
+
+int tickerLen = str.length(cleanTicker)
+
+var string root = underlying_ticker
+var string expiry = expiry_input
+var string opt_type = "C"
+var int strike_val = manual_strike_val
+var bool is_option = false
+
+if tickerLen > 7
+    int idx = tickerLen - 1
+    string strike_str = ""
+    while idx >= 0 and f_is_digit(str.substring(cleanTicker, idx, idx + 1))
+        strike_str := str.substring(cleanTicker, idx, idx + 1) + strike_str
+        idx := idx - 1
+        
+    if idx > 2 and str.length(strike_str) > 0
+        string opt_char = str.substring(cleanTicker, idx, idx + 1)
+        if opt_char == "C" or opt_char == "P" or opt_char == "E"
+            opt_type := opt_char == "P" ? "P" : "C"
+            strike_val := int(str.tonumber(strike_str))
+            int exp_len = 5
+            if idx >= 3 and f_is_digit(str.substring(cleanTicker, idx - 3, idx - 2))
+                exp_len := 6
+            if idx >= exp_len
+                expiry := str.substring(cleanTicker, idx - exp_len, idx)
+                root := str.substring(cleanTicker, 0, idx - exp_len)
+                is_option := true
+
+preset_root     = stock_name_preset == "NIFTY" ? "NIFTY" : (stock_name_preset == "BANKNIFTY" ? "BANKNIFTY" : (stock_name_preset == "FINNIFTY" ? "FINNIFTY" : (stock_name_preset == "MIDCPNIFTY" ? "MIDCPNIFTY" : (stock_name_preset == "CRUDEOIL" ? "CRUDEOIL" : underlying_ticker))))
+preset_exchange = stock_name_preset == "CRUDEOIL" ? "MCX" : (stock_name_preset == "Custom" ? exchange : "NSE")
+preset_step     = stock_name_preset == "NIFTY" ? 50 : (stock_name_preset == "BANKNIFTY" ? 100 : (stock_name_preset == "FINNIFTY" ? 50 : (stock_name_preset == "MIDCPNIFTY" ? 25 : (stock_name_preset == "CRUDEOIL" ? 50 : strike_step_input))))
+
+final_root     = is_option ? root : preset_root
+final_exchange = is_option ? exchange : preset_exchange
+final_expiry   = is_option ? expiry : expiry_input
+strike_step    = preset_step
+
+spot_sym = final_exchange + ":" + final_root
+[spot_open, spot_pdc, spot_pdh, spot_pdl, spot_close_today] = request.security(spot_sym, "1D", [open[0], close[1], high[1], low[1], close[0]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+var int base_center_strike = na
+if barstate.isfirst or na(base_center_strike)
+    int calc_strike = (atm_select_mode == "Manual Strike Entry") ? manual_strike_val : (is_option ? strike_val : int(math.round(nz(spot_close_today, spot_open) / strike_step) * strike_step))
+    if calc_strike <= 0
+        calc_strike := manual_strike_val
+    base_center_strike := calc_strike
+
+final_strike = base_center_strike
+
+// Description of ATM Selection Method
+string atm_selection_method = (atm_select_mode == "Manual Strike Entry") ? "Manual Input (" + str.tostring(manual_strike_val) + ")" : "Auto: Spot " + str.tostring(nz(spot_close_today, spot_open), "#.##") + " → Round to Step " + str.tostring(strike_step)
+
+// Universal Fail-Safe Option Ticker Construction Matching Techfrost Nifty_V6_SR Strategy
+f_build_option_symbol(int target_strike, bool target_is_ce) =>
+    if is_option
+        string st_digits = str.tostring(int(final_strike))
+        int st_len = str.length(st_digits)
+        if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+            int end_trim = 2
+            string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
+            string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
+            string sfx = target_is_ce ? "CE" : "PE"
+            syminfo.prefix + ":" + pfx + str.tostring(target_strike) + sfx
+        else if str.match(cleanTicker, "[CP]\\d+$") != ""
+            string matchCP = str.match(cleanTicker, "[CP]\\d+$")
+            int matchPos = str.pos(cleanTicker, matchCP)
+            string pfx = str.substring(cleanTicker, 0, matchPos)
+            string cp_letter = target_is_ce ? "C" : "P"
+            syminfo.prefix + ":" + pfx + cp_letter + str.tostring(target_strike)
+        else
+            string cp_letter = target_is_ce ? "C" : "P"
+            final_exchange + ":" + final_root + final_expiry + cp_letter + str.tostring(target_strike)
+    else
+        if str.contains(suffixStyle, "CE/PE")
+            string cp_sfx = target_is_ce ? "CE" : "PE"
+            final_exchange + ":" + final_root + final_expiry + str.tostring(target_strike) + cp_sfx
+        else
+            string cp_letter = target_is_ce ? "C" : "P"
+            final_exchange + ":" + final_root + final_expiry + cp_letter + str.tostring(target_strike)
+
+// =========================================================================
+// STRIKES & DATA FETCHING FOR ATM, OTM, AND ITM STRIKES
+// =========================================================================
+int offsetPts = switch offset_choice_str
+    "5 Points"   => 5
+    "10 Points"  => 10
+    "15 Points"  => 15
+    "20 Points"  => 20
+    "25 Points"  => 25
+    "40 Points"  => 40
+    "50 Points"  => 50
+    "100 Points" => 100
+    "150 Points" => 150
+    "200 Points" => 200
+    => 100
+
+int st_atm    = final_strike
+int st_otm_ce = final_strike + offsetPts
+int st_otm_pe = final_strike - offsetPts
+
+int st_itm_ce = final_strike - offsetPts
+int st_itm_pe = final_strike + offsetPts
+
+// Multi-Variable Option Contract Tuple Match (Same Method as Techfrost Nifty_V6_SR)
+f_get_contract_tuple_extended() =>
+    var float day_open   = na
+    var float prev_close = na
+    var float f5m_close  = na
+    if ta.change(time("D")) != 0
+        prev_close := close[1]
+        day_open   := open
+        f5m_close  := na
+    if (hour == 9 and minute >= 19) or hour > 9
+        if na(f5m_close)
+            f5m_close := close
+    [nz(day_open, open), nz(prev_close, close[1]), na(f5m_close) ? nz(day_open, open) : f5m_close, close]
+
+// Fetch Option Ticker Data Using Single Tuple Security Queries
+string ce_atm_ticker = f_build_option_symbol(st_atm, true)
+string pe_atm_ticker = f_build_option_symbol(st_atm, false)
+[ce_atm_o, ce_atm_pdc, ce_atm_f5m, ce_atm_ltp] = request.security(ce_atm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
+[pe_atm_o, pe_atm_pdc, pe_atm_f5m, pe_atm_ltp] = request.security(pe_atm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
+
+string ce_otm_ticker = f_build_option_symbol(st_otm_ce, true)
+string pe_otm_ticker = f_build_option_symbol(st_otm_pe, false)
+[ce_otm_o, ce_otm_pdc, ce_otm_f5m, ce_otm_ltp] = request.security(ce_otm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
+[pe_otm_o, pe_otm_pdc, pe_otm_f5m, pe_otm_ltp] = request.security(pe_otm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
+
+string ce_itm_ticker = f_build_option_symbol(st_itm_ce, true)
+string pe_itm_ticker = f_build_option_symbol(st_itm_pe, false)
+[ce_itm_o, ce_itm_pdc, ce_itm_f5m, ce_itm_ltp] = request.security(ce_itm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
+[pe_itm_o, pe_itm_pdc, pe_itm_f5m, pe_itm_ltp] = request.security(pe_itm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
+
+// Resolve Static Basis Reference Values
+f_resolve_basis(dop, pdc, f5m) =>
+    standard_bep_basis == "Previous Day Close" ? pdc : (standard_bep_basis == "First 5 Min Close" ? f5m : dop)
+
+float ce_atm_ref = f_resolve_basis(ce_atm_o, ce_atm_pdc, ce_atm_f5m)
+float pe_atm_ref = f_resolve_basis(pe_atm_o, pe_atm_pdc, pe_atm_f5m)
+
+float ce_otm_ref = f_resolve_basis(ce_otm_o, ce_otm_pdc, ce_otm_f5m)
+float pe_otm_ref = f_resolve_basis(pe_otm_o, pe_otm_pdc, pe_otm_f5m)
+
+float ce_itm_ref = f_resolve_basis(ce_itm_o, ce_itm_pdc, ce_itm_f5m)
+float pe_itm_ref = f_resolve_basis(pe_itm_o, pe_itm_pdc, pe_itm_f5m)
+
+// Check if valid Option Premium Data is fetched
+bool has_atm_data_rt   = not na(ce_atm_ltp) and not na(pe_atm_ltp) and (ce_atm_ltp > 0 or pe_atm_ltp > 0)
+bool has_atm_data_stat = not na(ce_atm_ref) and not na(pe_atm_ref) and (ce_atm_ref > 0 or pe_atm_ref > 0)
+
+bool has_otm_data_rt   = not na(ce_otm_ltp) and not na(pe_otm_ltp) and (ce_otm_ltp > 0 or pe_otm_ltp > 0)
+bool has_otm_data_stat = not na(ce_otm_ref) and not na(pe_otm_ref) and (ce_otm_ref > 0 or pe_otm_ref > 0)
+
+bool has_itm_data_rt   = not na(ce_itm_ltp) and not na(pe_itm_ltp) and (ce_itm_ltp > 0 or pe_itm_ltp > 0)
+bool has_itm_data_stat = not na(ce_itm_ref) and not na(pe_itm_ref) and (ce_itm_ref > 0 or pe_itm_ref > 0)
+
+// =========================================================================
+// SPOT BEP CALCULATIONS & ATM PIVOTS
+// =========================================================================
+
+// --- ATM PIVOT CALCULATIONS ---
+float atm_strike_pivot   = float(st_atm)
+float atm_neutral_pivot  = has_atm_data_rt ? (float(st_atm) + (nz(ce_atm_ltp) - nz(pe_atm_ltp)) / 2.0) : float(st_atm)
+
+// --- LAYER 1: ATM Straddle BEP (The Volatility Anchor) ---
+float atm_cp_rt          = has_atm_data_rt   ? (nz(ce_atm_ltp) + nz(pe_atm_ltp)) : na
+float atm_cp_stat        = has_atm_data_stat ? (nz(ce_atm_ref) + nz(pe_atm_ref)) : na
+
+float atm_straddle_upper_rt   = not na(atm_cp_rt)   ? st_atm + atm_cp_rt   : na
+float atm_straddle_lower_rt   = not na(atm_cp_rt)   ? st_atm - atm_cp_rt   : na
+
+float atm_straddle_upper_stat = not na(atm_cp_stat) ? st_atm + atm_cp_stat : na
+float atm_straddle_lower_stat = not na(atm_cp_stat) ? st_atm - atm_cp_stat : na
+
+// --- LAYER 2: OTM Strangle BEP (The Institutional Walls) ---
+float otm_call_bep_rt    = not na(ce_otm_ltp) and ce_otm_ltp > 0 ? st_otm_ce + ce_otm_ltp : na
+float otm_put_bep_rt     = not na(pe_otm_ltp) and pe_otm_ltp > 0 ? st_otm_pe - pe_otm_ltp : na
+
+float otm_call_bep_stat  = not na(ce_otm_ref) and ce_otm_ref > 0 ? st_otm_ce + ce_otm_ref : na
+float otm_put_bep_stat   = not na(pe_otm_ref) and pe_otm_ref > 0 ? st_otm_pe - pe_otm_ref : na
+
+// --- LAYER 3: ITM BEP (Immediate Gamma Traps) ---
+float itm_call_bep_rt    = not na(ce_itm_ltp) and ce_itm_ltp > 0 ? st_itm_ce + ce_itm_ltp : na
+float itm_put_bep_rt     = not na(pe_itm_ltp) and pe_itm_ltp > 0 ? st_itm_pe - pe_itm_ltp : na
+
+float itm_call_bep_stat  = not na(ce_itm_ref) and ce_itm_ref > 0 ? st_itm_ce + ce_itm_ref : na
+float itm_put_bep_stat   = not na(pe_itm_ref) and pe_itm_ref > 0 ? st_itm_pe - pe_itm_ref : na
+
+// =========================================================================
+// GOLDEN CONFLUENCE MATRIX & SIGNALS
+// =========================================================================
+
+// 1. Rejection Zone (ATM Straddle Upper BEP aligns with OTM Call BEP)
+bool is_rejection_zone = (not na(atm_straddle_upper_rt) and not na(otm_call_bep_rt) and math.abs(atm_straddle_upper_rt - otm_call_bep_rt) <= confluence_tol) or (not na(atm_straddle_upper_stat) and not na(otm_call_bep_stat) and math.abs(atm_straddle_upper_stat - otm_call_bep_stat) <= confluence_tol)
+
+// 2. Gamma Squeeze Trigger (ITM Call BEP aligns with Previous Day High or Spot crosses ITM Call BEP)
+bool is_gamma_squeeze_align = (not na(itm_call_bep_rt) and math.abs(itm_call_bep_rt - spot_pdh) <= confluence_tol) or (not na(itm_call_bep_stat) and math.abs(itm_call_bep_stat - spot_pdh) <= confluence_tol)
+bool is_gamma_squeeze_break = (not na(itm_call_bep_rt) and ta.crossover(close, itm_call_bep_rt)) or (not na(itm_call_bep_stat) and ta.crossover(close, itm_call_bep_stat))
+bool is_gamma_squeeze       = is_gamma_squeeze_align or is_gamma_squeeze_break
+
+// 3. Long Unwinding Trigger (ITM Put BEP aligns with Previous Day Low or Spot drops below ITM Put BEP)
+bool is_long_unwind_align   = (not na(itm_put_bep_rt) and math.abs(itm_put_bep_rt - spot_pdl) <= confluence_tol) or (not na(itm_put_bep_stat) and math.abs(itm_put_bep_stat - spot_pdl) <= confluence_tol)
+bool is_long_unwind_break   = (not na(itm_put_bep_rt) and ta.crossunder(close, itm_put_bep_rt)) or (not na(itm_put_bep_stat) and ta.crossunder(close, itm_put_bep_stat))
+bool is_long_unwinding      = is_long_unwind_align or is_long_unwind_break
+
+// 4. Theta Box Status (Spot price inside ATM Straddle Support & Resistance)
+bool is_theta_box           = not na(atm_straddle_lower_rt) and not na(atm_straddle_upper_rt) and close >= atm_straddle_lower_rt and close <= atm_straddle_upper_rt
+
+// Filter Signal Triggers (Prevent Spamming Shapes on Every Bar)
+bool rj_trigger = is_rejection_zone and not is_rejection_zone[1]
+bool gs_trigger = (is_gamma_squeeze_align and not is_gamma_squeeze_align[1]) or is_gamma_squeeze_break
+bool lu_trigger = (is_long_unwind_align and not is_long_unwind_align[1]) or is_long_unwind_break
+
+bool plot_rj_shape = show_signals and (sig_plot_mode == "Every Candle (Raw)" ? is_rejection_zone : rj_trigger)
+bool plot_gs_shape = show_signals and (sig_plot_mode == "Every Candle (Raw)" ? is_gamma_squeeze : gs_trigger)
+bool plot_lu_shape = show_signals and (sig_plot_mode == "Every Candle (Raw)" ? is_long_unwinding : lu_trigger)
+
+// =========================================================================
+// PLOTTING ALL SPOT BEP LINES & SIGNALS
+// =========================================================================
+
+// --- ATM Strike Pivot Plot (Distinct Color) ---
+plot(show_atm_pivot and atm_strike_pivot > 0 ? atm_strike_pivot : na, "ATM Strike Pivot Level", color=c_atm_pivot, linewidth=2, style=plot.style_linebr)
+plot(show_atm_pivot and not na(atm_neutral_pivot) ? atm_neutral_pivot : na, "ATM Delta-Neutral BEP Pivot", color=color.new(c_atm_pivot, 30), linewidth=1, style=plot.style_linebr)
+
+// --- Realtime Plots ---
+plot(show_rt_atm_bep and not na(atm_straddle_upper_rt) ? atm_straddle_upper_rt : na, "Realtime ATM Straddle Upper BEP", color=c_atm_upper, linewidth=2)
+plot(show_rt_atm_bep and not na(atm_straddle_lower_rt) ? atm_straddle_lower_rt : na, "Realtime ATM Straddle Lower BEP", color=c_atm_lower, linewidth=2)
+
+plot(show_rt_otm_bep and not na(otm_call_bep_rt) ? otm_call_bep_rt : na, "Realtime OTM Call BEP (Wall)", color=c_otm_call, linewidth=2)
+plot(show_rt_otm_bep and not na(otm_put_bep_rt) ? otm_put_bep_rt : na, "Realtime OTM Put BEP (Wall)", color=c_otm_put, linewidth=2)
+
+plot(show_rt_itm_bep and not na(itm_call_bep_rt) ? itm_call_bep_rt : na, "Realtime ITM Call BEP (Gamma Trap)", color=c_itm_call, linewidth=2)
+plot(show_rt_itm_bep and not na(itm_put_bep_rt) ? itm_put_bep_rt : na, "Realtime ITM Put BEP (Gamma Trap)", color=c_itm_put, linewidth=2)
+
+// --- Static Plots ---
+plot(show_stat_atm_bep and not na(atm_straddle_upper_stat) ? atm_straddle_upper_stat : na, "Static ATM Straddle Upper BEP", color=color.new(c_atm_upper, 30), style=plot.style_linebr)
+plot(show_stat_atm_bep and not na(atm_straddle_lower_stat) ? atm_straddle_lower_stat : na, "Static ATM Straddle Lower BEP", color=color.new(c_atm_lower, 30), style=plot.style_linebr)
+
+plot(show_stat_otm_bep and not na(otm_call_bep_stat) ? otm_call_bep_stat : na, "Static OTM Call BEP", color=color.new(c_otm_call, 30), style=plot.style_linebr)
+plot(show_stat_otm_bep and not na(otm_put_bep_stat) ? otm_put_bep_stat : na, "Static OTM Put BEP", color=color.new(c_otm_put, 30), style=plot.style_linebr)
+
+plot(show_stat_itm_bep and not na(itm_call_bep_stat) ? itm_call_bep_stat : na, "Static ITM Call BEP", color=color.new(c_itm_call, 30), style=plot.style_linebr)
+plot(show_stat_itm_bep and not na(itm_put_bep_stat) ? itm_put_bep_stat : na, "Static ITM Put BEP", color=color.new(c_itm_put, 30), style=plot.style_linebr)
+
+// --- Spot Previous Day Levels ---
+plot(show_spot_pdh_pdl and spot_pdh > 0 ? spot_pdh : na, "Spot Previous Day High (PDH)", color=c_spot_pdh, linewidth=1, style=plot.style_linebr)
+plot(show_spot_pdh_pdl and spot_pdl > 0 ? spot_pdl : na, "Spot Previous Day Low (PDL)",  color=c_spot_pdl, linewidth=1, style=plot.style_linebr)
+
+// --- Clean & Elegant Confluence Signal Shapes ---
+plotshape(plot_rj_shape, title="Rejection Zone (RJ)", style=shape.diamond, location=location.abovebar, color=#FF9100, size=size.tiny, text="RJ", textcolor=#FF9100)
+plotshape(plot_gs_shape, title="Gamma Squeeze (GS)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.tiny, text="GS", textcolor=#00E676)
+plotshape(plot_lu_shape, title="Long Unwinding (LU)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.tiny, text="LU", textcolor=#FF1744)
+
+// --- Alert Conditions ---
+alertcondition(rj_trigger, title="Rejection Zone Alert", message="REJECTION ZONE: ATM Upper BEP & OTM Call BEP Confluence on {{ticker}}!")
+alertcondition(gs_trigger, title="Gamma Squeeze Alert", message="GAMMA SQUEEZE ALERT: ITM Call BEP / Spot PDH Breakout triggered on {{ticker}}!")
+alertcondition(lu_trigger, title="Long Unwinding Alert", message="LONG UNWINDING ALERT: ITM Put BEP / Spot PDL Breakdown triggered on {{ticker}}!")
+
+// =========================================================================
+// SUMMARY DASHBOARD TABLE
+// =========================================================================
+var table info_table = na
+if barstate.islast and show_options_table
+    table.delete(info_table)
+    
+    position_choice = table_pos_str == "Top Right" ? position.top_right :
+                      table_pos_str == "Top Left" ? position.top_left :
+                      table_pos_str == "Bottom Right" ? position.bottom_right : position.bottom_left
+                      
+    t_sz = table_size_str == "Tiny" ? size.tiny :
+           table_size_str == "Small" ? size.small :
+           table_size_str == "Normal" ? size.normal : size.large
+           
+    info_table := table.new(position_choice, 6, 10, border_width=1, border_color=color.gray)
+    
+    string basisTag = standard_bep_basis == "Previous Day Close" ? "Prev Settlement" : (standard_bep_basis == "First 5 Min Close" ? "First 5m Close" : "Day Open")
+
+    // Header Row 0
+    table.cell(info_table, 0, 0, "Spot Asset: " + final_root, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 0, "ATM Strike Pivot: " + str.tostring(st_atm), bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
+    table.cell(info_table, 2, 0, "Offset: " + str.tostring(offsetPts) + " pts", bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 3, 0, "Basis: " + basisTag, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 4, 0, "Expiry: " + final_expiry, bgcolor=#1565C0, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 5, 0, has_atm_data_rt ? "Option Data: OK" : "Ticker: " + ce_atm_ticker, bgcolor=has_atm_data_rt ? #1B5E20 : #B71C1C, text_color=color.white, text_size=t_sz)
+
+    // Row 1: Column Headers
+    table.cell(info_table, 0, 1, "BEP Layer / Level", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 1, "Formula / Strikes", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 2, 1, "Static BEP (" + basisTag + ")", bgcolor=#37474F, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 1, "Realtime BEP (LTP)", bgcolor=#37474F, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 1, "Spot Level Comparison", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 5, 1, "Confluence Matrix Status", bgcolor=#37474F, text_color=color.orange, text_size=t_sz)
+
+    // ATM Pivot Explanation Row (Row 2)
+    table.cell(info_table, 0, 2, "ATM Strike Pivot Level", bgcolor=#F57F17, text_color=color.black, text_size=t_sz)
+    table.cell(info_table, 1, 2, atm_selection_method, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 2, 2, "Strike: " + str.tostring(st_atm), bgcolor=color.black, text_color=#FFEA00, text_size=t_sz)
+    table.cell(info_table, 3, 2, "Neutral Pivot: " + str.tostring(atm_neutral_pivot, "#.##"), bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 2, "Spot vs ATM Pivot: " + str.tostring(close - float(st_atm), "+#.##;-#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 5, 2, "Primary Center Anchor", bgcolor=color.black, text_color=#FFEA00, text_size=t_sz)
+
+    // Layer 1 Rows (Rows 3 & 4)
+    string atm_up_stat_str = na(atm_straddle_upper_stat) ? "N/A (" + ce_atm_ticker + ")" : str.tostring(atm_straddle_upper_stat, "#.##")
+    string atm_up_rt_str   = na(atm_straddle_upper_rt)   ? "N/A (" + ce_atm_ticker + ")" : str.tostring(atm_straddle_upper_rt, "#.##")
+    table.cell(info_table, 0, 3, "Layer 1: ATM Upper Resistance", bgcolor=#1B5E20, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 3, "ATM Strike + Straddle CP", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 3, atm_up_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 3, atm_up_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 3, na(atm_straddle_upper_rt) ? "Spot vs Upper: N/A" : "Spot vs Upper: " + str.tostring(close - atm_straddle_upper_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=not na(atm_straddle_upper_rt) and close >= atm_straddle_upper_rt ? #00E676 : color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 3, is_rejection_zone ? "REJECTION CONFLUENCE" : "Normal Resistance", bgcolor=is_rejection_zone ? #FF6D00 : color.black, text_color=color.white, text_size=t_sz)
+
+    string atm_lo_stat_str = na(atm_straddle_lower_stat) ? "N/A (Check Expiry)" : str.tostring(atm_straddle_lower_stat, "#.##")
+    string atm_lo_rt_str   = na(atm_straddle_lower_rt)   ? "N/A (Check Expiry)" : str.tostring(atm_straddle_lower_rt, "#.##")
+    table.cell(info_table, 0, 4, "Layer 1: ATM Lower Support", bgcolor=#B71C1C, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 4, "ATM Strike - Straddle CP", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 4, atm_lo_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 4, atm_lo_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 4, na(atm_straddle_lower_rt) ? "Spot vs Lower: N/A" : "Spot vs Lower: " + str.tostring(close - atm_straddle_lower_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=not na(atm_straddle_lower_rt) and close <= atm_straddle_lower_rt ? #FF1744 : color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 4, is_theta_box ? "THETA DECAY BOX" : "Out of Theta Box", bgcolor=is_theta_box ? #00838F : color.black, text_color=color.white, text_size=t_sz)
+
+    // Layer 2 Rows (Rows 5 & 6)
+    string otm_c_stat_str = na(otm_call_bep_stat) ? "N/A" : str.tostring(otm_call_bep_stat, "#.##")
+    string otm_c_rt_str   = na(otm_call_bep_rt)   ? "N/A" : str.tostring(otm_call_bep_rt, "#.##")
+    table.cell(info_table, 0, 5, "Layer 2: OTM Call Resistance", bgcolor=#01579B, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 5, "OTM Strike " + str.tostring(st_otm_ce) + " + CE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 5, otm_c_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 5, otm_c_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 5, na(otm_call_bep_rt) ? "Spot vs OTM Call: N/A" : "Spot vs OTM Call: " + str.tostring(close - otm_call_bep_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 5, "Institutional Call Wall", bgcolor=color.black, text_color=#00B0FF, text_size=t_sz)
+
+    string otm_p_stat_str = na(otm_put_bep_stat) ? "N/A" : str.tostring(otm_put_bep_stat, "#.##")
+    string otm_p_rt_str   = na(otm_put_bep_rt)   ? "N/A" : str.tostring(otm_put_bep_rt, "#.##")
+    table.cell(info_table, 0, 6, "Layer 2: OTM Put Support", bgcolor=#E65100, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 6, "OTM Strike " + str.tostring(st_otm_pe) + " - PE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 6, otm_p_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 6, otm_p_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 6, na(otm_put_bep_rt) ? "Spot vs OTM Put: N/A" : "Spot vs OTM Put: " + str.tostring(close - otm_put_bep_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 6, "Institutional Put Wall", bgcolor=color.black, text_color=#FF9100, text_size=t_sz)
+
+    // Layer 3 Rows (Rows 7 & 8)
+    string itm_c_stat_str = na(itm_call_bep_stat) ? "N/A" : str.tostring(itm_call_bep_stat, "#.##")
+    string itm_c_rt_str   = na(itm_call_bep_rt)   ? "N/A" : str.tostring(itm_call_bep_rt, "#.##")
+    table.cell(info_table, 0, 7, "Layer 3: ITM Call Gamma Trap", bgcolor=#4A148C, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 7, "ITM Strike " + str.tostring(st_itm_ce) + " + CE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 7, itm_c_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 7, itm_c_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 7, "ITM Call vs Spot PDH (" + str.tostring(spot_pdh, "#.##") + ")", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 7, is_gamma_squeeze ? "GAMMA SQUEEZE ACTIVE" : "Short Cover Watch", bgcolor=is_gamma_squeeze ? #00E676 : color.black, text_color=is_gamma_squeeze ? color.black : #AA00FF, text_size=t_sz)
+
+    string itm_p_stat_str = na(itm_put_bep_stat) ? "N/A" : str.tostring(itm_put_bep_stat, "#.##")
+    string itm_p_rt_str   = na(itm_put_bep_rt)   ? "N/A" : str.tostring(itm_put_bep_rt, "#.##")
+    table.cell(info_table, 0, 8, "Layer 3: ITM Put Gamma Trap", bgcolor=#F57F17, text_color=color.black, text_size=t_sz)
+    table.cell(info_table, 1, 8, "ITM Strike " + str.tostring(st_itm_pe) + " - PE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 8, itm_p_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 8, itm_p_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 8, "ITM Put vs Spot PDL (" + str.tostring(spot_pdl, "#.##") + ")", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 8, is_long_unwinding ? "LONG UNWINDING ACTIVE" : "Long Unwind Watch", bgcolor=is_long_unwinding ? #D50000 : color.black, text_color=is_long_unwinding ? color.white : #FFD600, text_size=t_sz)
+
+    // Spot PDH & PDL Summary Row (Row 9)
+    table.cell(info_table, 0, 9, "Spot Previous Day Levels", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 9, "PDH: " + str.tostring(spot_pdh, "#.##") + " | PDL: " + str.tostring(spot_pdl, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 2, 9, "PDC: " + str.tostring(spot_pdc, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 3, 9, "Spot LTP: " + str.tostring(close, "#.##"), bgcolor=#1565C0, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 9, "Daily Range: " + str.tostring(high - low, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 9, is_theta_box ? "Inside Theta Box" : (not na(atm_straddle_upper_rt) and close > atm_straddle_upper_rt ? "Bullish Range Expansion" : "Bearish Range Expansion"), bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
