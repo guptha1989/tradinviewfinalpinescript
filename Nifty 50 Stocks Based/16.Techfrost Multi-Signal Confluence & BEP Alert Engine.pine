@@ -37,7 +37,7 @@ strikeOverride       = input.float(0.0, "Strike Price Override", minval=0.0, gro
 G_STRAT              = "[2] Strategy Enable / Disable Controls"
 enableFreshIV        = input.bool(true, "Enable Strategy 1: Fresh Intrinsic Value", group=G_STRAT)
 enableTV             = input.bool(true, "Enable Strategy 2: Time Value (from 5A)", group=G_STRAT)
-enableBasket         = input.bool(true, "Enable Strategy 3: Basket Averages (from 6)", group=G_STRAT)
+enableBasket         = input.bool(true, "Enable Strategy 3: Tweaked Basket Averages & BEP Confluence", group=G_STRAT)
 enableBEP            = input.bool(true, "Enable Strategy 4: BEP Level Touch", group=G_STRAT)
 enableConfluence     = input.bool(true, "Enable Strategy 5: Strong Confluence", group=G_STRAT)
 
@@ -275,7 +275,37 @@ float ce_o_m3 = f_get_open_val(ce_c_m3), float pe_o_m3 = f_get_open_val(pe_c_m3)
 float ce_o_m4 = f_get_open_val(ce_c_m4), float pe_o_m4 = f_get_open_val(pe_c_m4)
 
 // ==========================================
-// STRATEGY 1: FRESH INTRINSIC VALUE CREATION (STRICT ALTERNATION)
+// BEP PROXIMITY / TOUCH ENGINE
+// ==========================================
+
+float atm_ce_bep    = baseStrike + ce_o_0
+float atm_pe_bep    = baseStrike - pe_o_0
+float atm_bep_pivot = (atm_ce_bep + atm_pe_bep) / 2.0
+
+float otm_ce_bep    = k_p1 + ce_o_p1
+float otm_pe_bep    = k_m1 - pe_o_m1
+
+float itm_ce_bep    = k_m1 + ce_o_m1
+float itm_pe_bep    = k_p1 - pe_o_p1
+
+f_near_bep(float level) =>
+    not na(level) and (math.abs(close - level) <= (stepVal * 0.1) or ta.cross(close, level))
+
+bool bep_touch_alert = f_near_bep(atm_bep_pivot) or f_near_bep(atm_ce_bep) or f_near_bep(atm_pe_bep) or f_near_bep(otm_ce_bep) or f_near_bep(otm_pe_bep) or f_near_bep(itm_ce_bep) or f_near_bep(itm_pe_bep)
+
+// Window allowing alert 1 or 2 candles before/after BEP crossover candle
+bool bep_window = bep_touch_alert or bep_touch_alert[1] or bep_touch_alert[2]
+
+plot(enableBEP ? atm_bep_pivot : na, title="ATM BEP Pivot Line", color=#FFEE58, linewidth=2)
+plot(enableBEP ? otm_ce_bep : na,    title="OTM Call Upper BEP", color=#FF5252, linewidth=1)
+plot(enableBEP ? otm_pe_bep : na,    title="OTM Put Lower BEP",  color=#FF5252, linewidth=1)
+plot(enableBEP ? itm_ce_bep : na,    title="ITM Call Upper BEP", color=#00E676, linewidth=1)
+plot(enableBEP ? itm_pe_bep : na,    title="ITM Put Lower BEP",  color=#00E676, linewidth=1)
+
+alertcondition(bep_touch_alert, title="Price at BEP Level Alert", message="BEP ALERT: Price reached an active BEP Level (ATM/OTM/ITM) on {{ticker}}!")
+
+// ==========================================
+// STRATEGY 1: FRESH INTRINSIC VALUE CREATION
 // ==========================================
 
 float spotLTP = close
@@ -312,7 +342,7 @@ alertcondition(fresh_ce_buy_signal, title="Fresh Intrinsic CE Buy Alert", messag
 alertcondition(fresh_pe_buy_signal, title="Fresh Intrinsic PE Buy Alert", message="FRESH IV ALERT: Put Option gained fresh Intrinsic Value on {{ticker}}!")
 
 // ==========================================
-// STRATEGY 2: TIME VALUE ALERT SETUP (FROM 5A - STRICT ALTERNATION)
+// STRATEGY 2: TIME VALUE ALERT SETUP (FROM 5A)
 // ==========================================
 
 float otm_avg_tv_rt = (ce_tv_otm + pe_tv_otm) / 2.0
@@ -359,7 +389,7 @@ alertcondition(tv_bc_signal, title="Time Value Buy CE (BC) Alert", message="TV B
 alertcondition(tv_bp_signal, title="Time Value Buy PE (BP) Alert", message="TV BP ALERT: Time Value Buy PE condition triggered on {{ticker}}!")
 
 // ==========================================
-// STRATEGY 3: BASKET AVERAGES CROSSOVER (STRICT ALTERNATION)
+// STRATEGY 3: TWEAKED BASKET AVERAGES & BEP CONFLUENCE
 // ==========================================
 
 float sum_ce_open = nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1) + nz(ce_o_p2) + nz(ce_o_m2) + nz(ce_o_p3) + nz(ce_o_m3) + nz(ce_o_p4) + nz(ce_o_m4)
@@ -375,11 +405,17 @@ float peAvgCur  = sum_pe_cur  / 9.0
 float ceAvgChg = ceAvgCur - ceAvgOpen
 float peAvgChg = peAvgCur - peAvgOpen
 
-bool ce_cross_above = ta.crossover(ceAvgCur, ceAvgOpen) or (ceAvgCur > ceAvgOpen and ceAvgCur[1] <= ceAvgOpen[1])
-bool pe_cross_above = ta.crossover(peAvgCur, peAvgOpen) or (peAvgCur > peAvgOpen and peAvgCur[1] <= peAvgOpen[1])
+// Buy CE Basket Conditions (with mandatory positive/green ceAvgChg > 0)
+bool cond_ce_1 = (peAvgCur < peAvgOpen) and (ceAvgCur > peAvgCur) and (ceAvgCur < ceAvgOpen) and (ceAvgChg > 0)
+bool cond_ce_2 = (ceAvgCur > ceAvgOpen) and (peAvgCur < peAvgOpen) and (ceAvgChg > 0)
 
-bool raw_basket_ce = enableBasket and ce_cross_above and (ceAvgChg > 0)
-bool raw_basket_pe = enableBasket and pe_cross_above and (peAvgChg > 0)
+bool raw_basket_ce = enableBasket and (cond_ce_1 or cond_ce_2) and bep_window
+
+// Buy PE / Sell CE Basket Conditions (with mandatory negative/blue ceAvgChg < 0)
+bool cond_pe_1 = (ceAvgCur < ceAvgOpen) and (peAvgCur > ceAvgCur) and (peAvgCur < peAvgOpen) and (ceAvgChg < 0)
+bool cond_pe_2 = (peAvgCur > peAvgOpen) and (ceAvgCur < ceAvgOpen) and (ceAvgChg < 0)
+
+bool raw_basket_pe = enableBasket and (cond_pe_1 or cond_pe_2) and bep_window
 
 var int state_st3 = 0
 bool basket_ce_buy = false
@@ -395,27 +431,12 @@ else if raw_basket_pe and state_st3 != -1
 plotshape(enableBasket and basket_ce_buy, title="Basket Avg BUY CE Signal", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BUY CE (BASKET)")
 plotshape(enableBasket and basket_pe_buy, title="Basket Avg BUY PE / SELL Signal", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="BUY PE / SELL (BASKET)")
 
-alertcondition(basket_ce_buy, title="Basket Buy CE Alert", message="BASKET CE ALERT: CE Current Avg crossed above Day Open Avg & Change is positive on {{ticker}}!")
-alertcondition(basket_pe_buy, title="Basket Buy PE Alert", message="BASKET PE ALERT: PE Current Avg crossed above Day Open Avg & Change is positive on {{ticker}}!")
+alertcondition(basket_ce_buy, title="Basket Buy CE Alert", message="BASKET CE ALERT: Tweaked Basket CE condition met near BEP Level on {{ticker}}!")
+alertcondition(basket_pe_buy, title="Basket Buy PE Alert", message="BASKET PE ALERT: Tweaked Basket PE condition met near BEP Level on {{ticker}}!")
 
 // ==========================================
-// STRATEGY 4: BEP PROXIMITY / TOUCH ALERTS (STRICT ALTERNATION)
+// STRATEGY 4: BEP PROXIMITY / TOUCH ALERTS
 // ==========================================
-
-float atm_ce_bep    = baseStrike + ce_o_0
-float atm_pe_bep    = baseStrike - pe_o_0
-float atm_bep_pivot = (atm_ce_bep + atm_pe_bep) / 2.0
-
-float otm_ce_bep    = k_p1 + ce_o_p1
-float otm_pe_bep    = k_m1 - pe_o_m1
-
-float itm_ce_bep    = k_m1 + ce_o_m1
-float itm_pe_bep    = k_p1 - pe_o_p1
-
-f_near_bep(float level) =>
-    enableBEP and not na(level) and (math.abs(close - level) <= (stepVal * 0.1) or ta.cross(close, level))
-
-bool bep_touch_alert = f_near_bep(atm_bep_pivot) or f_near_bep(atm_ce_bep) or f_near_bep(atm_pe_bep) or f_near_bep(otm_ce_bep) or f_near_bep(otm_pe_bep) or f_near_bep(itm_ce_bep) or f_near_bep(itm_pe_bep)
 
 bool raw_bep_ce = bep_touch_alert and close >= open
 bool raw_bep_pe = bep_touch_alert and close < open
@@ -434,16 +455,8 @@ else if raw_bep_pe and state_st4 != -1
 plotshape(enableBEP and bep_ce_buy, title="BEP Touch BUY CE Signal", style=shape.labelup, location=location.belowbar, color=color.aqua, textcolor=color.black, size=size.small, text="BUY CE (BEP)")
 plotshape(enableBEP and bep_pe_buy, title="BEP Touch BUY PE / SELL Signal", style=shape.labeldown, location=location.abovebar, color=#FF9100, textcolor=color.white, size=size.small, text="BUY PE / SELL (BEP)")
 
-plot(enableBEP ? atm_bep_pivot : na, title="ATM BEP Pivot Line", color=#FFEE58, linewidth=2)
-plot(enableBEP ? otm_ce_bep : na,    title="OTM Call Upper BEP", color=#FF5252, linewidth=1)
-plot(enableBEP ? otm_pe_bep : na,    title="OTM Put Lower BEP",  color=#FF5252, linewidth=1)
-plot(enableBEP ? itm_ce_bep : na,    title="ITM Call Upper BEP", color=#00E676, linewidth=1)
-plot(enableBEP ? itm_pe_bep : na,    title="ITM Put Lower BEP",  color=#00E676, linewidth=1)
-
-alertcondition(bep_touch_alert, title="Price at BEP Level Alert", message="BEP ALERT: Price reached an active BEP Level (ATM/OTM/ITM) on {{ticker}}!")
-
 // ==========================================
-// STRATEGY 5: STRONG CONFLUENCE ENGINE (STRICT ALTERNATION)
+// STRATEGY 5: STRONG CONFLUENCE ENGINE
 // ==========================================
 
 int ce_confluence_count = (fresh_ce_buy_signal ? 1 : 0) + (tv_bc_signal ? 1 : 0) + (basket_ce_buy ? 1 : 0) + (bep_touch_alert ? 1 : 0)
