@@ -35,13 +35,13 @@ enableConfluence     = input.bool(true, "Enable Strategy 5: Strong Confluence", 
 
 // --- [3] Master Dashboard & Performance Tables Controls ---
 G_TABLES             = "[3] Master Tables & Sizing Controls"
-showLiveTableInput   = input.bool(true, "Show Live Signal Status Table", group=G_TABLES)
-liveTablePosInput    = input.string("Top Right", "Live Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLES)
-liveTableSizeInput   = input.string("Small", "Live Table Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLES)
+showLiveTableInput   = input.bool(true, "Show Current Live Alerts Table", group=G_TABLES)
+liveTablePosInput    = input.string("Top Right", "Current Alerts Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLES)
+liveTableSizeInput   = input.string("Small", "Current Alerts Table Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLES)
 
-showPerfTableInput   = input.bool(true, "Show 5-Day Strategy Performance Table", group=G_TABLES)
-perfTablePosInput    = input.string("Bottom Left", "Performance Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLES)
-perfTableSizeInput   = input.string("Small", "Performance Table Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLES)
+showPerfTableInput   = input.bool(true, "Show Master 5-Day Performance Table", group=G_TABLES)
+perfTablePosInput    = input.string("Bottom Left", "Master Performance Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLES)
+perfTableSizeInput   = input.string("Small", "Master Performance Table Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLES)
 
 targetPtsInput       = input.float(20.0, "Target Points for Win Definition", minval=1.0, step=1.0, group=G_TABLES)
 stoplossPtsInput     = input.float(10.0, "Stop Loss Points for Loss Definition", minval=1.0, step=1.0, group=G_TABLES)
@@ -195,7 +195,7 @@ f_build_option_symbol(float target_strike, bool target_is_ce) =>
 f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
 f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
 
-// 9 Strikes centered strictly around Day Open ATM (baseStrike is always middle row)
+// 9 Strikes centered strictly around Day Open ATM
 float k_0  = baseStrike
 float k_p1 = baseStrike + 1.0 * stepVal
 float k_p2 = baseStrike + 2.0 * stepVal
@@ -278,8 +278,8 @@ bool fresh_pe_iv = enableFreshIV and (pe_iv_0 > 0 and (na(pe_iv_0[1]) or pe_iv_0
 bool fresh_ce_buy_signal = fresh_ce_iv
 bool fresh_pe_buy_signal = fresh_pe_iv
 
-plotshape(enableFreshIV and fresh_ce_buy_signal, title="Fresh IV Call Buy", style=shape.triangleup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.tiny, text="Fresh IV CE")
-plotshape(enableFreshIV and fresh_pe_buy_signal, title="Fresh IV Put Buy", style=shape.triangledown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.tiny, text="Fresh IV PE")
+plotshape(enableFreshIV and fresh_ce_buy_signal, title="Fresh IV BUY CE Signal", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BUY CE (IV)")
+plotshape(enableFreshIV and fresh_pe_buy_signal, title="Fresh IV BUY PE / SELL Signal", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="BUY PE / SELL (IV)")
 
 alertcondition(fresh_ce_buy_signal, title="Fresh Intrinsic CE Buy Alert", message="FRESH IV ALERT: Call Option gained fresh Intrinsic Value on {{ticker}}!")
 alertcondition(fresh_pe_buy_signal, title="Fresh Intrinsic PE Buy Alert", message="FRESH IV ALERT: Put Option gained fresh Intrinsic Value on {{ticker}}!")
@@ -325,8 +325,8 @@ if enableTV
         tv_bp_signal := true
         signal_state_itv := -1
 
-plotshape(enableTV and tv_bc_signal, title="Time Value Buy CE (BC)", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BC")
-plotshape(enableTV and tv_bp_signal, title="Time Value Buy PE (BP)", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="BP")
+plotshape(enableTV and tv_bc_signal, title="Time Value BUY CE (BC)", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BUY CE (TV)")
+plotshape(enableTV and tv_bp_signal, title="Time Value BUY PE / SELL (BP)", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="BUY PE / SELL (TV)")
 
 alertcondition(tv_bc_signal, title="Time Value Buy CE (BC) Alert", message="TV BC ALERT: Time Value Buy CE condition triggered on {{ticker}}!")
 alertcondition(tv_bp_signal, title="Time Value Buy PE (BP) Alert", message="TV BP ALERT: Time Value Buy PE condition triggered on {{ticker}}!")
@@ -354,8 +354,8 @@ bool pe_cross_above = ta.crossover(peAvgCur, peAvgOpen) or (peAvgCur > peAvgOpen
 bool basket_ce_buy = enableBasket and ce_cross_above and (ceAvgChg > 0)
 bool basket_pe_buy = enableBasket and pe_cross_above and (peAvgChg > 0)
 
-plotshape(enableBasket and basket_ce_buy, title="Basket Avg Call Buy", style=shape.circle, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.tiny, text="Basket CE")
-plotshape(enableBasket and basket_pe_buy, title="Basket Avg Put Buy", style=shape.circle, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.tiny, text="Basket PE")
+plotshape(enableBasket and basket_ce_buy, title="Basket Avg BUY CE Signal", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BUY CE (BASKET)")
+plotshape(enableBasket and basket_pe_buy, title="Basket Avg BUY PE / SELL Signal", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="BUY PE / SELL (BASKET)")
 
 alertcondition(basket_ce_buy, title="Basket Buy CE Alert", message="BASKET CE ALERT: CE Current Avg crossed above Day Open Avg & Change is positive on {{ticker}}!")
 alertcondition(basket_pe_buy, title="Basket Buy PE Alert", message="BASKET PE ALERT: PE Current Avg crossed above Day Open Avg & Change is positive on {{ticker}}!")
@@ -379,6 +379,12 @@ f_near_bep(float level) =>
 
 bool bep_touch_alert = f_near_bep(atm_bep_pivot) or f_near_bep(atm_ce_bep) or f_near_bep(atm_pe_bep) or f_near_bep(otm_ce_bep) or f_near_bep(otm_pe_bep) or f_near_bep(itm_ce_bep) or f_near_bep(itm_pe_bep)
 
+bool bep_ce_buy = bep_touch_alert and close >= open
+bool bep_pe_buy = bep_touch_alert and close < open
+
+plotshape(enableBEP and bep_ce_buy, title="BEP Touch BUY CE Signal", style=shape.labelup, location=location.belowbar, color=color.aqua, textcolor=color.black, size=size.small, text="BUY CE (BEP)")
+plotshape(enableBEP and bep_pe_buy, title="BEP Touch BUY PE / SELL Signal", style=shape.labeldown, location=location.abovebar, color=#FF9100, textcolor=color.white, size=size.small, text="BUY PE / SELL (BEP)")
+
 plot(enableBEP ? atm_bep_pivot : na, title="ATM BEP Pivot Line", color=#FFEE58, linewidth=2)
 plot(enableBEP ? otm_ce_bep : na,    title="OTM Call Upper BEP", color=#FF5252, linewidth=1)
 plot(enableBEP ? otm_pe_bep : na,    title="OTM Put Lower BEP",  color=#FF5252, linewidth=1)
@@ -388,7 +394,7 @@ plot(enableBEP ? itm_pe_bep : na,    title="ITM Put Lower BEP",  color=#00E676, 
 alertcondition(bep_touch_alert, title="Price at BEP Level Alert", message="BEP ALERT: Price reached an active BEP Level (ATM/OTM/ITM) on {{ticker}}!")
 
 // ==========================================
-// STRATEGY 5: STRONG CONFLUENCE ENGINE (STRONG BC & STRONG BP)
+// STRATEGY 5: STRONG CONFLUENCE ENGINE (STRONG BUY CE & STRONG BUY PE)
 // ==========================================
 
 int ce_confluence_count = (fresh_ce_buy_signal ? 1 : 0) + (tv_bc_signal ? 1 : 0) + (basket_ce_buy ? 1 : 0) + (bep_touch_alert ? 1 : 0)
@@ -397,8 +403,8 @@ int pe_confluence_count = (fresh_pe_buy_signal ? 1 : 0) + (tv_bp_signal ? 1 : 0)
 bool strong_bc_signal = enableConfluence and (ce_confluence_count >= 2)
 bool strong_bp_signal = enableConfluence and (pe_confluence_count >= 2)
 
-plotshape(enableConfluence and strong_bc_signal, title="Strong Buy CE (Strong BC)", style=shape.labelup, location=location.belowbar, color=#76FF03, textcolor=color.black, size=size.normal, text="STRONG BC")
-plotshape(enableConfluence and strong_bp_signal, title="Strong Buy PE (Strong BP)", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.normal, text="STRONG BP")
+plotshape(enableConfluence and strong_bc_signal, title="★ STRONG BUY CE ★", style=shape.labelup, location=location.belowbar, color=#76FF03, textcolor=color.black, size=size.normal, text="★ STRONG BUY CE ★")
+plotshape(enableConfluence and strong_bp_signal, title="★ STRONG BUY PE / SELL ★", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.normal, text="★ STRONG BUY PE / SELL ★")
 
 alertcondition(strong_bc_signal, title="Strong Buy CE (Strong BC) Alert", message="STRONG BC CONFLUENCE: Multiple Buy CE triggers aligned on {{ticker}}!")
 alertcondition(strong_bp_signal, title="Strong Buy PE (Strong BP) Alert", message="STRONG BP CONFLUENCE: Multiple Buy PE triggers aligned on {{ticker}}!")
@@ -468,7 +474,7 @@ f_eval_strategy_swing(bool sig_ce, bool sig_pe) =>
 [st1_t, st1_w, st1_l, st1_pts, st1_dd] = f_eval_strategy_swing(fresh_ce_buy_signal, fresh_pe_buy_signal)
 [st2_t, st2_w, st2_l, st2_pts, st2_dd] = f_eval_strategy_swing(tv_bc_signal, tv_bp_signal)
 [st3_t, st3_w, st3_l, st3_pts, st3_dd] = f_eval_strategy_swing(basket_ce_buy, basket_pe_buy)
-[st4_t, st4_w, st4_l, st4_pts, st4_dd] = f_eval_strategy_swing(bep_touch_alert and close > open, bep_touch_alert and close < open)
+[st4_t, st4_w, st4_l, st4_pts, st4_dd] = f_eval_strategy_swing(bep_ce_buy, bep_pe_buy)
 [st5_t, st5_w, st5_l, st5_pts, st5_dd] = f_eval_strategy_swing(strong_bc_signal, strong_bp_signal)
 
 // ==========================================
@@ -491,7 +497,7 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
-// Table 1: Live Signal Status Table
+// Table 1: Current Live Alert Matrix Table
 var table dashTable = table.new(f_get_table_pos(liveTablePosInput), 4, 10, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 if barstate.islast
@@ -499,37 +505,42 @@ if barstate.islast
         table.delete(dashTable)
     else
         string sz = f_get_table_text_size(liveTableSizeInput)
-        table.cell(dashTable, 0, 0, "Signal Trigger", bgcolor=#1565C0, text_color=color.white, text_size=sz)
-        table.cell(dashTable, 1, 0, "Call (CE)", bgcolor=#1565C0, text_color=color.white, text_size=sz)
-        table.cell(dashTable, 2, 0, "Put (PE)", bgcolor=#1565C0, text_color=color.white, text_size=sz)
-        table.cell(dashTable, 3, 0, "Status", bgcolor=#1565C0, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 0, 0, "Strategy / Trigger", bgcolor=#1565C0, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 1, 0, "Call (CE) Value", bgcolor=#1565C0, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 2, 0, "Put (PE) Value", bgcolor=#1565C0, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 3, 0, "Current Live Alert Status", bgcolor=#1565C0, text_color=color.white, text_size=sz)
 
-        table.cell(dashTable, 0, 1, "Fresh Intrinsic Value", bgcolor=#212121, text_color=color.white, text_size=sz)
+        // Row 1: Fresh Intrinsic Value
+        table.cell(dashTable, 0, 1, "1. Fresh Intrinsic Value", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 1, str.tostring(ce_iv_0, "#.##"), bgcolor=color.black, text_color=ce_iv_0 > 0 ? #00E676 : color.gray, text_size=sz)
         table.cell(dashTable, 2, 1, str.tostring(pe_iv_0, "#.##"), bgcolor=color.black, text_color=pe_iv_0 > 0 ? #FF1744 : color.gray, text_size=sz)
-        table.cell(dashTable, 3, 1, fresh_ce_buy_signal ? "CE BUY" : (fresh_pe_buy_signal ? "PE BUY" : "NO IV"), bgcolor=fresh_ce_buy_signal ? #1B5E20 : (fresh_pe_buy_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
+        table.cell(dashTable, 3, 1, fresh_ce_buy_signal ? "BUY CE" : (fresh_pe_buy_signal ? "BUY PE / SELL" : "NO ALERT"), bgcolor=fresh_ce_buy_signal ? #1B5E20 : (fresh_pe_buy_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
 
-        table.cell(dashTable, 0, 2, "Time Value Crossover", bgcolor=#212121, text_color=color.white, text_size=sz)
+        // Row 2: Time Value Alert
+        table.cell(dashTable, 0, 2, "2. Time Value (5A)", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 2, str.tostring(ce_tv_0, "#.##"), bgcolor=color.black, text_color=color.white, text_size=sz)
         table.cell(dashTable, 2, 2, str.tostring(pe_tv_0, "#.##"), bgcolor=color.black, text_color=color.white, text_size=sz)
-        table.cell(dashTable, 3, 2, tv_bc_signal ? "BC BUY" : (tv_bp_signal ? "BP BUY" : "WAIT"), bgcolor=tv_bc_signal ? #1B5E20 : (tv_bp_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
+        table.cell(dashTable, 3, 2, tv_bc_signal ? "BUY CE (BC)" : (tv_bp_signal ? "BUY PE / SELL (BP)" : "WAIT"), bgcolor=tv_bc_signal ? #1B5E20 : (tv_bp_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
 
-        table.cell(dashTable, 0, 3, "Basket Avg Crossover", bgcolor=#212121, text_color=color.white, text_size=sz)
+        // Row 3: Basket Averages
+        table.cell(dashTable, 0, 3, "3. Basket Averages (6)", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 3, str.tostring(ceAvgCur, "#.##") + " (" + (ceAvgChg >= 0 ? "+" : "") + str.tostring(ceAvgChg, "#.##") + ")", bgcolor=color.black, text_color=ceAvgChg >= 0 ? #00E676 : #FF5252, text_size=sz)
         table.cell(dashTable, 2, 3, str.tostring(peAvgCur, "#.##") + " (" + (peAvgChg >= 0 ? "+" : "") + str.tostring(peAvgChg, "#.##") + ")", bgcolor=color.black, text_color=peAvgChg >= 0 ? #00E676 : #FF5252, text_size=sz)
-        table.cell(dashTable, 3, 3, basket_ce_buy ? "CE CROSS" : (basket_pe_buy ? "PE CROSS" : "FLAT"), bgcolor=basket_ce_buy ? #1B5E20 : (basket_pe_buy ? #880E4F : color.black), text_color=color.white, text_size=sz)
+        table.cell(dashTable, 3, 3, basket_ce_buy ? "BUY CE" : (basket_pe_buy ? "BUY PE / SELL" : "FLAT"), bgcolor=basket_ce_buy ? #1B5E20 : (basket_pe_buy ? #880E4F : color.black), text_color=color.white, text_size=sz)
 
-        table.cell(dashTable, 0, 4, "BEP Level Touch", bgcolor=#212121, text_color=color.white, text_size=sz)
+        // Row 4: BEP Touch Status
+        table.cell(dashTable, 0, 4, "4. BEP Level Touch", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 4, "ATM Pivot: " + str.tostring(atm_bep_pivot, "#.##"), bgcolor=color.black, text_color=color.aqua, text_size=sz)
         table.cell(dashTable, 2, 4, "OTM/ITM BEP", bgcolor=color.black, text_color=color.silver, text_size=sz)
-        table.cell(dashTable, 3, 4, bep_touch_alert ? "AT BEP!" : "CLEAR", bgcolor=bep_touch_alert ? #F57F17 : color.black, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 3, 4, bep_touch_alert ? (close >= open ? "BUY CE (BEP)" : "BUY PE / SELL (BEP)") : "CLEAR", bgcolor=bep_touch_alert ? #F57F17 : color.black, text_color=color.white, text_size=sz)
 
-        table.cell(dashTable, 0, 5, "Confluence State", bgcolor=#37474F, text_color=color.white, text_size=sz)
+        // Row 5: Confluence State
+        table.cell(dashTable, 0, 5, "5. Strong Confluence", bgcolor=#37474F, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 5, "CE Triggers: " + str.tostring(ce_confluence_count), bgcolor=#37474F, text_color=#76FF03, text_size=sz)
         table.cell(dashTable, 2, 5, "PE Triggers: " + str.tostring(pe_confluence_count), bgcolor=#37474F, text_color=#FF1744, text_size=sz)
-        table.cell(dashTable, 3, 5, strong_bc_signal ? "STRONG BC" : (strong_bp_signal ? "STRONG BP" : "NEUTRAL"), bgcolor=strong_bc_signal ? #76FF03 : (strong_bp_signal ? #FF1744 : color.black), text_color=strong_bc_signal ? color.black : color.white, text_size=sz)
+        table.cell(dashTable, 3, 5, strong_bc_signal ? "STRONG BUY CE" : (strong_bp_signal ? "STRONG BUY PE / SELL" : "NEUTRAL"), bgcolor=strong_bc_signal ? #76FF03 : (strong_bp_signal ? #FF1744 : color.black), text_color=strong_bc_signal ? color.black : color.white, text_size=sz)
 
-// Table 2: Master 5-Day Strategy Performance Table
+// Table 2: Master 5-Day Strategy Performance Table (KEPT SEPARATELY)
 var table perfTable = table.new(f_get_table_pos(perfTablePosInput), 7, 7, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 f_fill_perf_row(table tbl, int r, string st_name, int t_count, int w_count, int l_count, float peak_pts, float max_dd_pts, string sz_str) =>
@@ -551,7 +562,7 @@ if barstate.islast
         table.delete(perfTable)
     else
         string psz = f_get_table_text_size(perfTableSizeInput)
-        table.cell(perfTable, 0, 0, "5-Day Strategy Matrix", bgcolor=#006064, text_color=color.aqua, text_size=psz)
+        table.cell(perfTable, 0, 0, "Master 5-Day Strategy Matrix", bgcolor=#006064, text_color=color.aqua, text_size=psz)
         table.cell(perfTable, 1, 0, "Trades", bgcolor=#006064, text_color=color.white, text_size=psz)
         table.cell(perfTable, 2, 0, "Win / Loss", bgcolor=#006064, text_color=color.white, text_size=psz)
         table.cell(perfTable, 3, 0, "Win Rate %", bgcolor=#006064, text_color=color.white, text_size=psz)
