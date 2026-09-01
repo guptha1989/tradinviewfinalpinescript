@@ -32,6 +32,7 @@ underlyingInput      = input.enum(UnderlyingAsset.auto, "Underlying Asset", grou
 optionTypeInput      = input.enum(OptionType.auto, "Option Type", group=G_INST)
 spotTickerOverride   = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group=G_INST)
 strikeOverride       = input.float(0.0, "Strike Price Override", minval=0.0, group=G_INST)
+offsetChoiceInput    = input.string("50 Points", "Strike Offset Points", options=["Auto (Step)", "5 Points", "10 Points", "15 Points", "20 Points", "25 Points", "40 Points", "50 Points", "100 Points", "150 Points", "200 Points"], group=G_INST, tooltip="Choose point distance offset for ITM / OTM strikes (e.g. 50, 100, 150, 200).")
 
 // --- [2] Strategy Enable / Disable Controls ---
 G_STRAT              = "[2] Strategy Enable / Disable Controls"
@@ -175,6 +176,19 @@ float stepVal = switch actualUnderlying
     UnderlyingAsset.gold      => 100.0
     UnderlyingAsset.stock     => f_auto_detect_step(not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
 
+float offsetPts = switch offsetChoiceInput
+    "5 Points"   => 5.0
+    "10 Points"  => 10.0
+    "15 Points"  => 15.0
+    "20 Points"  => 20.0
+    "25 Points"  => 25.0
+    "40 Points"  => 40.0
+    "50 Points"  => 50.0
+    "100 Points" => 100.0
+    "150 Points" => 150.0
+    "200 Points" => 200.0
+    => stepVal
+
 var float baseCenterStrike = na
 if barstate.isfirst or na(baseCenterStrike)
     float refPrice = strikeOverride > 0.0 ? strikeOverride : (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
@@ -210,17 +224,17 @@ f_build_option_symbol(float target_strike, bool target_is_ce) =>
 f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
 f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
 
-// 9 Strikes centered strictly around Day Open ATM
+// 9 Strikes centered around Day Open ATM based on Strike Offset Points
 float k_0  = baseStrike
-float k_p1 = baseStrike + 1.0 * stepVal
-float k_p2 = baseStrike + 2.0 * stepVal
-float k_p3 = baseStrike + 3.0 * stepVal
-float k_p4 = baseStrike + 4.0 * stepVal
+float k_p1 = baseStrike + 1.0 * offsetPts
+float k_p2 = baseStrike + 2.0 * offsetPts
+float k_p3 = baseStrike + 3.0 * offsetPts
+float k_p4 = baseStrike + 4.0 * offsetPts
 
-float k_m1 = baseStrike - 1.0 * stepVal
-float k_m2 = baseStrike - 2.0 * stepVal
-float k_m3 = baseStrike - 3.0 * stepVal
-float k_m4 = baseStrike - 4.0 * stepVal
+float k_m1 = baseStrike - 1.0 * offsetPts
+float k_m2 = baseStrike - 2.0 * offsetPts
+float k_m3 = baseStrike - 3.0 * offsetPts
+float k_m4 = baseStrike - 4.0 * offsetPts
 
 // ==========================================
 // DATA FETCHING FOR STRIKES
@@ -289,7 +303,7 @@ float itm_ce_bep    = k_m1 + ce_o_m1
 float itm_pe_bep    = k_p1 - pe_o_p1
 
 f_near_bep(float level) =>
-    not na(level) and (math.abs(close - level) <= (stepVal * 0.1) or ta.cross(close, level))
+    not na(level) and (math.abs(close - level) <= (offsetPts * 0.1) or ta.cross(close, level))
 
 bool bep_touch_alert = f_near_bep(atm_bep_pivot) or f_near_bep(atm_ce_bep) or f_near_bep(atm_pe_bep) or f_near_bep(otm_ce_bep) or f_near_bep(otm_pe_bep) or f_near_bep(itm_ce_bep) or f_near_bep(itm_pe_bep)
 
