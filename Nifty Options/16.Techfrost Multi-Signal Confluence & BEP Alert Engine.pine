@@ -18,84 +18,33 @@ enum OptionType
     ce   = "Call (CE)"
     pe   = "Put (PE)"
 
-enum StepOverrideChoice
-    auto    = "Auto"
-    step1   = "1"
-    step2_5 = "2.5"
-    step5   = "5"
-    step10  = "10"
-    step20  = "20"
-    step25  = "25"
-    step50  = "50"
-    step100 = "100"
-    step200 = "200"
-    step500 = "500"
-
 // --- [1] Instrument & Strike Settings ---
 G_INST               = "[1] Instrument & Strike Settings"
 underlyingInput      = input.enum(UnderlyingAsset.auto, "Underlying Asset", group=G_INST)
 optionTypeInput      = input.enum(OptionType.auto, "Option Type", group=G_INST)
-numStrikesInput      = input.int(4, "Number of ITM/OTM Strikes Each Side", minval=1, maxval=4, group=G_INST,
-  tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
 spotTickerOverride   = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group=G_INST)
 strikeOverride       = input.float(0.0, "Strike Price Override", minval=0.0, group=G_INST)
-strikeStepInput      = input.enum(StepOverrideChoice.auto, "Strike Step Override", group=G_INST)
-calc_basis           = input.string("Day Open Price", "Calculation Basis", options=["Day Open Price", "Previous Day Close", "First 5 Min Close"], group=G_INST)
 
-// --- [2] Trigger 1: Fresh Intrinsic Value Settings ---
-G_FRESH_IV           = "[2] Trigger 1: Fresh Intrinsic Value Creation"
-enableFreshIVAlerts  = input.bool(true, "Enable Fresh Intrinsic Value Creation Alerts", group=G_FRESH_IV, tooltip="Alerts when an Option contract gains fresh Intrinsic Value (> 0 from 0).")
-showFreshIVShapes    = input.bool(true, "Show Fresh Intrinsic Value Signals on Chart", group=G_FRESH_IV)
+// --- [2] Strategy Enable / Disable Controls ---
+G_STRAT              = "[2] Strategy Enable / Disable Controls"
+enableFreshIV        = input.bool(true, "Enable Strategy 1: Fresh Intrinsic Value", group=G_STRAT)
+enableTV             = input.bool(true, "Enable Strategy 2: Time Value (from 5A)", group=G_STRAT)
+enableBasket         = input.bool(true, "Enable Strategy 3: Basket Averages (from 6)", group=G_STRAT)
+enableBEP            = input.bool(true, "Enable Strategy 4: BEP Level Touch", group=G_STRAT)
+enableConfluence     = input.bool(true, "Enable Strategy 5: Strong Confluence", group=G_STRAT)
 
-// --- [3] Trigger 2: Time Value Alert Settings (from 5A) ---
-G_TV                 = "[3] Trigger 2: Time Value Alert Engine (from 5A)"
-enableTVAlerts       = input.bool(true, "Enable Time Value Crossover Alerts", group=G_TV)
-signalFilterInput    = input.string("Alternate Signals Only (Wait for Opposite)", "Signal Filter Mode", options=["Alternate Signals Only (Wait for Opposite)", "Initial Trigger Only", "All Candles (Raw)"], group=G_TV, tooltip="Alternate Signals Only enforces strict alternation: once Buy CE triggers, it waits for Buy PE before triggering Buy CE again.")
-showTVShapes         = input.bool(true, "Show Time Value Signal Shapes (BC / BP)", group=G_TV)
+// --- [3] Master Dashboard & Performance Tables Controls ---
+G_TABLES             = "[3] Master Tables & Sizing Controls"
+showLiveTableInput   = input.bool(true, "Show Live Signal Status Table", group=G_TABLES)
+liveTablePosInput    = input.string("Top Right", "Live Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLES)
+liveTableSizeInput   = input.string("Small", "Live Table Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLES)
 
-// --- [4] Trigger 3: Basket Averages Crossover Settings (from 6) ---
-G_BASKET             = "[4] Trigger 3: Basket Averages Crossover & Positive Change"
-enableBasketAlerts   = input.bool(true, "Enable Basket Avg Crossover & Positive Change Alerts", group=G_BASKET, tooltip="Alerts when CE/PE Current Average crosses above Day Open Average AND Change is positive (> 0).")
-showBasketShapes     = input.bool(true, "Show Basket Crossover Signals on Chart", group=G_BASKET)
+showPerfTableInput   = input.bool(true, "Show 5-Day Strategy Performance Table", group=G_TABLES)
+perfTablePosInput    = input.string("Bottom Left", "Performance Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLES)
+perfTableSizeInput   = input.string("Small", "Performance Table Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLES)
 
-// --- [5] Trigger 4: BEP Proximity / Level Touch Settings ---
-G_BEP                = "[5] Trigger 4: BEP Level Proximity / Touch Alerts"
-enableBEPAlerts      = input.bool(true, "Enable Price at BEP Level Alerts", group=G_BEP, tooltip="Alerts whenever price reaches or touches ATM, OTM, or ITM BEP levels.")
-bepTolerancePts      = input.float(5.0, "BEP Touch Tolerance (Points)", minval=0.5, step=0.5, group=G_BEP, tooltip="Point distance tolerance to trigger BEP touch alert.")
-showBEPLines         = input.bool(true, "Show BEP Reference Lines on Chart", group=G_BEP)
-
-// --- [6] Trigger 5: Strong Confluence Signal Engine ---
-G_CONFLUENCE         = "[6] Trigger 5: Strong Confluence Engine (Strong BC / Strong BP)"
-enableConfluence     = input.bool(true, "Enable Strong Confluence Signal Engine", group=G_CONFLUENCE)
-confluenceMode       = input.string("2 or More Triggers Aligned", "Confluence Required Mode", options=["2 or More Triggers Aligned", "3 or More Triggers Aligned"], group=G_CONFLUENCE)
-showStrongShapes     = input.bool(true, "Show Strong BC & Strong BP Signals on Chart", group=G_CONFLUENCE)
-
-// --- [7] Visual Styling & Candle Protection ---
-G_STYLE              = "[7] Visual Styling & Candle Protection"
-colorBC              = input.color(#00E676, "Buy CE (BC) Arrow Color", group=G_STYLE)
-colorBP              = input.color(#FF1744, "Buy PE (BP) Arrow Color", group=G_STYLE)
-colorStrongBC        = input.color(#76FF03, "Strong Buy CE (Strong BC) Color", group=G_STYLE)
-colorStrongBP        = input.color(#FF1744, "Strong Buy PE (Strong BP) Color", group=G_STYLE)
-colorSignalTextColor = input.color(color.white, "Signal Text Color", group=G_STYLE)
-
-colorATMBEP          = input.color(color.aqua, "ATM BEP Line Color", group=G_STYLE)
-colorATMPivot        = input.color(#FFEE58, "ATM Pivot Line Color", group=G_STYLE)
-colorOTMBEP          = input.color(#FF5252, "OTM BEP Line Color", group=G_STYLE)
-colorITMBEP          = input.color(#00E676, "ITM BEP Line Color", group=G_STYLE)
-
-// --- [8] Live Signal & BEP Dashboard Settings ---
-G_TABLE              = "[8] Dashboard Settings"
-showTableInput       = input.bool(true, "Show Signal & BEP Status Dashboard Table", group=G_TABLE)
-tablePosInput        = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLE)
-tableTextSizeInput   = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLE)
-
-// --- [9] 5-Day Strategy Performance & Risk Analytics Table ---
-G_PERF               = "[9] 5-Day Strategy Performance & Risk Analytics Table"
-showPerfTableInput   = input.bool(true, "Show 5-Day Strategy Performance Table", group=G_PERF, tooltip="Displays Win/Loss count, Win Rate %, Max Swing Points captured, Max Drawdown SL points, and Est. Profit.")
-perfTablePosInput    = input.string("Bottom Left", "Performance Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_PERF)
-targetPtsInput       = input.float(20.0, "Target Points for Win Definition", minval=1.0, step=1.0, group=G_PERF, tooltip="Minimum points captured in same swing to count trade as WIN.")
-stoplossPtsInput     = input.float(10.0, "Stop Loss Points for Loss Definition", minval=1.0, step=1.0, group=G_PERF, tooltip="Max adverse points below entry to count trade as LOSS.")
-perfTextSizeInput    = input.string("Small", "Performance Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_PERF)
+targetPtsInput       = input.float(20.0, "Target Points for Win Definition", minval=1.0, step=1.0, group=G_TABLES)
+stoplossPtsInput     = input.float(10.0, "Stop Loss Points for Loss Definition", minval=1.0, step=1.0, group=G_TABLES)
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -204,25 +153,12 @@ f_auto_detect_step(float ref_p) =>
         s_res := 50.0
     s_res
 
-float stepVal = 50.0
-switch strikeStepInput
-    StepOverrideChoice.step1   => stepVal := 1.0
-    StepOverrideChoice.step2_5 => stepVal := 2.5
-    StepOverrideChoice.step5   => stepVal := 5.0
-    StepOverrideChoice.step10  => stepVal := 10.0
-    StepOverrideChoice.step20  => stepVal := 20.0
-    StepOverrideChoice.step25  => stepVal := 25.0
-    StepOverrideChoice.step50  => stepVal := 50.0
-    StepOverrideChoice.step100 => stepVal := 100.0
-    StepOverrideChoice.step200 => stepVal := 200.0
-    StepOverrideChoice.step500 => stepVal := 500.0
-    =>
-        switch actualUnderlying
-            UnderlyingAsset.banknifty => stepVal := 100.0
-            UnderlyingAsset.nifty     => stepVal := 50.0
-            UnderlyingAsset.crudeoil  => stepVal := 50.0
-            UnderlyingAsset.gold      => stepVal := 100.0
-            UnderlyingAsset.stock     => stepVal := f_auto_detect_step(not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
+float stepVal = switch actualUnderlying
+    UnderlyingAsset.banknifty => 100.0
+    UnderlyingAsset.nifty     => 50.0
+    UnderlyingAsset.crudeoil  => 50.0
+    UnderlyingAsset.gold      => 100.0
+    UnderlyingAsset.stock     => f_auto_detect_step(not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
 
 var float baseCenterStrike = na
 if barstate.isfirst or na(baseCenterStrike)
@@ -320,7 +256,7 @@ float ce_o_m3 = f_get_open_val(ce_c_m3), float pe_o_m3 = f_get_open_val(pe_c_m3)
 float ce_o_m4 = f_get_open_val(ce_c_m4), float pe_o_m4 = f_get_open_val(pe_c_m4)
 
 // ==========================================
-// TRIGGER 1: FRESH INTRINSIC VALUE CREATION
+// STRATEGY 1: FRESH INTRINSIC VALUE CREATION
 // ==========================================
 
 float spotLTP = close
@@ -336,22 +272,20 @@ f_calc_iv_tv(float st_val, float ce_ltp, float pe_ltp) =>
 [ce_iv_otm, ce_tv_otm, pe_iv_otm, pe_tv_otm] = f_calc_iv_tv(k_p1, ce_c_p1, pe_c_m1)
 [ce_iv_itm, ce_tv_itm, pe_iv_itm, pe_tv_itm] = f_calc_iv_tv(k_m1, ce_c_m1, pe_c_p1)
 
-// Detect fresh Intrinsic Value creation (0 to > 0 transition)
-bool fresh_ce_iv = enableFreshIVAlerts and (ce_iv_0 > 0 and (na(ce_iv_0[1]) or ce_iv_0[1] == 0))
-bool fresh_pe_iv = enableFreshIVAlerts and (pe_iv_0 > 0 and (na(pe_iv_0[1]) or pe_iv_0[1] == 0))
+bool fresh_ce_iv = enableFreshIV and (ce_iv_0 > 0 and (na(ce_iv_0[1]) or ce_iv_0[1] == 0))
+bool fresh_pe_iv = enableFreshIV and (pe_iv_0 > 0 and (na(pe_iv_0[1]) or pe_iv_0[1] == 0))
 
-// Rule: If CE gets fresh Intrinsic Value -> CE Buy; If PE gets fresh Intrinsic Value -> PE Buy
 bool fresh_ce_buy_signal = fresh_ce_iv
 bool fresh_pe_buy_signal = fresh_pe_iv
 
-plotshape(showFreshIVShapes and fresh_ce_buy_signal, title="Fresh IV Call Buy", style=shape.triangleup, location=location.belowbar, color=colorBC, textcolor=colorSignalTextColor, size=size.tiny, text="Fresh IV CE")
-plotshape(showFreshIVShapes and fresh_pe_buy_signal, title="Fresh IV Put Buy", style=shape.triangledown, location=location.abovebar, color=colorBP, textcolor=colorSignalTextColor, size=size.tiny, text="Fresh IV PE")
+plotshape(enableFreshIV and fresh_ce_buy_signal, title="Fresh IV Call Buy", style=shape.triangleup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.tiny, text="Fresh IV CE")
+plotshape(enableFreshIV and fresh_pe_buy_signal, title="Fresh IV Put Buy", style=shape.triangledown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.tiny, text="Fresh IV PE")
 
 alertcondition(fresh_ce_buy_signal, title="Fresh Intrinsic CE Buy Alert", message="FRESH IV ALERT: Call Option gained fresh Intrinsic Value on {{ticker}}!")
 alertcondition(fresh_pe_buy_signal, title="Fresh Intrinsic PE Buy Alert", message="FRESH IV ALERT: Put Option gained fresh Intrinsic Value on {{ticker}}!")
 
 // ==========================================
-// TRIGGER 2: TIME VALUE ALERT SETUP (FROM 5A)
+// STRATEGY 2: TIME VALUE ALERT SETUP (FROM 5A)
 // ==========================================
 
 float otm_avg_tv_rt = (ce_tv_otm + pe_tv_otm) / 2.0
@@ -379,21 +313,11 @@ bool itm_bp_signal = (ta.crossover(pe_c_p1, itm_avg_tv_rt) and itm_ce_was_below)
 bool raw_bc_signal = otm_bc_signal or itm_bc_signal
 bool raw_bp_signal = otm_bp_signal or itm_bp_signal
 
-bool init_bc_signal = raw_bc_signal and not raw_bc_signal[1]
-bool init_bp_signal = raw_bp_signal and not raw_bp_signal[1]
-
 var int signal_state_itv = 0
-
 bool tv_bc_signal = false
 bool tv_bp_signal = false
 
-if signalFilterInput == "All Candles (Raw)"
-    tv_bc_signal := raw_bc_signal
-    tv_bp_signal := raw_bp_signal
-else if signalFilterInput == "Initial Trigger Only"
-    tv_bc_signal := init_bc_signal
-    tv_bp_signal := init_bp_signal
-else // "Alternate Signals Only (Wait for Opposite)"
+if enableTV
     if raw_bc_signal and signal_state_itv != 1
         tv_bc_signal := true
         signal_state_itv := 1
@@ -401,50 +325,25 @@ else // "Alternate Signals Only (Wait for Opposite)"
         tv_bp_signal := true
         signal_state_itv := -1
 
-plotshape(showTVShapes and tv_bc_signal, title="Time Value Buy CE (BC)", style=shape.labelup, location=location.belowbar, color=colorBC, textcolor=colorSignalTextColor, size=size.small, text="BC")
-plotshape(showTVShapes and tv_bp_signal, title="Time Value Buy PE (BP)", style=shape.labeldown, location=location.abovebar, color=colorBP, textcolor=colorSignalTextColor, size=size.small, text="BP")
+plotshape(enableTV and tv_bc_signal, title="Time Value Buy CE (BC)", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BC")
+plotshape(enableTV and tv_bp_signal, title="Time Value Buy PE (BP)", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="BP")
 
 alertcondition(tv_bc_signal, title="Time Value Buy CE (BC) Alert", message="TV BC ALERT: Time Value Buy CE condition triggered on {{ticker}}!")
 alertcondition(tv_bp_signal, title="Time Value Buy PE (BP) Alert", message="TV BP ALERT: Time Value Buy PE condition triggered on {{ticker}}!")
 
 // ==========================================
-// TRIGGER 3: BASKET AVERAGES CROSSOVER & POSITIVE CHANGE
+// STRATEGY 3: BASKET AVERAGES CROSSOVER
 // ==========================================
 
-float sum_ce_open = nz(ce_o_0)
-float sum_pe_open = nz(pe_o_0)
-float sum_ce_cur  = nz(ce_c_0)
-float sum_pe_cur  = nz(pe_c_0)
-int total_count   = 1 + 2 * numStrikesInput
+float sum_ce_open = nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1) + nz(ce_o_p2) + nz(ce_o_m2) + nz(ce_o_p3) + nz(ce_o_m3) + nz(ce_o_p4) + nz(ce_o_m4)
+float sum_pe_open = nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2) + nz(pe_o_p3) + nz(pe_o_m3) + nz(pe_o_p4) + nz(pe_o_m4)
+float sum_ce_cur  = nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3) + nz(ce_c_p4) + nz(ce_c_m4)
+float sum_pe_cur  = nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3) + nz(pe_c_p4) + nz(pe_c_m4)
 
-if numStrikesInput >= 1
-    sum_ce_open += nz(ce_o_p1) + nz(ce_o_m1)
-    sum_pe_open += nz(pe_o_p1) + nz(pe_o_m1)
-    sum_ce_cur  += nz(ce_c_p1) + nz(ce_c_m1)
-    sum_pe_cur  += nz(pe_c_p1) + nz(pe_c_m1)
-
-if numStrikesInput >= 2
-    sum_ce_open += nz(ce_o_p2) + nz(ce_o_m2)
-    sum_pe_open += nz(pe_o_p2) + nz(pe_o_m2)
-    sum_ce_cur  += nz(ce_c_p2) + nz(ce_c_m2)
-    sum_pe_cur  += nz(pe_c_p2) + nz(pe_c_m2)
-
-if numStrikesInput >= 3
-    sum_ce_open += nz(ce_o_p3) + nz(ce_o_m3)
-    sum_pe_open += nz(pe_o_p3) + nz(pe_o_m3)
-    sum_ce_cur  += nz(ce_c_p3) + nz(ce_c_m3)
-    sum_pe_cur  += nz(pe_c_p3) + nz(pe_c_m3)
-
-if numStrikesInput >= 4
-    sum_ce_open += nz(ce_o_p4) + nz(ce_o_m4)
-    sum_pe_open += nz(pe_o_p4) + nz(pe_o_m4)
-    sum_ce_cur  += nz(ce_c_p4) + nz(ce_c_m4)
-    sum_pe_cur  += nz(pe_c_p4) + nz(pe_c_m4)
-
-float ceAvgOpen = sum_ce_open / float(total_count)
-float peAvgOpen = sum_pe_open / float(total_count)
-float ceAvgCur  = sum_ce_cur  / float(total_count)
-float peAvgCur  = sum_pe_cur  / float(total_count)
+float ceAvgOpen = sum_ce_open / 9.0
+float peAvgOpen = sum_pe_open / 9.0
+float ceAvgCur  = sum_ce_cur  / 9.0
+float peAvgCur  = sum_pe_cur  / 9.0
 
 float ceAvgChg = ceAvgCur - ceAvgOpen
 float peAvgChg = peAvgCur - peAvgOpen
@@ -452,17 +351,17 @@ float peAvgChg = peAvgCur - peAvgOpen
 bool ce_cross_above = ta.crossover(ceAvgCur, ceAvgOpen) or (ceAvgCur > ceAvgOpen and ceAvgCur[1] <= ceAvgOpen[1])
 bool pe_cross_above = ta.crossover(peAvgCur, peAvgOpen) or (peAvgCur > peAvgOpen and peAvgCur[1] <= peAvgOpen[1])
 
-bool basket_ce_buy = enableBasketAlerts and ce_cross_above and (ceAvgChg > 0)
-bool basket_pe_buy = enableBasketAlerts and pe_cross_above and (peAvgChg > 0)
+bool basket_ce_buy = enableBasket and ce_cross_above and (ceAvgChg > 0)
+bool basket_pe_buy = enableBasket and pe_cross_above and (peAvgChg > 0)
 
-plotshape(showBasketShapes and basket_ce_buy, title="Basket Avg Call Buy", style=shape.circle, location=location.belowbar, color=colorBC, textcolor=colorSignalTextColor, size=size.tiny, text="Basket CE")
-plotshape(showBasketShapes and basket_pe_buy, title="Basket Avg Put Buy", style=shape.circle, location=location.abovebar, color=colorBP, textcolor=colorSignalTextColor, size=size.tiny, text="Basket PE")
+plotshape(enableBasket and basket_ce_buy, title="Basket Avg Call Buy", style=shape.circle, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.tiny, text="Basket CE")
+plotshape(enableBasket and basket_pe_buy, title="Basket Avg Put Buy", style=shape.circle, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.tiny, text="Basket PE")
 
 alertcondition(basket_ce_buy, title="Basket Buy CE Alert", message="BASKET CE ALERT: CE Current Avg crossed above Day Open Avg & Change is positive on {{ticker}}!")
 alertcondition(basket_pe_buy, title="Basket Buy PE Alert", message="BASKET PE ALERT: PE Current Avg crossed above Day Open Avg & Change is positive on {{ticker}}!")
 
 // ==========================================
-// TRIGGER 4: BEP PROXIMITY / TOUCH ALERTS
+// STRATEGY 4: BEP PROXIMITY / TOUCH ALERTS
 // ==========================================
 
 float atm_ce_bep    = baseStrike + ce_o_0
@@ -476,37 +375,30 @@ float itm_ce_bep    = k_m1 + ce_o_m1
 float itm_pe_bep    = k_p1 - pe_o_p1
 
 f_near_bep(float level) =>
-    enableBEPAlerts and not na(level) and (math.abs(close - level) <= bepTolerancePts or ta.cross(close, level))
+    enableBEP and not na(level) and (math.abs(close - level) <= (stepVal * 0.1) or ta.cross(close, level))
 
-bool near_atm_bep = f_near_bep(atm_bep_pivot) or f_near_bep(atm_ce_bep) or f_near_bep(atm_pe_bep)
-bool near_otm_bep = f_near_bep(otm_ce_bep) or f_near_bep(otm_pe_bep)
-bool near_itm_bep = f_near_bep(itm_ce_bep) or f_near_bep(itm_pe_bep)
+bool bep_touch_alert = f_near_bep(atm_bep_pivot) or f_near_bep(atm_ce_bep) or f_near_bep(atm_pe_bep) or f_near_bep(otm_ce_bep) or f_near_bep(otm_pe_bep) or f_near_bep(itm_ce_bep) or f_near_bep(itm_pe_bep)
 
-bool bep_touch_alert = near_atm_bep or near_otm_bep or near_itm_bep
-
-plot(showBEPLines ? atm_bep_pivot : na, title="ATM BEP Pivot Line", color=colorATMPivot, linewidth=2)
-plot(showBEPLines ? otm_ce_bep : na,    title="OTM Call Upper BEP", color=colorOTMBEP,  linewidth=1)
-plot(showBEPLines ? otm_pe_bep : na,    title="OTM Put Lower BEP", color=colorOTMBEP,  linewidth=1)
-plot(showBEPLines ? itm_ce_bep : na,    title="ITM Call Upper BEP", color=colorITMBEP,  linewidth=1)
-plot(showBEPLines ? itm_pe_bep : na,    title="ITM Put Lower BEP", color=colorITMBEP,  linewidth=1)
+plot(enableBEP ? atm_bep_pivot : na, title="ATM BEP Pivot Line", color=#FFEE58, linewidth=2)
+plot(enableBEP ? otm_ce_bep : na,    title="OTM Call Upper BEP", color=#FF5252, linewidth=1)
+plot(enableBEP ? otm_pe_bep : na,    title="OTM Put Lower BEP",  color=#FF5252, linewidth=1)
+plot(enableBEP ? itm_ce_bep : na,    title="ITM Call Upper BEP", color=#00E676, linewidth=1)
+plot(enableBEP ? itm_pe_bep : na,    title="ITM Put Lower BEP",  color=#00E676, linewidth=1)
 
 alertcondition(bep_touch_alert, title="Price at BEP Level Alert", message="BEP ALERT: Price reached an active BEP Level (ATM/OTM/ITM) on {{ticker}}!")
 
 // ==========================================
-// TRIGGER 5: CONFLUENCE SIGNAL ENGINE (STRONG BC & STRONG BP)
+// STRATEGY 5: STRONG CONFLUENCE ENGINE (STRONG BC & STRONG BP)
 // ==========================================
 
 int ce_confluence_count = (fresh_ce_buy_signal ? 1 : 0) + (tv_bc_signal ? 1 : 0) + (basket_ce_buy ? 1 : 0) + (bep_touch_alert ? 1 : 0)
 int pe_confluence_count = (fresh_pe_buy_signal ? 1 : 0) + (tv_bp_signal ? 1 : 0) + (basket_pe_buy ? 1 : 0) + (bep_touch_alert ? 1 : 0)
 
-int min_required = confluenceMode == "3 or More Triggers Aligned" ? 3 : 2
+bool strong_bc_signal = enableConfluence and (ce_confluence_count >= 2)
+bool strong_bp_signal = enableConfluence and (pe_confluence_count >= 2)
 
-bool strong_bc_signal = enableConfluence and (ce_confluence_count >= min_required)
-bool strong_bp_signal = enableConfluence and (pe_confluence_count >= min_required)
-
-// Candle protection: Distinct positioning using location & clear styling so candles remain crisp
-plotshape(showStrongShapes and strong_bc_signal, title="Strong Buy CE (Strong BC)", style=shape.labelup, location=location.belowbar, color=colorStrongBC, textcolor=color.black, size=size.normal, text="STRONG BC")
-plotshape(showStrongShapes and strong_bp_signal, title="Strong Buy PE (Strong BP)", style=shape.labeldown, location=location.abovebar, color=colorStrongBP, textcolor=color.white, size=size.normal, text="STRONG BP")
+plotshape(enableConfluence and strong_bc_signal, title="Strong Buy CE (Strong BC)", style=shape.labelup, location=location.belowbar, color=#76FF03, textcolor=color.black, size=size.normal, text="STRONG BC")
+plotshape(enableConfluence and strong_bp_signal, title="Strong Buy PE (Strong BP)", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.normal, text="STRONG BP")
 
 alertcondition(strong_bc_signal, title="Strong Buy CE (Strong BC) Alert", message="STRONG BC CONFLUENCE: Multiple Buy CE triggers aligned on {{ticker}}!")
 alertcondition(strong_bp_signal, title="Strong Buy PE (Strong BP) Alert", message="STRONG BP CONFLUENCE: Multiple Buy PE triggers aligned on {{ticker}}!")
@@ -515,8 +407,6 @@ alertcondition(strong_bp_signal, title="Strong Buy PE (Strong BP) Alert", messag
 // 5-DAY STRATEGY PERFORMANCE & SWING RISK ANALYTICS ENGINE
 // ==========================================
 
-bool in_5d_window = true
-
 f_eval_strategy_swing(bool sig_ce, bool sig_pe) =>
     var int trades = 0, var int wins = 0, var int losses = 0
     var float total_peak_pts = 0.0, var float total_max_dd = 0.0
@@ -524,57 +414,54 @@ f_eval_strategy_swing(bool sig_ce, bool sig_pe) =>
     var bool active_ce = false, var bool active_pe = false
     var float swing_peak = 0.0, var float swing_dd = 0.0
 
-    if in_5d_window
-        // Exit or evaluate existing active trade swing
-        if active_ce
-            float cur_gain = high - entry_price
-            float cur_loss = entry_price - low
-            if cur_gain > swing_peak
-                swing_peak := cur_gain
-            if cur_loss > swing_dd
-                swing_dd := cur_loss
+    if active_ce
+        float cur_gain = high - entry_price
+        float cur_loss = entry_price - low
+        if cur_gain > swing_peak
+            swing_peak := cur_gain
+        if cur_loss > swing_dd
+            swing_dd := cur_loss
 
-            if sig_pe or ta.change(time("D")) != 0 or barstate.islast
-                trades += 1
-                if swing_peak >= targetPtsInput
-                    wins += 1
-                if swing_dd >= stoplossPtsInput
-                    losses += 1
-                total_peak_pts += swing_peak
-                total_max_dd   += swing_dd
-                active_ce      := false
+        if sig_pe or ta.change(time("D")) != 0 or barstate.islast
+            trades += 1
+            if swing_peak >= targetPtsInput
+                wins += 1
+            if swing_dd >= stoplossPtsInput
+                losses += 1
+            total_peak_pts += swing_peak
+            total_max_dd   += swing_dd
+            active_ce      := false
 
-        else if active_pe
-            float cur_gain = entry_price - low
-            float cur_loss = high - entry_price
-            if cur_gain > swing_peak
-                swing_peak := cur_gain
-            if cur_loss > swing_dd
-                swing_dd := cur_loss
+    else if active_pe
+        float cur_gain = entry_price - low
+        float cur_loss = high - entry_price
+        if cur_gain > swing_peak
+            swing_peak := cur_gain
+        if cur_loss > swing_dd
+            swing_dd := cur_loss
 
-            if sig_ce or ta.change(time("D")) != 0 or barstate.islast
-                trades += 1
-                if swing_peak >= targetPtsInput
-                    wins += 1
-                if swing_dd >= stoplossPtsInput
-                    losses += 1
-                total_peak_pts += swing_peak
-                total_max_dd   += swing_dd
-                active_pe      := false
+        if sig_ce or ta.change(time("D")) != 0 or barstate.islast
+            trades += 1
+            if swing_peak >= targetPtsInput
+                wins += 1
+            if swing_dd >= stoplossPtsInput
+                losses += 1
+            total_peak_pts += swing_peak
+            total_max_dd   += swing_dd
+            active_pe      := false
 
-        // Trigger new trade entry
-        if sig_ce and not active_ce
-            active_ce   := true
-            active_pe   := false
-            entry_price := close
-            swing_peak  := 0.0
-            swing_dd    := 0.0
-        else if sig_pe and not active_pe
-            active_pe   := true
-            active_ce   := false
-            entry_price := close
-            swing_peak  := 0.0
-            swing_dd    := 0.0
+    if sig_ce and not active_ce
+        active_ce   := true
+        active_pe   := false
+        entry_price := close
+        swing_peak  := 0.0
+        swing_dd    := 0.0
+    else if sig_pe and not active_pe
+        active_pe   := true
+        active_ce   := false
+        entry_price := close
+        swing_peak  := 0.0
+        swing_dd    := 0.0
 
     [trades, wins, losses, total_peak_pts, total_max_dd]
 
@@ -604,14 +491,14 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
-// Table 1: Live Signal Status
-var table dashTable = table.new(f_get_table_pos(tablePosInput), 4, 10, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+// Table 1: Live Signal Status Table
+var table dashTable = table.new(f_get_table_pos(liveTablePosInput), 4, 10, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 if barstate.islast
-    if not showTableInput
+    if not showLiveTableInput
         table.delete(dashTable)
     else
-        string sz = f_get_table_text_size(tableTextSizeInput)
+        string sz = f_get_table_text_size(liveTableSizeInput)
         table.cell(dashTable, 0, 0, "Signal Trigger", bgcolor=#1565C0, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 0, "Call (CE)", bgcolor=#1565C0, text_color=color.white, text_size=sz)
         table.cell(dashTable, 2, 0, "Put (PE)", bgcolor=#1565C0, text_color=color.white, text_size=sz)
@@ -642,7 +529,7 @@ if barstate.islast
         table.cell(dashTable, 2, 5, "PE Triggers: " + str.tostring(pe_confluence_count), bgcolor=#37474F, text_color=#FF1744, text_size=sz)
         table.cell(dashTable, 3, 5, strong_bc_signal ? "STRONG BC" : (strong_bp_signal ? "STRONG BP" : "NEUTRAL"), bgcolor=strong_bc_signal ? #76FF03 : (strong_bp_signal ? #FF1744 : color.black), text_color=strong_bc_signal ? color.black : color.white, text_size=sz)
 
-// Table 2: Master 5-Day Strategy Performance & Risk Analytics Box
+// Table 2: Master 5-Day Strategy Performance Table
 var table perfTable = table.new(f_get_table_pos(perfTablePosInput), 7, 7, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 f_fill_perf_row(table tbl, int r, string st_name, int t_count, int w_count, int l_count, float peak_pts, float max_dd_pts, string sz_str) =>
@@ -663,7 +550,7 @@ if barstate.islast
     if not showPerfTableInput
         table.delete(perfTable)
     else
-        string psz = f_get_table_text_size(perfTextSizeInput)
+        string psz = f_get_table_text_size(perfTableSizeInput)
         table.cell(perfTable, 0, 0, "5-Day Strategy Matrix", bgcolor=#006064, text_color=color.aqua, text_size=psz)
         table.cell(perfTable, 1, 0, "Trades", bgcolor=#006064, text_color=color.white, text_size=psz)
         table.cell(perfTable, 2, 0, "Win / Loss", bgcolor=#006064, text_color=color.white, text_size=psz)
