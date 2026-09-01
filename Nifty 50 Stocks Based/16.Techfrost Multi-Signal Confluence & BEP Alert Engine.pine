@@ -83,11 +83,19 @@ colorATMPivot        = input.color(#FFEE58, "ATM Pivot Line Color", group=G_STYL
 colorOTMBEP          = input.color(#FF5252, "OTM BEP Line Color", group=G_STYLE)
 colorITMBEP          = input.color(#00E676, "ITM BEP Line Color", group=G_STYLE)
 
-// --- [8] Dashboard Settings ---
+// --- [8] Live Signal & BEP Dashboard Settings ---
 G_TABLE              = "[8] Dashboard Settings"
 showTableInput       = input.bool(true, "Show Signal & BEP Status Dashboard Table", group=G_TABLE)
 tablePosInput        = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLE)
 tableTextSizeInput   = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLE)
+
+// --- [9] 5-Day Strategy Performance & Risk Analytics Table ---
+G_PERF               = "[9] 5-Day Strategy Performance & Risk Analytics Table"
+showPerfTableInput   = input.bool(true, "Show 5-Day Strategy Performance Table", group=G_PERF, tooltip="Displays Win/Loss count, Win Rate %, Max Swing Points captured, Max Drawdown SL points, and Est. Profit.")
+perfTablePosInput    = input.string("Bottom Left", "Performance Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_PERF)
+targetPtsInput       = input.float(20.0, "Target Points for Win Definition", minval=1.0, step=1.0, group=G_PERF, tooltip="Minimum points captured in same swing to count trade as WIN.")
+stoplossPtsInput     = input.float(10.0, "Stop Loss Points for Loss Definition", minval=1.0, step=1.0, group=G_PERF, tooltip="Max adverse points below entry to count trade as LOSS.")
+perfTextSizeInput    = input.string("Small", "Performance Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_PERF)
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -504,7 +512,80 @@ alertcondition(strong_bc_signal, title="Strong Buy CE (Strong BC) Alert", messag
 alertcondition(strong_bp_signal, title="Strong Buy PE (Strong BP) Alert", message="STRONG BP CONFLUENCE: Multiple Buy PE triggers aligned on {{ticker}}!")
 
 // ==========================================
-// LIVE SIGNAL & BEP DASHBOARD TABLE
+// 5-DAY STRATEGY PERFORMANCE & SWING RISK ANALYTICS ENGINE
+// ==========================================
+
+bool in_5d_window = true
+
+f_eval_strategy_swing(bool sig_ce, bool sig_pe) =>
+    var int trades = 0, var int wins = 0, var int losses = 0
+    var float total_peak_pts = 0.0, var float total_max_dd = 0.0
+    var float entry_price = na
+    var bool active_ce = false, var bool active_pe = false
+    var float swing_peak = 0.0, var float swing_dd = 0.0
+
+    if in_5d_window
+        // Exit or evaluate existing active trade swing
+        if active_ce
+            float cur_gain = high - entry_price
+            float cur_loss = entry_price - low
+            if cur_gain > swing_peak
+                swing_peak := cur_gain
+            if cur_loss > swing_dd
+                swing_dd := cur_loss
+
+            if sig_pe or ta.change(time("D")) != 0 or barstate.islast
+                trades += 1
+                if swing_peak >= targetPtsInput
+                    wins += 1
+                if swing_dd >= stoplossPtsInput
+                    losses += 1
+                total_peak_pts += swing_peak
+                total_max_dd   += swing_dd
+                active_ce      := false
+
+        else if active_pe
+            float cur_gain = entry_price - low
+            float cur_loss = high - entry_price
+            if cur_gain > swing_peak
+                swing_peak := cur_gain
+            if cur_loss > swing_dd
+                swing_dd := cur_loss
+
+            if sig_ce or ta.change(time("D")) != 0 or barstate.islast
+                trades += 1
+                if swing_peak >= targetPtsInput
+                    wins += 1
+                if swing_dd >= stoplossPtsInput
+                    losses += 1
+                total_peak_pts += swing_peak
+                total_max_dd   += swing_dd
+                active_pe      := false
+
+        // Trigger new trade entry
+        if sig_ce and not active_ce
+            active_ce   := true
+            active_pe   := false
+            entry_price := close
+            swing_peak  := 0.0
+            swing_dd    := 0.0
+        else if sig_pe and not active_pe
+            active_pe   := true
+            active_ce   := false
+            entry_price := close
+            swing_peak  := 0.0
+            swing_dd    := 0.0
+
+    [trades, wins, losses, total_peak_pts, total_max_dd]
+
+[st1_t, st1_w, st1_l, st1_pts, st1_dd] = f_eval_strategy_swing(fresh_ce_buy_signal, fresh_pe_buy_signal)
+[st2_t, st2_w, st2_l, st2_pts, st2_dd] = f_eval_strategy_swing(tv_bc_signal, tv_bp_signal)
+[st3_t, st3_w, st3_l, st3_pts, st3_dd] = f_eval_strategy_swing(basket_ce_buy, basket_pe_buy)
+[st4_t, st4_w, st4_l, st4_pts, st4_dd] = f_eval_strategy_swing(bep_touch_alert and close > open, bep_touch_alert and close < open)
+[st5_t, st5_w, st5_l, st5_pts, st5_dd] = f_eval_strategy_swing(strong_bc_signal, strong_bp_signal)
+
+// ==========================================
+// DASHBOARD TABLES
 // ==========================================
 
 f_get_table_pos(string pos_str) =>
@@ -523,6 +604,7 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
+// Table 1: Live Signal Status
 var table dashTable = table.new(f_get_table_pos(tablePosInput), 4, 10, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 if barstate.islast
@@ -535,32 +617,63 @@ if barstate.islast
         table.cell(dashTable, 2, 0, "Put (PE)", bgcolor=#1565C0, text_color=color.white, text_size=sz)
         table.cell(dashTable, 3, 0, "Status", bgcolor=#1565C0, text_color=color.white, text_size=sz)
 
-        // Row 1: Fresh Intrinsic Value
         table.cell(dashTable, 0, 1, "Fresh Intrinsic Value", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 1, str.tostring(ce_iv_0, "#.##"), bgcolor=color.black, text_color=ce_iv_0 > 0 ? #00E676 : color.gray, text_size=sz)
         table.cell(dashTable, 2, 1, str.tostring(pe_iv_0, "#.##"), bgcolor=color.black, text_color=pe_iv_0 > 0 ? #FF1744 : color.gray, text_size=sz)
         table.cell(dashTable, 3, 1, fresh_ce_buy_signal ? "CE BUY" : (fresh_pe_buy_signal ? "PE BUY" : "NO IV"), bgcolor=fresh_ce_buy_signal ? #1B5E20 : (fresh_pe_buy_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
 
-        // Row 2: Time Value Alert
         table.cell(dashTable, 0, 2, "Time Value Crossover", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 2, str.tostring(ce_tv_0, "#.##"), bgcolor=color.black, text_color=color.white, text_size=sz)
         table.cell(dashTable, 2, 2, str.tostring(pe_tv_0, "#.##"), bgcolor=color.black, text_color=color.white, text_size=sz)
         table.cell(dashTable, 3, 2, tv_bc_signal ? "BC BUY" : (tv_bp_signal ? "BP BUY" : "WAIT"), bgcolor=tv_bc_signal ? #1B5E20 : (tv_bp_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
 
-        // Row 3: Basket Averages
         table.cell(dashTable, 0, 3, "Basket Avg Crossover", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 3, str.tostring(ceAvgCur, "#.##") + " (" + (ceAvgChg >= 0 ? "+" : "") + str.tostring(ceAvgChg, "#.##") + ")", bgcolor=color.black, text_color=ceAvgChg >= 0 ? #00E676 : #FF5252, text_size=sz)
         table.cell(dashTable, 2, 3, str.tostring(peAvgCur, "#.##") + " (" + (peAvgChg >= 0 ? "+" : "") + str.tostring(peAvgChg, "#.##") + ")", bgcolor=color.black, text_color=peAvgChg >= 0 ? #00E676 : #FF5252, text_size=sz)
         table.cell(dashTable, 3, 3, basket_ce_buy ? "CE CROSS" : (basket_pe_buy ? "PE CROSS" : "FLAT"), bgcolor=basket_ce_buy ? #1B5E20 : (basket_pe_buy ? #880E4F : color.black), text_color=color.white, text_size=sz)
 
-        // Row 4: BEP Touch Status
         table.cell(dashTable, 0, 4, "BEP Level Touch", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 4, "ATM Pivot: " + str.tostring(atm_bep_pivot, "#.##"), bgcolor=color.black, text_color=color.aqua, text_size=sz)
         table.cell(dashTable, 2, 4, "OTM/ITM BEP", bgcolor=color.black, text_color=color.silver, text_size=sz)
         table.cell(dashTable, 3, 4, bep_touch_alert ? "AT BEP!" : "CLEAR", bgcolor=bep_touch_alert ? #F57F17 : color.black, text_color=color.white, text_size=sz)
 
-        // Row 5: Confluence State
         table.cell(dashTable, 0, 5, "Confluence State", bgcolor=#37474F, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 5, "CE Triggers: " + str.tostring(ce_confluence_count), bgcolor=#37474F, text_color=#76FF03, text_size=sz)
         table.cell(dashTable, 2, 5, "PE Triggers: " + str.tostring(pe_confluence_count), bgcolor=#37474F, text_color=#FF1744, text_size=sz)
         table.cell(dashTable, 3, 5, strong_bc_signal ? "STRONG BC" : (strong_bp_signal ? "STRONG BP" : "NEUTRAL"), bgcolor=strong_bc_signal ? #76FF03 : (strong_bp_signal ? #FF1744 : color.black), text_color=strong_bc_signal ? color.black : color.white, text_size=sz)
+
+// Table 2: Master 5-Day Strategy Performance & Risk Analytics Box
+var table perfTable = table.new(f_get_table_pos(perfTablePosInput), 7, 7, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+
+f_fill_perf_row(table tbl, int r, string st_name, int t_count, int w_count, int l_count, float peak_pts, float max_dd_pts, string sz_str) =>
+    float win_rate = t_count > 0 ? (float(w_count) / float(t_count) * 100.0) : 0.0
+    float net_profit = peak_pts - max_dd_pts
+    color wr_color   = win_rate >= 50.0 ? #00E676 : (win_rate > 0 ? #FF9100 : color.gray)
+    color net_color  = net_profit >= 0.0 ? #00E676 : #FF1744
+
+    table.cell(tbl, 0, r, st_name, bgcolor=#212121, text_color=color.white, text_size=sz_str)
+    table.cell(tbl, 1, r, str.tostring(t_count), bgcolor=color.black, text_color=color.white, text_size=sz_str)
+    table.cell(tbl, 2, r, str.tostring(w_count) + " W / " + str.tostring(l_count) + " L", bgcolor=color.black, text_color=color.silver, text_size=sz_str)
+    table.cell(tbl, 3, r, str.tostring(win_rate, "#.#") + "%", bgcolor=color.black, text_color=wr_color, text_size=sz_str)
+    table.cell(tbl, 4, r, "+" + str.tostring(peak_pts, "#.#") + " pts", bgcolor=color.black, text_color=#00E676, text_size=sz_str)
+    table.cell(tbl, 5, r, "-" + str.tostring(max_dd_pts, "#.#") + " pts", bgcolor=color.black, text_color=#FF1744, text_size=sz_str)
+    table.cell(tbl, 6, r, (net_profit >= 0 ? "+" : "") + str.tostring(net_profit, "#.#") + " pts", bgcolor=color.black, text_color=net_color, text_size=sz_str)
+
+if barstate.islast
+    if not showPerfTableInput
+        table.delete(perfTable)
+    else
+        string psz = f_get_table_text_size(perfTextSizeInput)
+        table.cell(perfTable, 0, 0, "5-Day Strategy Matrix", bgcolor=#006064, text_color=color.aqua, text_size=psz)
+        table.cell(perfTable, 1, 0, "Trades", bgcolor=#006064, text_color=color.white, text_size=psz)
+        table.cell(perfTable, 2, 0, "Win / Loss", bgcolor=#006064, text_color=color.white, text_size=psz)
+        table.cell(perfTable, 3, 0, "Win Rate %", bgcolor=#006064, text_color=color.white, text_size=psz)
+        table.cell(perfTable, 4, 0, "Max Swing Pts", bgcolor=#006064, text_color=color.white, text_size=psz)
+        table.cell(perfTable, 5, 0, "Max Drawdown (SL)", bgcolor=#006064, text_color=color.white, text_size=psz)
+        table.cell(perfTable, 6, 0, "Net Profit Pts", bgcolor=#006064, text_color=color.white, text_size=psz)
+
+        f_fill_perf_row(perfTable, 1, "1. Fresh Intrinsic Value", st1_t, st1_w, st1_l, st1_pts, st1_dd, psz)
+        f_fill_perf_row(perfTable, 2, "2. Time Value (5A)",       st2_t, st2_w, st2_l, st2_pts, st2_dd, psz)
+        f_fill_perf_row(perfTable, 3, "3. Basket Averages (6)",  st3_t, st3_w, st3_l, st3_pts, st3_dd, psz)
+        f_fill_perf_row(perfTable, 4, "4. BEP Level Touch",       st4_t, st4_w, st4_l, st4_pts, st4_dd, psz)
+        f_fill_perf_row(perfTable, 5, "5. Strong Confluence",     st5_t, st5_w, st5_l, st5_pts, st5_dd, psz)
