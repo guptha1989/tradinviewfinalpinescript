@@ -18,6 +18,14 @@ enum OptionType
     ce   = "Call (CE)"
     pe   = "Put (PE)"
 
+enum DayChoice
+    today = "Today (Day 1)"
+    day2  = "Day 2"
+    day3  = "Day 3"
+    day4  = "Day 4"
+    day5  = "Day 5"
+    all   = "All 5 Days Combined"
+
 // --- [1] Instrument & Strike Settings ---
 G_INST               = "[1] Instrument & Strike Settings"
 underlyingInput      = input.enum(UnderlyingAsset.auto, "Underlying Asset", group=G_INST)
@@ -43,8 +51,15 @@ showPerfTableInput   = input.bool(true, "Show Master 5-Day Performance Table", g
 perfTablePosInput    = input.string("Bottom Left", "Master Performance Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLES)
 perfTableSizeInput   = input.string("Small", "Master Performance Table Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLES)
 
-targetPtsInput       = input.float(20.0, "Target Points for Win Definition", minval=1.0, step=1.0, group=G_TABLES)
-stoplossPtsInput     = input.float(10.0, "Stop Loss Points for Loss Definition", minval=1.0, step=1.0, group=G_TABLES)
+// --- [4] Day-Wise Trade Log Table Controls ---
+G_LOG                = "[4] Day-Wise Trade Entry & Exit Log Table"
+showTradeLogTable    = input.bool(true, "Show Day-Wise Trade Entry/Exit Log Table", group=G_LOG)
+selectedDayInput     = input.enum(DayChoice.today, "Select Day for Trade Log", group=G_LOG)
+tradeLogPosInput     = input.string("Bottom Right", "Trade Log Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_LOG)
+tradeLogSizeInput    = input.string("Small", "Trade Log Table Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_LOG)
+
+targetPtsInput       = input.float(20.0, "Target Points for Win Definition", minval=1.0, step=1.0, group=G_LOG)
+stoplossPtsInput     = input.float(10.0, "Stop Loss Points for Loss Definition", minval=1.0, step=1.0, group=G_LOG)
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -242,6 +257,10 @@ pe_c_m4 = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timef
 
 bool is_new_day = ta.change(time("D")) != 0
 
+var int day_index = 0
+if is_new_day
+    day_index += 1
+
 f_get_open_val(float cur_c) =>
     ta.valuewhen(is_new_day or bar_index == 0, cur_c, 0)
 
@@ -256,7 +275,7 @@ float ce_o_m3 = f_get_open_val(ce_c_m3), float pe_o_m3 = f_get_open_val(pe_c_m3)
 float ce_o_m4 = f_get_open_val(ce_c_m4), float pe_o_m4 = f_get_open_val(pe_c_m4)
 
 // ==========================================
-// STRATEGY 1: FRESH INTRINSIC VALUE CREATION
+// STRATEGY 1: FRESH INTRINSIC VALUE CREATION (STRICT ALTERNATION)
 // ==========================================
 
 float spotLTP = close
@@ -272,11 +291,19 @@ f_calc_iv_tv(float st_val, float ce_ltp, float pe_ltp) =>
 [ce_iv_otm, ce_tv_otm, pe_iv_otm, pe_tv_otm] = f_calc_iv_tv(k_p1, ce_c_p1, pe_c_m1)
 [ce_iv_itm, ce_tv_itm, pe_iv_itm, pe_tv_itm] = f_calc_iv_tv(k_m1, ce_c_m1, pe_c_p1)
 
-bool fresh_ce_iv = enableFreshIV and (ce_iv_0 > 0 and (na(ce_iv_0[1]) or ce_iv_0[1] == 0))
-bool fresh_pe_iv = enableFreshIV and (pe_iv_0 > 0 and (na(pe_iv_0[1]) or pe_iv_0[1] == 0))
+bool raw_fresh_ce = enableFreshIV and (ce_iv_0 > 0 and (na(ce_iv_0[1]) or ce_iv_0[1] == 0))
+bool raw_fresh_pe = enableFreshIV and (pe_iv_0 > 0 and (na(pe_iv_0[1]) or pe_iv_0[1] == 0))
 
-bool fresh_ce_buy_signal = fresh_ce_iv
-bool fresh_pe_buy_signal = fresh_pe_iv
+var int state_st1 = 0
+bool fresh_ce_buy_signal = false
+bool fresh_pe_buy_signal = false
+
+if raw_fresh_ce and state_st1 != 1
+    fresh_ce_buy_signal := true
+    state_st1 := 1
+else if raw_fresh_pe and state_st1 != -1
+    fresh_pe_buy_signal := true
+    state_st1 := -1
 
 plotshape(enableFreshIV and fresh_ce_buy_signal, title="Fresh IV BUY CE Signal", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BUY CE (IV)")
 plotshape(enableFreshIV and fresh_pe_buy_signal, title="Fresh IV BUY PE / SELL Signal", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="BUY PE / SELL (IV)")
@@ -285,7 +312,7 @@ alertcondition(fresh_ce_buy_signal, title="Fresh Intrinsic CE Buy Alert", messag
 alertcondition(fresh_pe_buy_signal, title="Fresh Intrinsic PE Buy Alert", message="FRESH IV ALERT: Put Option gained fresh Intrinsic Value on {{ticker}}!")
 
 // ==========================================
-// STRATEGY 2: TIME VALUE ALERT SETUP (FROM 5A)
+// STRATEGY 2: TIME VALUE ALERT SETUP (FROM 5A - STRICT ALTERNATION)
 // ==========================================
 
 float otm_avg_tv_rt = (ce_tv_otm + pe_tv_otm) / 2.0
@@ -313,17 +340,17 @@ bool itm_bp_signal = (ta.crossover(pe_c_p1, itm_avg_tv_rt) and itm_ce_was_below)
 bool raw_bc_signal = otm_bc_signal or itm_bc_signal
 bool raw_bp_signal = otm_bp_signal or itm_bp_signal
 
-var int signal_state_itv = 0
+var int state_st2 = 0
 bool tv_bc_signal = false
 bool tv_bp_signal = false
 
 if enableTV
-    if raw_bc_signal and signal_state_itv != 1
+    if raw_bc_signal and state_st2 != 1
         tv_bc_signal := true
-        signal_state_itv := 1
-    else if raw_bp_signal and signal_state_itv != -1
+        state_st2 := 1
+    else if raw_bp_signal and state_st2 != -1
         tv_bp_signal := true
-        signal_state_itv := -1
+        state_st2 := -1
 
 plotshape(enableTV and tv_bc_signal, title="Time Value BUY CE (BC)", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BUY CE (TV)")
 plotshape(enableTV and tv_bp_signal, title="Time Value BUY PE / SELL (BP)", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="BUY PE / SELL (TV)")
@@ -332,7 +359,7 @@ alertcondition(tv_bc_signal, title="Time Value Buy CE (BC) Alert", message="TV B
 alertcondition(tv_bp_signal, title="Time Value Buy PE (BP) Alert", message="TV BP ALERT: Time Value Buy PE condition triggered on {{ticker}}!")
 
 // ==========================================
-// STRATEGY 3: BASKET AVERAGES CROSSOVER
+// STRATEGY 3: BASKET AVERAGES CROSSOVER (STRICT ALTERNATION)
 // ==========================================
 
 float sum_ce_open = nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1) + nz(ce_o_p2) + nz(ce_o_m2) + nz(ce_o_p3) + nz(ce_o_m3) + nz(ce_o_p4) + nz(ce_o_m4)
@@ -351,8 +378,19 @@ float peAvgChg = peAvgCur - peAvgOpen
 bool ce_cross_above = ta.crossover(ceAvgCur, ceAvgOpen) or (ceAvgCur > ceAvgOpen and ceAvgCur[1] <= ceAvgOpen[1])
 bool pe_cross_above = ta.crossover(peAvgCur, peAvgOpen) or (peAvgCur > peAvgOpen and peAvgCur[1] <= peAvgOpen[1])
 
-bool basket_ce_buy = enableBasket and ce_cross_above and (ceAvgChg > 0)
-bool basket_pe_buy = enableBasket and pe_cross_above and (peAvgChg > 0)
+bool raw_basket_ce = enableBasket and ce_cross_above and (ceAvgChg > 0)
+bool raw_basket_pe = enableBasket and pe_cross_above and (peAvgChg > 0)
+
+var int state_st3 = 0
+bool basket_ce_buy = false
+bool basket_pe_buy = false
+
+if raw_basket_ce and state_st3 != 1
+    basket_ce_buy := true
+    state_st3 := 1
+else if raw_basket_pe and state_st3 != -1
+    basket_pe_buy := true
+    state_st3 := -1
 
 plotshape(enableBasket and basket_ce_buy, title="Basket Avg BUY CE Signal", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BUY CE (BASKET)")
 plotshape(enableBasket and basket_pe_buy, title="Basket Avg BUY PE / SELL Signal", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="BUY PE / SELL (BASKET)")
@@ -361,7 +399,7 @@ alertcondition(basket_ce_buy, title="Basket Buy CE Alert", message="BASKET CE AL
 alertcondition(basket_pe_buy, title="Basket Buy PE Alert", message="BASKET PE ALERT: PE Current Avg crossed above Day Open Avg & Change is positive on {{ticker}}!")
 
 // ==========================================
-// STRATEGY 4: BEP PROXIMITY / TOUCH ALERTS
+// STRATEGY 4: BEP PROXIMITY / TOUCH ALERTS (STRICT ALTERNATION)
 // ==========================================
 
 float atm_ce_bep    = baseStrike + ce_o_0
@@ -379,8 +417,19 @@ f_near_bep(float level) =>
 
 bool bep_touch_alert = f_near_bep(atm_bep_pivot) or f_near_bep(atm_ce_bep) or f_near_bep(atm_pe_bep) or f_near_bep(otm_ce_bep) or f_near_bep(otm_pe_bep) or f_near_bep(itm_ce_bep) or f_near_bep(itm_pe_bep)
 
-bool bep_ce_buy = bep_touch_alert and close >= open
-bool bep_pe_buy = bep_touch_alert and close < open
+bool raw_bep_ce = bep_touch_alert and close >= open
+bool raw_bep_pe = bep_touch_alert and close < open
+
+var int state_st4 = 0
+bool bep_ce_buy = false
+bool bep_pe_buy = false
+
+if raw_bep_ce and state_st4 != 1
+    bep_ce_buy := true
+    state_st4 := 1
+else if raw_bep_pe and state_st4 != -1
+    bep_pe_buy := true
+    state_st4 := -1
 
 plotshape(enableBEP and bep_ce_buy, title="BEP Touch BUY CE Signal", style=shape.labelup, location=location.belowbar, color=color.aqua, textcolor=color.black, size=size.small, text="BUY CE (BEP)")
 plotshape(enableBEP and bep_pe_buy, title="BEP Touch BUY PE / SELL Signal", style=shape.labeldown, location=location.abovebar, color=#FF9100, textcolor=color.white, size=size.small, text="BUY PE / SELL (BEP)")
@@ -394,14 +443,25 @@ plot(enableBEP ? itm_pe_bep : na,    title="ITM Put Lower BEP",  color=#00E676, 
 alertcondition(bep_touch_alert, title="Price at BEP Level Alert", message="BEP ALERT: Price reached an active BEP Level (ATM/OTM/ITM) on {{ticker}}!")
 
 // ==========================================
-// STRATEGY 5: STRONG CONFLUENCE ENGINE (STRONG BUY CE & STRONG BUY PE)
+// STRATEGY 5: STRONG CONFLUENCE ENGINE (STRICT ALTERNATION)
 // ==========================================
 
 int ce_confluence_count = (fresh_ce_buy_signal ? 1 : 0) + (tv_bc_signal ? 1 : 0) + (basket_ce_buy ? 1 : 0) + (bep_touch_alert ? 1 : 0)
 int pe_confluence_count = (fresh_pe_buy_signal ? 1 : 0) + (tv_bp_signal ? 1 : 0) + (basket_pe_buy ? 1 : 0) + (bep_touch_alert ? 1 : 0)
 
-bool strong_bc_signal = enableConfluence and (ce_confluence_count >= 2)
-bool strong_bp_signal = enableConfluence and (pe_confluence_count >= 2)
+bool raw_strong_bc = enableConfluence and (ce_confluence_count >= 2)
+bool raw_strong_bp = enableConfluence and (pe_confluence_count >= 2)
+
+var int state_st5 = 0
+bool strong_bc_signal = false
+bool strong_bp_signal = false
+
+if raw_strong_bc and state_st5 != 1
+    strong_bc_signal := true
+    state_st5 := 1
+else if raw_strong_bp and state_st5 != -1
+    strong_bp_signal := true
+    state_st5 := -1
 
 plotshape(enableConfluence and strong_bc_signal, title="★ STRONG BUY CE ★", style=shape.labelup, location=location.belowbar, color=#76FF03, textcolor=color.black, size=size.normal, text="★ STRONG BUY CE ★")
 plotshape(enableConfluence and strong_bp_signal, title="★ STRONG BUY PE / SELL ★", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.normal, text="★ STRONG BUY PE / SELL ★")
@@ -410,15 +470,28 @@ alertcondition(strong_bc_signal, title="Strong Buy CE (Strong BC) Alert", messag
 alertcondition(strong_bp_signal, title="Strong Buy PE (Strong BP) Alert", message="STRONG BP CONFLUENCE: Multiple Buy PE triggers aligned on {{ticker}}!")
 
 // ==========================================
-// 5-DAY STRATEGY PERFORMANCE & SWING RISK ANALYTICS ENGINE
+// 5-DAY STRATEGY PERFORMANCE & TRADE LOG ENGINE
 // ==========================================
 
-f_eval_strategy_swing(bool sig_ce, bool sig_pe) =>
+var string[] log_day_tag = array.new_string(0)
+var string[] log_time_str= array.new_string(0)
+var string[] log_strat   = array.new_string(0)
+var string[] log_type    = array.new_string(0)
+var float[]  log_entry   = array.new_float(0)
+var float[]  log_peak    = array.new_float(0)
+var float[]  log_dd      = array.new_float(0)
+
+f_eval_and_log(string s_name, bool sig_ce, bool sig_pe) =>
     var int trades = 0, var int wins = 0, var int losses = 0
     var float total_peak_pts = 0.0, var float total_max_dd = 0.0
     var float entry_price = na
     var bool active_ce = false, var bool active_pe = false
     var float swing_peak = 0.0, var float swing_dd = 0.0
+    var int entry_time = na
+
+    string d_tag = "Day " + str.tostring(day_index + 1)
+    if day_index == 0
+        d_tag := "Today (Day 1)"
 
     if active_ce
         float cur_gain = high - entry_price
@@ -428,7 +501,7 @@ f_eval_strategy_swing(bool sig_ce, bool sig_pe) =>
         if cur_loss > swing_dd
             swing_dd := cur_loss
 
-        if sig_pe or ta.change(time("D")) != 0 or barstate.islast
+        if sig_pe or is_new_day or barstate.islast
             trades += 1
             if swing_peak >= targetPtsInput
                 wins += 1
@@ -436,7 +509,16 @@ f_eval_strategy_swing(bool sig_ce, bool sig_pe) =>
                 losses += 1
             total_peak_pts += swing_peak
             total_max_dd   += swing_dd
-            active_ce      := false
+
+            array.push(log_day_tag, d_tag)
+            array.push(log_time_str, str.format("{0,date,HH:mm}", entry_time))
+            array.push(log_strat, s_name)
+            array.push(log_type, "BUY CE")
+            array.push(log_entry, entry_price)
+            array.push(log_peak, swing_peak)
+            array.push(log_dd, swing_dd)
+
+            active_ce := false
 
     else if active_pe
         float cur_gain = entry_price - low
@@ -446,7 +528,7 @@ f_eval_strategy_swing(bool sig_ce, bool sig_pe) =>
         if cur_loss > swing_dd
             swing_dd := cur_loss
 
-        if sig_ce or ta.change(time("D")) != 0 or barstate.islast
+        if sig_ce or is_new_day or barstate.islast
             trades += 1
             if swing_peak >= targetPtsInput
                 wins += 1
@@ -454,28 +536,39 @@ f_eval_strategy_swing(bool sig_ce, bool sig_pe) =>
                 losses += 1
             total_peak_pts += swing_peak
             total_max_dd   += swing_dd
-            active_pe      := false
+
+            array.push(log_day_tag, d_tag)
+            array.push(log_time_str, str.format("{0,date,HH:mm}", entry_time))
+            array.push(log_strat, s_name)
+            array.push(log_type, "BUY PE / SELL")
+            array.push(log_entry, entry_price)
+            array.push(log_peak, swing_peak)
+            array.push(log_dd, swing_dd)
+
+            active_pe := false
 
     if sig_ce and not active_ce
         active_ce   := true
         active_pe   := false
         entry_price := close
+        entry_time  := time
         swing_peak  := 0.0
         swing_dd    := 0.0
     else if sig_pe and not active_pe
         active_pe   := true
         active_ce   := false
         entry_price := close
+        entry_time  := time
         swing_peak  := 0.0
         swing_dd    := 0.0
 
     [trades, wins, losses, total_peak_pts, total_max_dd]
 
-[st1_t, st1_w, st1_l, st1_pts, st1_dd] = f_eval_strategy_swing(fresh_ce_buy_signal, fresh_pe_buy_signal)
-[st2_t, st2_w, st2_l, st2_pts, st2_dd] = f_eval_strategy_swing(tv_bc_signal, tv_bp_signal)
-[st3_t, st3_w, st3_l, st3_pts, st3_dd] = f_eval_strategy_swing(basket_ce_buy, basket_pe_buy)
-[st4_t, st4_w, st4_l, st4_pts, st4_dd] = f_eval_strategy_swing(bep_ce_buy, bep_pe_buy)
-[st5_t, st5_w, st5_l, st5_pts, st5_dd] = f_eval_strategy_swing(strong_bc_signal, strong_bp_signal)
+[st1_t, st1_w, st1_l, st1_pts, st1_dd] = f_eval_and_log("1. Fresh IV",       fresh_ce_buy_signal, fresh_pe_buy_signal)
+[st2_t, st2_w, st2_l, st2_pts, st2_dd] = f_eval_and_log("2. Time Value (5A)", tv_bc_signal, tv_bp_signal)
+[st3_t, st3_w, st3_l, st3_pts, st3_dd] = f_eval_and_log("3. Basket Avg (6)",  basket_ce_buy, basket_pe_buy)
+[st4_t, st4_w, st4_l, st4_pts, st4_dd] = f_eval_and_log("4. BEP Touch",       bep_ce_buy, bep_pe_buy)
+[st5_t, st5_w, st5_l, st5_pts, st5_dd] = f_eval_and_log("5. Strong Confl.",   strong_bc_signal, strong_bp_signal)
 
 // ==========================================
 // DASHBOARD TABLES
@@ -497,7 +590,7 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
-// Table 1: Current Live Alert Matrix Table
+// Table 1: Current Live Alert Status Table
 var table dashTable = table.new(f_get_table_pos(liveTablePosInput), 4, 10, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 if barstate.islast
@@ -510,31 +603,26 @@ if barstate.islast
         table.cell(dashTable, 2, 0, "Put (PE) Value", bgcolor=#1565C0, text_color=color.white, text_size=sz)
         table.cell(dashTable, 3, 0, "Current Live Alert Status", bgcolor=#1565C0, text_color=color.white, text_size=sz)
 
-        // Row 1: Fresh Intrinsic Value
         table.cell(dashTable, 0, 1, "1. Fresh Intrinsic Value", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 1, str.tostring(ce_iv_0, "#.##"), bgcolor=color.black, text_color=ce_iv_0 > 0 ? #00E676 : color.gray, text_size=sz)
         table.cell(dashTable, 2, 1, str.tostring(pe_iv_0, "#.##"), bgcolor=color.black, text_color=pe_iv_0 > 0 ? #FF1744 : color.gray, text_size=sz)
         table.cell(dashTable, 3, 1, fresh_ce_buy_signal ? "BUY CE" : (fresh_pe_buy_signal ? "BUY PE / SELL" : "NO ALERT"), bgcolor=fresh_ce_buy_signal ? #1B5E20 : (fresh_pe_buy_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
 
-        // Row 2: Time Value Alert
         table.cell(dashTable, 0, 2, "2. Time Value (5A)", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 2, str.tostring(ce_tv_0, "#.##"), bgcolor=color.black, text_color=color.white, text_size=sz)
         table.cell(dashTable, 2, 2, str.tostring(pe_tv_0, "#.##"), bgcolor=color.black, text_color=color.white, text_size=sz)
         table.cell(dashTable, 3, 2, tv_bc_signal ? "BUY CE (BC)" : (tv_bp_signal ? "BUY PE / SELL (BP)" : "WAIT"), bgcolor=tv_bc_signal ? #1B5E20 : (tv_bp_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
 
-        // Row 3: Basket Averages
         table.cell(dashTable, 0, 3, "3. Basket Averages (6)", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 3, str.tostring(ceAvgCur, "#.##") + " (" + (ceAvgChg >= 0 ? "+" : "") + str.tostring(ceAvgChg, "#.##") + ")", bgcolor=color.black, text_color=ceAvgChg >= 0 ? #00E676 : #FF5252, text_size=sz)
         table.cell(dashTable, 2, 3, str.tostring(peAvgCur, "#.##") + " (" + (peAvgChg >= 0 ? "+" : "") + str.tostring(peAvgChg, "#.##") + ")", bgcolor=color.black, text_color=peAvgChg >= 0 ? #00E676 : #FF5252, text_size=sz)
         table.cell(dashTable, 3, 3, basket_ce_buy ? "BUY CE" : (basket_pe_buy ? "BUY PE / SELL" : "FLAT"), bgcolor=basket_ce_buy ? #1B5E20 : (basket_pe_buy ? #880E4F : color.black), text_color=color.white, text_size=sz)
 
-        // Row 4: BEP Touch Status
         table.cell(dashTable, 0, 4, "4. BEP Level Touch", bgcolor=#212121, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 4, "ATM Pivot: " + str.tostring(atm_bep_pivot, "#.##"), bgcolor=color.black, text_color=color.aqua, text_size=sz)
         table.cell(dashTable, 2, 4, "OTM/ITM BEP", bgcolor=color.black, text_color=color.silver, text_size=sz)
         table.cell(dashTable, 3, 4, bep_touch_alert ? (close >= open ? "BUY CE (BEP)" : "BUY PE / SELL (BEP)") : "CLEAR", bgcolor=bep_touch_alert ? #F57F17 : color.black, text_color=color.white, text_size=sz)
 
-        // Row 5: Confluence State
         table.cell(dashTable, 0, 5, "5. Strong Confluence", bgcolor=#37474F, text_color=color.white, text_size=sz)
         table.cell(dashTable, 1, 5, "CE Triggers: " + str.tostring(ce_confluence_count), bgcolor=#37474F, text_color=#76FF03, text_size=sz)
         table.cell(dashTable, 2, 5, "PE Triggers: " + str.tostring(pe_confluence_count), bgcolor=#37474F, text_color=#FF1744, text_size=sz)
@@ -575,3 +663,54 @@ if barstate.islast
         f_fill_perf_row(perfTable, 3, "3. Basket Averages (6)",  st3_t, st3_w, st3_l, st3_pts, st3_dd, psz)
         f_fill_perf_row(perfTable, 4, "4. BEP Level Touch",       st4_t, st4_w, st4_l, st4_pts, st4_dd, psz)
         f_fill_perf_row(perfTable, 5, "5. Strong Confluence",     st5_t, st5_w, st5_l, st5_pts, st5_dd, psz)
+
+// Table 3: Day-Wise Trade Entry & Exit Log Table
+var table logTable = table.new(f_get_table_pos(tradeLogPosInput), 7, 15, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+
+if barstate.islast
+    if not showTradeLogTable
+        table.delete(logTable)
+    else
+        string lsz = f_get_table_text_size(tradeLogSizeInput)
+        string selDayStr = switch selectedDayInput
+            DayChoice.today => "Today (Day 1)"
+            DayChoice.day2  => "Day 2"
+            DayChoice.day3  => "Day 3"
+            DayChoice.day4  => "Day 4"
+            DayChoice.day5  => "Day 5"
+            => "All 5 Days Combined"
+
+        table.cell(logTable, 0, 0, "Trade Log: " + selDayStr, bgcolor=#1565C0, text_color=color.white, text_size=lsz)
+        table.cell(logTable, 1, 0, "Time", bgcolor=#1565C0, text_color=color.white, text_size=lsz)
+        table.cell(logTable, 2, 0, "Strategy", bgcolor=#1565C0, text_color=color.white, text_size=lsz)
+        table.cell(logTable, 3, 0, "Type", bgcolor=#1565C0, text_color=color.white, text_size=lsz)
+        table.cell(logTable, 4, 0, "Entry Price", bgcolor=#1565C0, text_color=color.white, text_size=lsz)
+        table.cell(logTable, 5, 0, "Max Swing Pts", bgcolor=#1565C0, text_color=color.white, text_size=lsz)
+        table.cell(logTable, 6, 0, "Max Drawdown (SL)", bgcolor=#1565C0, text_color=color.white, text_size=lsz)
+
+        int log_sz = array.size(log_day_tag)
+        int row_idx = 1
+        if log_sz > 0
+            for i = log_sz - 1 to 0
+                if row_idx < 15
+                    string cur_dtag = array.get(log_day_tag, i)
+                    bool match_day = selectedDayInput == DayChoice.all or cur_dtag == selDayStr
+                    if match_day
+                        string t_time  = array.get(log_time_str, i)
+                        string t_strat = array.get(log_strat, i)
+                        string t_type  = array.get(log_type, i)
+                        float  t_entry = array.get(log_entry, i)
+                        float  t_peak  = array.get(log_peak, i)
+                        float  t_dd    = array.get(log_dd, i)
+
+                        color type_col = str.contains(t_type, "CE") ? #00E676 : #FF1744
+
+                        table.cell(logTable, 0, row_idx, "#" + str.tostring(row_idx) + " (" + cur_dtag + ")", bgcolor=#212121, text_color=color.white, text_size=lsz)
+                        table.cell(logTable, 1, row_idx, t_time, bgcolor=color.black, text_color=color.white, text_size=lsz)
+                        table.cell(logTable, 2, row_idx, t_strat, bgcolor=color.black, text_color=color.silver, text_size=lsz)
+                        table.cell(logTable, 3, row_idx, t_type, bgcolor=color.black, text_color=type_col, text_size=lsz)
+                        table.cell(logTable, 4, row_idx, str.tostring(t_entry, "#.##"), bgcolor=color.black, text_color=color.white, text_size=lsz)
+                        table.cell(logTable, 5, row_idx, "+" + str.tostring(t_peak, "#.#") + " pts", bgcolor=color.black, text_color=#00E676, text_size=lsz)
+                        table.cell(logTable, 6, row_idx, "-" + str.tostring(t_dd, "#.#") + " pts", bgcolor=color.black, text_color=#FF1744, text_size=lsz)
+
+                        row_idx += 1
