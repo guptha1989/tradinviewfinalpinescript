@@ -1,5 +1,5 @@
 //@version=6
-indicator("Techfrost Intrinsic Time Value and BEP Analytics", shorttitle="TF IVTVBEP", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
+indicator("5A.Techfrost Intrinsic Time Value and BEP Analytics", shorttitle="TF IVTVBEP", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -293,7 +293,7 @@ string opp_ticker = f_build_option_symbol(base_strike, not isCall)
 
 bool opp_is_bull   = nz(opp_c) >= nz(opp_o)
 color opp_body_col = opp_is_bull ? colorOppBull : colorOppBear
-color opp_wick_col = opp_is_bull ? color.new(colorOppBull, 40) : color.new(colorOppBear, 40)
+color opp_wick_col = opp_is_bull ? color.new(colorOppBull, 30) : color.new(colorOppBear, 30)
 
 plotcandle(showOppCandlesInput ? opp_o : na,
            showOppCandlesInput ? opp_h : na,

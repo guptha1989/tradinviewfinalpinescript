@@ -42,7 +42,7 @@ strikeOverride       = input.float(0.0, "Strike Price Override", minval=0.0, gro
 strikeStepInput      = input.enum(StepOverrideChoice.auto, "Strike Step Override", group=G_INST)
 calc_basis           = input.string("Day Open Price", "Calculation Basis", options=["Day Open Price", "Previous Day Close", "First 5 Min Close"], group=G_INST)
 
-// --- [2] Basket Averages & Sub-Pane Settings ---
+// --- [2] Basket Averages & Sub-Pane Settings (from #6) ---
 G_BASKET             = "[2] Basket Averages & Sub-Pane Settings"
 displayChartModeInput= input.string("Both Lines & Histograms", "Sub-Pane Display Mode", options=["Both Lines & Histograms", "Basket Average Lines Only", "Average Change Histograms / Lines Only"], group=G_BASKET)
 showPlotsInput       = input.bool(true, "Show Basket Average Lines", group=G_BASKET)
@@ -59,8 +59,26 @@ colorPEAvgOpen       = input.color(color.new(#D50000, 50), "PE Day Open Basket A
 colorPEAvgCur        = input.color(#FF1744, "PE Current Basket Avg Color", group=G_BASKET)
 colorZeroLine        = input.color(color.new(color.gray, 30), "Zero Baseline Color", group=G_BASKET)
 
-// --- [3] Intrinsic & Time Value Signals ---
-G_ITM_OTM            = "[3] Intrinsic & Time Value Signals"
+// --- [3] Intrinsic & Time Value Sub-Pane Lines (from #5A) ---
+G_ITV_SUB            = "[3] Intrinsic & Time Value Sub-Pane Analytics"
+showCE_IV_Sub        = input.bool(true, "Show CE Sub-Pane Intrinsic Line", group=G_ITV_SUB)
+showPE_IV_Sub        = input.bool(true, "Show PE Sub-Pane Intrinsic Line", group=G_ITV_SUB)
+showAvg_IV_Sub       = input.bool(true, "Show Avg Sub-Pane Intrinsic Line", group=G_ITV_SUB)
+
+showCE_TV_Sub        = input.bool(true, "Show CE Sub-Pane Time Value Line", group=G_ITV_SUB)
+showPE_TV_Sub        = input.bool(true, "Show PE Sub-Pane Time Value Line", group=G_ITV_SUB)
+showAvg_TV_Sub       = input.bool(true, "Show Avg Sub-Pane Time Value Line", group=G_ITV_SUB)
+
+colorCE_IV           = input.color(#00E676, "CE Intrinsic Line Color", group=G_ITV_SUB)
+colorPE_IV           = input.color(#FF1744, "PE Intrinsic Line Color", group=G_ITV_SUB)
+colorAvg_IV          = input.color(#FFEE58, "Avg Intrinsic Line Color", group=G_ITV_SUB)
+
+colorCE_TV           = input.color(#00B0FF, "CE Time Value Line Color", group=G_ITV_SUB)
+colorPE_TV           = input.color(#FF9100, "PE Time Value Line Color", group=G_ITV_SUB)
+colorAvg_TV          = input.color(#E040FB, "Avg Time Value Line Color", group=G_ITV_SUB)
+
+// --- [4] Intrinsic & Time Value Signals (from #5A) ---
+G_ITM_OTM            = "[4] Intrinsic & Time Value Signals"
 signalFilterInput    = input.string("Alternate Signals Only (Wait for Opposite)", "Signal Filter Mode", options=["Alternate Signals Only (Wait for Opposite)", "Initial Trigger Only", "All Candles (Raw)"], group=G_ITM_OTM)
 showITM_OTM_Signals  = input.bool(true, "Show Buy CE (BC) & Buy PE (BP) Signal Shapes", group=G_ITM_OTM)
 colorSB_CE           = input.color(#00E676, "Buy CE (BC) Arrow Color", group=G_ITM_OTM)
@@ -290,7 +308,7 @@ float ce_o_m3 = f_get_open_val(ce_c_m3), float pe_o_m3 = f_get_open_val(pe_c_m3)
 float ce_o_m4 = f_get_open_val(ce_c_m4), float pe_o_m4 = f_get_open_val(pe_c_m4)
 
 // ==========================================
-// FEATURE 1: INTRINSIC & TIME VALUE ANALYTICS & SIGNALS (FROM INDICATOR #5)
+// FEATURE 1: INTRINSIC & TIME VALUE ANALYTICS & SIGNALS (FROM INDICATOR #5A)
 // ==========================================
 
 float spotLTP = close
@@ -311,6 +329,17 @@ float otm_avg_iv_rt = (ce_iv_otm + pe_iv_otm) / 2.0
 
 float itm_avg_tv_rt = (ce_tv_itm + pe_tv_itm) / 2.0
 float itm_avg_iv_rt = (ce_iv_itm + pe_iv_itm) / 2.0
+
+float avg_iv_rt = (ce_iv_0 + pe_iv_0) / 2.0
+float avg_tv_rt = (ce_tv_0 + pe_tv_0) / 2.0
+
+plot(showCE_IV_Sub  ? ce_iv_0   : na, title="CE Intrinsic Line",  color=colorCE_IV,  linewidth=1)
+plot(showPE_IV_Sub  ? pe_iv_0   : na, title="PE Intrinsic Line",  color=colorPE_IV,  linewidth=1)
+plot(showAvg_IV_Sub ? avg_iv_rt : na, title="Avg Intrinsic Line", color=colorAvg_IV, linewidth=2)
+
+plot(showCE_TV_Sub  ? ce_tv_0   : na, title="CE Time Value Line", color=colorCE_TV,  linewidth=1)
+plot(showPE_TV_Sub  ? pe_tv_0   : na, title="PE Time Value Line", color=colorPE_TV,  linewidth=1)
+plot(showAvg_TV_Sub ? avg_tv_rt : na, title="Avg Time Value Line", color=colorAvg_TV, linewidth=2)
 
 // Signal Engine with State Machine Alternation
 bool otm_ce_above = close > otm_avg_tv_rt
