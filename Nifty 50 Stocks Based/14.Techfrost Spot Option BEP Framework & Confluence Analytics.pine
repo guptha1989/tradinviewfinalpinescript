@@ -34,8 +34,8 @@ manual_strike_val  = input.int(24000, "Manual ATM Strike Price", group=G_INST)
 stock_name_preset  = input.string("NIFTY", "Preset Underlying", options=["Custom", "NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "CRUDEOIL"], group=G_INST)
 underlying_ticker  = input.string("NIFTY", "Custom Underlying Ticker", group=G_INST)
 exchange           = input.string("NSE", "Exchange", group=G_INST)
-expiry_input       = input.string("24829", "Option Expiry (YYMdd)", group=G_INST, tooltip="Enter current active option expiry string (e.g. 24829 or 24905). Ensure contract is valid for live premiums.")
-suffixStyle        = input.string("CE/PE", "Option Suffix Format", options=["C/P", "CE/PE"], group=G_INST)
+expiry_input       = input.string("260804", "Option Expiry String (YYMMDD/Code)", group=G_INST, tooltip="Expiry date string format like 260804 (YYMMDD) or 24JUN. Used in contract symbol building.")
+suffixStyle        = input.string("C/P (e.g. C24100)", "Option Symbol Format", options=["C/P (e.g. C24100)", "CE/PE (e.g. 24100CE)"], group=G_INST, tooltip="Select option contract symbol format for exchange.")
 strike_step_input  = input.int(50, "Custom Strike Step", group=G_INST)
 
 // 2. BEP Calculation Settings
@@ -143,29 +143,33 @@ final_strike = base_center_strike
 // Description of ATM Selection Method
 string atm_selection_method = (atm_select_mode == "Manual Strike Entry") ? "Manual Input (" + str.tostring(manual_strike_val) + ")" : "Auto: Spot " + str.tostring(nz(spot_close_today, spot_open), "#.##") + " → Round to Step " + str.tostring(strike_step)
 
-// Universal Fail-Safe Option Ticker Construction
+// Universal Fail-Safe Option Ticker Construction Matching Techfrost Nifty_V6_SR Strategy
 f_build_option_symbol(int target_strike, bool target_is_ce) =>
-    string st_digits = str.tostring(int(final_strike))
-    int st_len = str.length(st_digits)
-    
-    if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
-        int end_trim = 2
-        string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
-        string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
-        string sfx = target_is_ce ? "CE" : "PE"
-        syminfo.prefix + ":" + pfx + str.tostring(target_strike) + sfx
-    else if str.match(cleanTicker, "[CP]\\d+$") != ""
-        string matchCP = str.match(cleanTicker, "[CP]\\d+$")
-        int matchPos = str.pos(cleanTicker, matchCP)
-        string pfx = str.substring(cleanTicker, 0, matchPos)
-        string cp_letter = target_is_ce ? "C" : "P"
-        syminfo.prefix + ":" + pfx + cp_letter + str.tostring(target_strike)
-    else
-        string cp_sfx = suffixStyle == "C/P" ? (target_is_ce ? "C" : "P") : (target_is_ce ? "CE" : "PE")
-        if suffixStyle == "C/P"
-            final_exchange + ":" + final_root + final_expiry + cp_sfx + str.tostring(target_strike)
+    if is_option
+        string st_digits = str.tostring(int(final_strike))
+        int st_len = str.length(st_digits)
+        if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+            int end_trim = 2
+            string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
+            string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
+            string sfx = target_is_ce ? "CE" : "PE"
+            syminfo.prefix + ":" + pfx + str.tostring(target_strike) + sfx
+        else if str.match(cleanTicker, "[CP]\\d+$") != ""
+            string matchCP = str.match(cleanTicker, "[CP]\\d+$")
+            int matchPos = str.pos(cleanTicker, matchCP)
+            string pfx = str.substring(cleanTicker, 0, matchPos)
+            string cp_letter = target_is_ce ? "C" : "P"
+            syminfo.prefix + ":" + pfx + cp_letter + str.tostring(target_strike)
         else
+            string cp_letter = target_is_ce ? "C" : "P"
+            final_exchange + ":" + final_root + final_expiry + cp_letter + str.tostring(target_strike)
+    else
+        if str.contains(suffixStyle, "CE/PE")
+            string cp_sfx = target_is_ce ? "CE" : "PE"
             final_exchange + ":" + final_root + final_expiry + str.tostring(target_strike) + cp_sfx
+        else
+            string cp_letter = target_is_ce ? "C" : "P"
+            final_exchange + ":" + final_root + final_expiry + cp_letter + str.tostring(target_strike)
 
 // =========================================================================
 // STRIKES & DATA FETCHING FOR ATM, OTM, AND ITM STRIKES
@@ -190,38 +194,35 @@ int st_otm_pe = final_strike - offsetPts
 int st_itm_ce = final_strike - offsetPts
 int st_itm_pe = final_strike + offsetPts
 
-// Clean Option Contract Data Resolution Without Nested Security Calls
-f_get_contract_intraday() =>
-    float d_open = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
-    var float d_f5m = na
+// Multi-Variable Option Contract Tuple Match (Same Method as Techfrost Nifty_V6_SR)
+f_get_contract_tuple_extended() =>
+    var float day_open   = na
+    var float prev_close = na
+    var float f5m_close  = na
     if ta.change(time("D")) != 0
-        d_f5m := na
+        prev_close := close[1]
+        day_open   := open
+        f5m_close  := na
     if (hour == 9 and minute >= 19) or hour > 9
-        if na(d_f5m)
-            d_f5m := close
-    [d_open, na(d_f5m) ? d_open : d_f5m, close]
+        if na(f5m_close)
+            f5m_close := close
+    [nz(day_open, open), nz(prev_close, close[1]), na(f5m_close) ? nz(day_open, open) : f5m_close, close]
 
-// Fetch Option Ticker Data
+// Fetch Option Ticker Data Using Single Tuple Security Queries
 string ce_atm_ticker = f_build_option_symbol(st_atm, true)
 string pe_atm_ticker = f_build_option_symbol(st_atm, false)
-[ce_atm_o, ce_atm_f5m, ce_atm_ltp] = request.security(ce_atm_ticker, timeframe.period, f_get_contract_intraday(), ignore_invalid_symbol=true)
-[pe_atm_o, pe_atm_f5m, pe_atm_ltp] = request.security(pe_atm_ticker, timeframe.period, f_get_contract_intraday(), ignore_invalid_symbol=true)
-[ce_atm_pdc]                       = request.security(ce_atm_ticker, "D", [close[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_atm_pdc]                       = request.security(pe_atm_ticker, "D", [close[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_atm_o, ce_atm_pdc, ce_atm_f5m, ce_atm_ltp] = request.security(ce_atm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
+[pe_atm_o, pe_atm_pdc, pe_atm_f5m, pe_atm_ltp] = request.security(pe_atm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
 
 string ce_otm_ticker = f_build_option_symbol(st_otm_ce, true)
 string pe_otm_ticker = f_build_option_symbol(st_otm_pe, false)
-[ce_otm_o, ce_otm_f5m, ce_otm_ltp] = request.security(ce_otm_ticker, timeframe.period, f_get_contract_intraday(), ignore_invalid_symbol=true)
-[pe_otm_o, pe_otm_f5m, pe_otm_ltp] = request.security(pe_otm_ticker, timeframe.period, f_get_contract_intraday(), ignore_invalid_symbol=true)
-[ce_otm_pdc]                       = request.security(ce_otm_ticker, "D", [close[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_otm_pdc]                       = request.security(pe_otm_ticker, "D", [close[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_otm_o, ce_otm_pdc, ce_otm_f5m, ce_otm_ltp] = request.security(ce_otm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
+[pe_otm_o, pe_otm_pdc, pe_otm_f5m, pe_otm_ltp] = request.security(pe_otm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
 
 string ce_itm_ticker = f_build_option_symbol(st_itm_ce, true)
 string pe_itm_ticker = f_build_option_symbol(st_itm_pe, false)
-[ce_itm_o, ce_itm_f5m, ce_itm_ltp] = request.security(ce_itm_ticker, timeframe.period, f_get_contract_intraday(), ignore_invalid_symbol=true)
-[pe_itm_o, pe_itm_f5m, pe_itm_ltp] = request.security(pe_itm_ticker, timeframe.period, f_get_contract_intraday(), ignore_invalid_symbol=true)
-[ce_itm_pdc]                       = request.security(ce_itm_ticker, "D", [close[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_itm_pdc]                       = request.security(pe_itm_ticker, "D", [close[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_itm_o, ce_itm_pdc, ce_itm_f5m, ce_itm_ltp] = request.security(ce_itm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
+[pe_itm_o, pe_itm_pdc, pe_itm_f5m, pe_itm_ltp] = request.security(pe_itm_ticker, timeframe.period, f_get_contract_tuple_extended(), ignore_invalid_symbol=true)
 
 // Resolve Static Basis Reference Values
 f_resolve_basis(dop, pdc, f5m) =>
@@ -365,7 +366,7 @@ if barstate.islast and show_options_table
     table.cell(info_table, 2, 0, "Offset: " + str.tostring(offsetPts) + " pts", bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 3, 0, "Basis: " + basisTag, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 4, 0, "Expiry: " + final_expiry, bgcolor=#1565C0, text_color=color.yellow, text_size=t_sz)
-    table.cell(info_table, 5, 0, has_atm_data_rt ? "Option Data: OK" : "Option Data: N/A (Check Expiry Input)", bgcolor=has_atm_data_rt ? #1B5E20 : #B71C1C, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 5, 0, has_atm_data_rt ? "Option Data: OK" : "Ticker: " + ce_atm_ticker, bgcolor=has_atm_data_rt ? #1B5E20 : #B71C1C, text_color=color.white, text_size=t_sz)
 
     // Row 1: Column Headers
     table.cell(info_table, 0, 1, "BEP Layer / Level", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
@@ -384,8 +385,8 @@ if barstate.islast and show_options_table
     table.cell(info_table, 5, 2, "Primary Center Anchor", bgcolor=color.black, text_color=#FFEA00, text_size=t_sz)
 
     // Layer 1 Rows (Rows 3 & 4)
-    string atm_up_stat_str = na(atm_straddle_upper_stat) ? "N/A (No Option Data)" : str.tostring(atm_straddle_upper_stat, "#.##")
-    string atm_up_rt_str   = na(atm_straddle_upper_rt)   ? "N/A (No Option Data)" : str.tostring(atm_straddle_upper_rt, "#.##")
+    string atm_up_stat_str = na(atm_straddle_upper_stat) ? "N/A (" + ce_atm_ticker + ")" : str.tostring(atm_straddle_upper_stat, "#.##")
+    string atm_up_rt_str   = na(atm_straddle_upper_rt)   ? "N/A (" + ce_atm_ticker + ")" : str.tostring(atm_straddle_upper_rt, "#.##")
     table.cell(info_table, 0, 3, "Layer 1: ATM Upper Resistance", bgcolor=#1B5E20, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 1, 3, "ATM Strike + Straddle CP", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
     table.cell(info_table, 2, 3, atm_up_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
@@ -393,8 +394,8 @@ if barstate.islast and show_options_table
     table.cell(info_table, 4, 3, na(atm_straddle_upper_rt) ? "Spot vs Upper: N/A" : "Spot vs Upper: " + str.tostring(close - atm_straddle_upper_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=not na(atm_straddle_upper_rt) and close >= atm_straddle_upper_rt ? #00E676 : color.silver, text_size=t_sz)
     table.cell(info_table, 5, 3, is_rejection_zone ? "REJECTION CONFLUENCE" : "Normal Resistance", bgcolor=is_rejection_zone ? #FF6D00 : color.black, text_color=color.white, text_size=t_sz)
 
-    string atm_lo_stat_str = na(atm_straddle_lower_stat) ? "N/A (No Option Data)" : str.tostring(atm_straddle_lower_stat, "#.##")
-    string atm_lo_rt_str   = na(atm_straddle_lower_rt)   ? "N/A (No Option Data)" : str.tostring(atm_straddle_lower_rt, "#.##")
+    string atm_lo_stat_str = na(atm_straddle_lower_stat) ? "N/A (Check Expiry)" : str.tostring(atm_straddle_lower_stat, "#.##")
+    string atm_lo_rt_str   = na(atm_straddle_lower_rt)   ? "N/A (Check Expiry)" : str.tostring(atm_straddle_lower_rt, "#.##")
     table.cell(info_table, 0, 4, "Layer 1: ATM Lower Support", bgcolor=#B71C1C, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 1, 4, "ATM Strike - Straddle CP", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
     table.cell(info_table, 2, 4, atm_lo_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
