@@ -1,0 +1,637 @@
+//@version=6
+indicator("15. Techfrost Day ATM Option Candles & Basket Table", shorttitle="TF Day ATM Candles & Table", overlay=true, precision=2, max_labels_count=500, max_boxes_count=500, max_lines_count=500)
+
+// ==========================================
+// ENUMS & INPUTS
+// ==========================================
+
+enum UnderlyingAsset
+    auto      = "Auto-Detect"
+    nifty     = "NIFTY"
+    banknifty = "BANKNIFTY"
+    crudeoil  = "CRUDEOIL"
+    gold      = "GOLD"
+    stock     = "Stock (Equity)"
+
+enum OptionType
+    auto = "Auto-Detect"
+    ce   = "Call (CE)"
+    pe   = "Put (PE)"
+
+enum StepOverrideChoice
+    auto    = "Auto"
+    step1   = "1"
+    step2_5 = "2.5"
+    step5   = "5"
+    step10  = "10"
+    step20  = "20"
+    step25  = "25"
+    step50  = "50"
+    step100 = "100"
+    step200 = "200"
+    step500 = "500"
+
+// --- Instrument Settings ---
+underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
+optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
+numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side", minval=1, maxval=4, group="Instrument Settings",
+  tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
+spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
+strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
+strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
+  tooltip="Set to Auto for auto-detection based on underlying stock/index (Auto-detects 1, 2.5, 5, 10, 20, 50, 100).")
+
+// --- Realtime Day Open ATM Option Candles ---
+G_CANDLES            = "Realtime Day Open ATM Option Candles"
+showCEATM_Candles    = input.bool(true, "Show Realtime Day Open ATM Call (CE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of the Day Open ATM Call option.")
+showPEATMCandles     = input.bool(true, "Show Realtime Day Open ATM Put (PE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of the Day Open ATM Put option.")
+plot_candle_mode     = input.string("Overlay on Spot (Strike +/- Premium)", "Candle Scaling Mode", options=["Overlay on Spot (Strike +/- Premium)", "Direct Option Premium Values"], group=G_CANDLES, tooltip="Select how option candles are scaled on chart.")
+
+color_atm_ce_bull    = input.color(#26A69A, "ATM CE Bullish Candle Body", group=G_CANDLES)
+color_atm_ce_bear    = input.color(#EF5350, "ATM CE Bearish Candle Body", group=G_CANDLES)
+color_atm_pe_bull    = input.color(#00B0FF, "ATM PE Bullish Candle Body", group=G_CANDLES)
+color_atm_pe_bear    = input.color(#FF9100, "ATM PE Bearish Candle Body", group=G_CANDLES)
+show_candle_labels   = input.bool(true, "Show Floating Right-Side LTP Labels", group=G_CANDLES)
+
+// --- Dashboard Table Controls ---
+G_TABLE              = "Dashboard Table Settings"
+showTableInput       = input.bool(true, "Show Summary & Strike Analytics Table", group=G_TABLE, tooltip="Enable or disable the summary & strike analytics table.")
+tablePosInput        = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLE)
+tableTextSizeInput   = input.string("Small", "Table Text Size / Resizing", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLE)
+
+colorCurATMHighlight = input.color(#FFEE58, "Current ATM Cell Highlight (Yellow)", group="Styling & Colors")
+colorDayATMHighlight = input.color(#00E5FF, "Day Open ATM Cell Highlight (Cyan)", group="Styling & Colors")
+
+// ==========================================
+// TICKER PARSING & AUTO-DETECTION
+// ==========================================
+
+string cleanTicker = syminfo.ticker
+int colonPos = str.pos(cleanTicker, ":")
+if colonPos != -1
+    cleanTicker := str.substring(cleanTicker, colonPos + 1)
+cleanTicker := str.replace_all(cleanTicker, " ", "")
+
+// ----- Detect underlying -----
+UnderlyingAsset actualUnderlying = na
+if underlyingInput == UnderlyingAsset.auto
+    if str.contains(cleanTicker, "BANKNIFTY")
+        actualUnderlying := UnderlyingAsset.banknifty
+    else if str.contains(cleanTicker, "NIFTY")
+        actualUnderlying := UnderlyingAsset.nifty
+    else if str.contains(cleanTicker, "CRUDEOIL")
+        actualUnderlying := UnderlyingAsset.crudeoil
+    else if str.contains(cleanTicker, "GOLD") and not str.contains(cleanTicker, "GOLDM") and not str.contains(cleanTicker, "GOLDPETAL")
+        actualUnderlying := UnderlyingAsset.gold
+    else if str.contains(cleanTicker, "GOLDM")
+        actualUnderlying := UnderlyingAsset.gold
+    else
+        actualUnderlying := UnderlyingAsset.stock
+else
+    actualUnderlying := underlyingInput
+
+// ----- Detect option type -----
+bool isCall = false
+bool isPut  = false
+
+if optionTypeInput == OptionType.ce
+    isCall := true
+else if optionTypeInput == OptionType.pe
+    isPut := true
+else
+    if str.contains(cleanTicker, "CE")
+        isCall := true
+    else if str.contains(cleanTicker, "PE")
+        isPut := true
+    else if str.match(cleanTicker, "C\\d+$") != ""
+        isCall := true
+    else if str.match(cleanTicker, "P\\d+$") != ""
+        isPut := true
+
+// ----- Strike extraction from chart symbol -----
+float detectedStrike = na
+string tickerWithoutCEPE = ""
+
+int tickerLen = str.length(cleanTicker)
+if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+    tickerWithoutCEPE := str.substring(cleanTicker, 0, tickerLen - 2)
+
+string matchC = str.match(cleanTicker, "C\\d+$")
+string matchP = str.match(cleanTicker, "P\\d+$")
+
+if matchC != ""
+    detectedStrike := str.tonumber(str.substring(matchC, 1))
+else if matchP != ""
+    detectedStrike := str.tonumber(str.substring(matchP, 1))
+else if tickerWithoutCEPE != ""
+    string strikeDigits = str.match(tickerWithoutCEPE, "\\d+$")
+    detectedStrike := str.tonumber(strikeDigits)
+
+float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : detectedStrike
+
+// ==========================================
+// SPOT TICKER RESOLUTION & STRICT DAY OPEN ATM CENTER ANCHORING
+// ==========================================
+
+string spotTicker = ""
+if str.length(spotTickerOverride) > 0
+    spotTicker := spotTickerOverride
+else
+    switch actualUnderlying
+        UnderlyingAsset.banknifty => spotTicker := "NSE:BANKNIFTY"
+        UnderlyingAsset.nifty     => spotTicker := "NSE:NIFTY"
+        UnderlyingAsset.crudeoil  => spotTicker := "MCX:CRUDEOIL1!"
+        UnderlyingAsset.gold      => spotTicker := "MCX:GOLD1!"
+        UnderlyingAsset.stock     =>
+            string rootGuess = str.match(cleanTicker, "^[A-Z&]+")
+            if rootGuess != ""
+                spotTicker := syminfo.prefix + ":" + rootGuess
+            else
+                spotTicker := syminfo.prefix + ":" + cleanTicker
+
+// Fetch Day Open Spot Price for the underlying
+float spotDayOpen = request.security(spotTicker, "D", open, lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+// Dynamic Smart Strike Step Auto-Detection (Works for Stocks & Indices)
+f_auto_detect_step(float ref_p) =>
+    float s_res = 50.0
+    if na(ref_p) or ref_p <= 0
+        s_res := 50.0
+    else if ref_p < 100
+        s_res := 1.0
+    else if ref_p < 250
+        s_res := 2.5
+    else if ref_p < 500
+        s_res := 5.0
+    else if ref_p < 1200
+        s_res := 10.0
+    else if ref_p < 2500
+        s_res := 20.0
+    else
+        s_res := 50.0
+    s_res
+
+float stepVal = 50.0
+switch strikeStepInput
+    StepOverrideChoice.step1   => stepVal := 1.0
+    StepOverrideChoice.step2_5 => stepVal := 2.5
+    StepOverrideChoice.step5   => stepVal := 5.0
+    StepOverrideChoice.step10  => stepVal := 10.0
+    StepOverrideChoice.step20  => stepVal := 20.0
+    StepOverrideChoice.step25  => stepVal := 25.0
+    StepOverrideChoice.step50  => stepVal := 50.0
+    StepOverrideChoice.step100 => stepVal := 100.0
+    StepOverrideChoice.step200 => stepVal := 200.0
+    StepOverrideChoice.step500 => stepVal := 500.0
+    =>
+        switch actualUnderlying
+            UnderlyingAsset.banknifty => stepVal := 100.0
+            UnderlyingAsset.nifty     => stepVal := 50.0
+            UnderlyingAsset.crudeoil  => stepVal := 50.0
+            UnderlyingAsset.gold      => stepVal := 100.0
+            UnderlyingAsset.stock     => stepVal := f_auto_detect_step(not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
+
+// Base Center Strike is fixed statically on barstate.isfirst to keep security requests 100% constant across all bars
+var float baseCenterStrike = na
+if barstate.isfirst or na(baseCenterStrike)
+    float refPrice = strikeOverride > 0.0 ? strikeOverride : (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
+    baseCenterStrike := math.round(refPrice / stepVal) * stepVal
+
+float baseStrike = baseCenterStrike
+
+// ==========================================
+// UNIVERSAL FAIL-SAFE CE & PE TICKER CONSTRUCTION
+// ==========================================
+
+f_build_option_symbol(float target_strike, bool target_is_ce) =>
+    string st_digits = not na(chartStrikePrice) and chartStrikePrice > 0 ? (chartStrikePrice == math.floor(chartStrikePrice) ? str.tostring(int(chartStrikePrice)) : str.tostring(chartStrikePrice)) : (target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike))
+    int st_len = str.length(st_digits)
+    string target_st_str = target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike)
+    
+    if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+        int end_trim = 2
+        string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
+        string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
+        string sfx = target_is_ce ? "CE" : "PE"
+        pfx + target_st_str + sfx
+    else if str.match(cleanTicker, "[CP]\\d+$") != ""
+        string matchCP = str.match(cleanTicker, "[CP]\\d+$")
+        int matchPos = str.pos(cleanTicker, matchCP)
+        string pfx = str.substring(cleanTicker, 0, matchPos)
+        string cp_letter = target_is_ce ? "C" : "P"
+        pfx + cp_letter + target_st_str
+    else
+        string rep_ticker = str.replace(cleanTicker, st_digits, target_st_str)
+        rep_ticker
+
+f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
+f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
+
+// 9 Strikes centered strictly around Day Open ATM (baseStrike is always middle row)
+float k_0  = baseStrike
+float k_p1 = baseStrike + 1.0 * stepVal
+float k_p2 = baseStrike + 2.0 * stepVal
+float k_p3 = baseStrike + 3.0 * stepVal
+float k_p4 = baseStrike + 4.0 * stepVal
+
+float k_m1 = baseStrike - 1.0 * stepVal
+float k_m2 = baseStrike - 2.0 * stepVal
+float k_m3 = baseStrike - 3.0 * stepVal
+float k_m4 = baseStrike - 4.0 * stepVal
+
+// ==========================================
+// DATA FETCHING FOR STRIKES (STATIC SECURITY CALLS INCLUDING FULL OHLC)
+// ==========================================
+
+f_get_strike_full_ohlc() =>
+    float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    [d_op, open, high, low, close]
+
+[ce_o_p4, ce_opn_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p4, pe_opn_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p3, ce_opn_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p3, pe_opn_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p2, ce_opn_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p2, pe_opn_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p1, ce_opn_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p1, pe_opn_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_0,  ce_opn_0,  ce_h_0,  ce_l_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_0,  pe_opn_0,  pe_h_0,  pe_l_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m1, ce_opn_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m1, pe_opn_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m2, ce_opn_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m2, pe_opn_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m3, ce_opn_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m3, pe_opn_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m4, ce_opn_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m4, pe_opn_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+// ==========================================
+// DAY OPEN ATM CALCULATION (MIN |CE OPEN - PE OPEN|)
+// ==========================================
+
+float diff_open_p4 = math.abs(nz(ce_o_p4) - nz(pe_o_p4))
+float diff_open_p3 = math.abs(nz(ce_o_p3) - nz(pe_o_p3))
+float diff_open_p2 = math.abs(nz(ce_o_p2) - nz(pe_o_p2))
+float diff_open_p1 = math.abs(nz(ce_o_p1) - nz(pe_o_p1))
+float diff_open_0  = math.abs(nz(ce_o_0)  - nz(pe_o_0))
+float diff_open_m1 = math.abs(nz(ce_o_m1) - nz(pe_o_m1))
+float diff_open_m2 = math.abs(nz(ce_o_m2) - nz(pe_o_m2))
+float diff_open_m3 = math.abs(nz(ce_o_m3) - nz(pe_o_m3))
+float diff_open_m4 = math.abs(nz(ce_o_m4) - nz(pe_o_m4))
+
+float minDiffOpen = math.min(diff_open_p4, math.min(diff_open_p3, math.min(diff_open_p2, math.min(diff_open_p1, math.min(diff_open_0, math.min(diff_open_m1, math.min(diff_open_m2, math.min(diff_open_m3, diff_open_m4))))))))
+
+float dayOpenATMStrike = k_0
+if minDiffOpen == diff_open_p4
+    dayOpenATMStrike := k_p4
+else if minDiffOpen == diff_open_p3
+    dayOpenATMStrike := k_p3
+else if minDiffOpen == diff_open_p2
+    dayOpenATMStrike := k_p2
+else if minDiffOpen == diff_open_p1
+    dayOpenATMStrike := k_p1
+else if minDiffOpen == diff_open_0
+    dayOpenATMStrike := k_0
+else if minDiffOpen == diff_open_m1
+    dayOpenATMStrike := k_m1
+else if minDiffOpen == diff_open_m2
+    dayOpenATMStrike := k_m2
+else if minDiffOpen == diff_open_m3
+    dayOpenATMStrike := k_m3
+else if minDiffOpen == diff_open_m4
+    dayOpenATMStrike := k_m4
+
+// ==========================================
+// CURRENT REALTIME ATM CALCULATION (MIN |CE LTP - PE LTP|)
+// ==========================================
+
+float diff_cur_p4 = math.abs(nz(ce_c_p4) - nz(pe_c_p4))
+float diff_cur_p3 = math.abs(nz(ce_c_p3) - nz(pe_c_p3))
+float diff_cur_p2 = math.abs(nz(ce_c_p2) - nz(pe_c_p2))
+float diff_cur_p1 = math.abs(nz(ce_c_p1) - nz(pe_c_p1))
+float diff_cur_0  = math.abs(nz(ce_c_0)  - nz(pe_c_0))
+float diff_cur_m1 = math.abs(nz(ce_c_m1) - nz(pe_c_m1))
+float diff_cur_m2 = math.abs(nz(ce_c_m2) - nz(pe_c_m2))
+float diff_cur_m3 = math.abs(nz(ce_c_m3) - nz(pe_c_m3))
+float diff_cur_m4 = math.abs(nz(ce_c_m4) - nz(pe_c_m4))
+
+float minDiffCur = math.min(diff_cur_p4, math.min(diff_cur_p3, math.min(diff_cur_p2, math.min(diff_cur_p1, math.min(diff_cur_0, math.min(diff_cur_m1, math.min(diff_cur_m2, math.min(diff_cur_m3, diff_cur_m4))))))))
+
+float curATMStrike = k_0
+if minDiffCur == diff_cur_p4
+    curATMStrike := k_p4
+else if minDiffCur == diff_cur_p3
+    curATMStrike := k_p3
+else if minDiffCur == diff_cur_p2
+    curATMStrike := k_p2
+else if minDiffCur == diff_cur_p1
+    curATMStrike := k_p1
+else if minDiffCur == diff_cur_0
+    curATMStrike := k_0
+else if minDiffCur == diff_cur_m1
+    curATMStrike := k_m1
+else if minDiffCur == diff_cur_m2
+    curATMStrike := k_m2
+else if minDiffCur == diff_cur_m3
+    curATMStrike := k_m3
+else if minDiffCur == diff_cur_m4
+    curATMStrike := k_m4
+
+// ==========================================
+// REALTIME DAY OPEN ATM CE & PE CANDLE OHLC EXTRACTION (UPDATES TICK-BY-TICK)
+// ==========================================
+
+float atm_ce_o = na, float atm_ce_h = na, float atm_ce_l = na, float atm_ce_c = na
+float atm_pe_o = na, float atm_pe_h = na, float atm_pe_l = na, float atm_pe_c = na
+
+if dayOpenATMStrike == k_p4
+    atm_ce_o := ce_opn_p4, atm_ce_h := ce_h_p4, atm_ce_l := ce_l_p4, atm_ce_c := ce_c_p4
+    atm_pe_o := pe_opn_p4, atm_pe_h := pe_h_p4, atm_pe_l := pe_l_p4, atm_pe_c := pe_c_p4
+else if dayOpenATMStrike == k_p3
+    atm_ce_o := ce_opn_p3, atm_ce_h := ce_h_p3, atm_ce_l := ce_l_p3, atm_ce_c := ce_c_p3
+    atm_pe_o := pe_opn_p3, atm_pe_h := pe_h_p3, atm_pe_l := pe_l_p3, atm_pe_c := pe_c_p3
+else if dayOpenATMStrike == k_p2
+    atm_ce_o := ce_opn_p2, atm_ce_h := ce_h_p2, atm_ce_l := ce_l_p2, atm_ce_c := ce_c_p2
+    atm_pe_o := pe_opn_p2, atm_pe_h := pe_h_p2, atm_pe_l := pe_l_p2, atm_pe_c := pe_c_p2
+else if dayOpenATMStrike == k_p1
+    atm_ce_o := ce_opn_p1, atm_ce_h := ce_h_p1, atm_ce_l := ce_l_p1, atm_ce_c := ce_c_p1
+    atm_pe_o := pe_opn_p1, atm_pe_h := pe_h_p1, atm_pe_l := pe_l_p1, atm_pe_c := pe_c_p1
+else if dayOpenATMStrike == k_0
+    atm_ce_o := ce_opn_0,  atm_ce_h := ce_h_0,  atm_ce_l := ce_l_0,  atm_ce_c := ce_c_0
+    atm_pe_o := pe_opn_0,  atm_pe_h := pe_h_0,  atm_pe_l := pe_l_0,  atm_pe_c := pe_c_0
+else if dayOpenATMStrike == k_m1
+    atm_ce_o := ce_opn_m1, atm_ce_h := ce_h_m1, atm_ce_l := ce_l_m1, atm_ce_c := ce_c_m1
+    atm_pe_o := pe_opn_m1, atm_pe_h := pe_h_m1, atm_pe_l := pe_l_m1, atm_pe_c := pe_c_m1
+else if dayOpenATMStrike == k_m2
+    atm_ce_o := ce_opn_m2, atm_ce_h := ce_h_m2, atm_ce_l := ce_l_m2, atm_ce_c := ce_c_m2
+    atm_pe_o := pe_opn_m2, atm_pe_h := pe_h_m2, atm_pe_l := pe_l_m2, atm_pe_c := pe_c_m2
+else if dayOpenATMStrike == k_m3
+    atm_ce_o := ce_opn_m3, atm_ce_h := ce_h_m3, atm_ce_l := ce_l_m3, atm_ce_c := ce_c_m3
+    atm_pe_o := pe_opn_m3, atm_pe_h := pe_h_m3, atm_pe_l := pe_l_m3, atm_pe_c := pe_c_m3
+else if dayOpenATMStrike == k_m4
+    atm_ce_o := ce_opn_m4, atm_ce_h := ce_h_m4, atm_ce_l := ce_l_m4, atm_ce_c := ce_c_m4
+    atm_pe_o := pe_opn_m4, atm_pe_h := pe_h_m4, atm_pe_l := pe_l_m4, atm_pe_c := pe_c_m4
+
+// Scaling Day Open ATM CE & PE Candle OHLC depending on plot mode
+float ce_candle_o = na, float ce_candle_h = na, float ce_candle_l = na, float ce_candle_c = na
+float pe_candle_o = na, float pe_candle_h = na, float pe_candle_l = na, float pe_candle_c = na
+
+if plot_candle_mode == "Overlay on Spot (Strike +/- Premium)"
+    ce_candle_o := dayOpenATMStrike + atm_ce_o
+    ce_candle_h := dayOpenATMStrike + atm_ce_h
+    ce_candle_l := dayOpenATMStrike + atm_ce_l
+    ce_candle_c := dayOpenATMStrike + atm_ce_c
+
+    pe_candle_o := dayOpenATMStrike - atm_pe_o
+    pe_candle_h := dayOpenATMStrike - atm_pe_h
+    pe_candle_l := dayOpenATMStrike - atm_pe_l
+    pe_candle_c := dayOpenATMStrike - atm_pe_c
+else
+    ce_candle_o := atm_ce_o
+    ce_candle_h := atm_ce_h
+    ce_candle_l := atm_ce_l
+    ce_candle_c := atm_ce_c
+
+    pe_candle_o := atm_pe_o
+    pe_candle_h := atm_pe_h
+    pe_candle_l := atm_pe_l
+    pe_candle_c := atm_pe_c
+
+// Colors for CE and PE candles
+color ce_body_col = atm_ce_c >= atm_ce_o ? color_atm_ce_bull : color_atm_ce_bear
+color ce_wick_col = atm_ce_c >= atm_ce_o ? color_atm_ce_bull : color_atm_ce_bear
+
+color pe_body_col = atm_pe_c >= atm_pe_o ? color_atm_pe_bull : color_atm_pe_bear
+color pe_wick_col = atm_pe_c >= atm_pe_o ? color_atm_pe_bull : color_atm_pe_bear
+
+// Plot Realtime Day Open ATM Option Candles on the Main Chart
+plotcandle(showCEATM_Candles ? ce_candle_o : na, showCEATM_Candles ? ce_candle_h : na, showCEATM_Candles ? ce_candle_l : na, showCEATM_Candles ? ce_candle_c : na, title="Day Open ATM CE Realtime Candle", color=ce_body_col, wickcolor=ce_wick_col, bordercolor=ce_wick_col)
+plotcandle(showPEATMCandles ? pe_candle_o : na, showPEATMCandles ? pe_candle_h : na, showPEATMCandles ? pe_candle_l : na, showPEATMCandles ? pe_candle_c : na, title="Day Open ATM PE Realtime Candle", color=pe_body_col, wickcolor=pe_wick_col, bordercolor=pe_wick_col)
+
+// Realtime Floating Right-Edge Price Labels
+var label lbl_atm_ce = na
+var label lbl_atm_pe = na
+
+if barstate.islast and show_candle_labels
+    label.delete(lbl_atm_ce)
+    label.delete(lbl_atm_pe)
+    
+    int label_x = bar_index + 10
+    string dayAtmStr = dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")
+    
+    if showCEATM_Candles and not na(ce_candle_c)
+        lbl_atm_ce := label.new(label_x, ce_candle_c, "Day ATM (" + dayAtmStr + ") CE LTP: " + str.tostring(atm_ce_c, "#.##"), color=color_atm_ce_bull, textcolor=color.white, style=label.style_label_left, size=size.small)
+    if showPEATMCandles and not na(pe_candle_c)
+        lbl_atm_pe := label.new(label_x, pe_candle_c, "Day ATM (" + dayAtmStr + ") PE LTP: " + str.tostring(atm_pe_c, "#.##"), color=color_atm_pe_bull, textcolor=color.white, style=label.style_label_left, size=size.small)
+
+// ==========================================
+// BASKET AVERAGE CALCULATIONS FOR DASHBOARD TABLE
+// ==========================================
+
+float sum_ce_open = nz(ce_o_0)
+float sum_pe_open = nz(pe_o_0)
+float sum_ce_cur  = nz(ce_c_0)
+float sum_pe_cur  = nz(pe_c_0)
+int total_count   = 1 + 2 * numStrikesInput
+
+if numStrikesInput >= 1
+    sum_ce_open += nz(ce_o_p1) + nz(ce_o_m1)
+    sum_pe_open += nz(pe_o_p1) + nz(pe_o_m1)
+    sum_ce_cur  += nz(ce_c_p1) + nz(ce_c_m1)
+    sum_pe_cur  += nz(pe_c_p1) + nz(pe_c_m1)
+
+if numStrikesInput >= 2
+    sum_ce_open += nz(ce_o_p2) + nz(ce_o_m2)
+    sum_pe_open += nz(pe_o_p2) + nz(pe_o_m2)
+    sum_ce_cur  += nz(ce_c_p2) + nz(ce_c_m2)
+    sum_pe_cur  += nz(pe_c_p2) + nz(pe_c_m2)
+
+if numStrikesInput >= 3
+    sum_ce_open += nz(ce_o_p3) + nz(ce_o_m3)
+    sum_pe_open += nz(pe_o_p3) + nz(pe_o_m3)
+    sum_ce_cur  += nz(ce_c_p3) + nz(ce_c_m3)
+    sum_pe_cur  += nz(pe_c_p3) + nz(pe_c_m3)
+
+if numStrikesInput >= 4
+    sum_ce_open += nz(ce_o_p4) + nz(ce_o_m4)
+    sum_pe_open += nz(pe_o_p4) + nz(pe_o_m4)
+    sum_ce_cur  += nz(ce_c_p4) + nz(ce_c_m4)
+    sum_pe_cur  += nz(pe_c_p4) + nz(pe_c_m4)
+
+float ceAvgOpen = sum_ce_open / float(total_count)
+float peAvgOpen = sum_pe_open / float(total_count)
+float ceAvgCur  = sum_ce_cur  / float(total_count)
+float peAvgCur  = sum_pe_cur  / float(total_count)
+
+float ceAvgChg = ceAvgCur - ceAvgOpen
+float peAvgChg = peAvgCur - peAvgOpen
+
+float basketAvgOpen = (ceAvgOpen + peAvgOpen) / 2.0
+float basketAvgCur  = (ceAvgCur + peAvgCur) / 2.0
+float basketAvgChg  = basketAvgCur - basketAvgOpen
+
+// ==========================================
+// DASHBOARD & STRIKE TABLE (EXACT VISUAL REPLICA FROM IMAGE)
+// ==========================================
+
+f_get_table_pos(string pos_str) =>
+    switch pos_str
+        "Top Right"    => position.top_right
+        "Top Left"     => position.top_left
+        "Bottom Left"  => position.bottom_left
+        => position.bottom_right
+
+f_get_table_text_size(string sz_str) =>
+    switch sz_str
+        "Auto"   => size.auto
+        "Tiny"   => size.tiny
+        "Small"  => size.small
+        "Normal" => size.normal
+        "Large"  => size.large
+        => size.small
+
+var table summaryTable = table.new(f_get_table_pos(tablePosInput), 8, 15, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+
+string underlyingName = switch actualUnderlying
+    UnderlyingAsset.banknifty => "BANKNIFTY"
+    UnderlyingAsset.nifty     => "NIFTY"
+    UnderlyingAsset.crudeoil  => "CRUDEOIL"
+    UnderlyingAsset.gold      => "GOLD"
+    UnderlyingAsset.stock     => "STOCK"
+    => "Unknown"
+
+string curTextSize = f_get_table_text_size(tableTextSizeInput)
+
+f_fill_grid_row(table tbl, int r, float st_val, bool is_cur_atm, bool is_day_atm, float ce_op, float ce_ltp, float pe_op, float pe_ltp, string t_sz) =>
+    string st_fmt = st_val == math.floor(st_val) ? str.tostring(int(st_val)) : str.tostring(st_val, "#.##")
+    string st_label = st_fmt + (is_cur_atm and is_day_atm ? " (Cur & Day ATM)" : (is_cur_atm ? " (Cur ATM)" : (is_day_atm ? " (Day ATM)" : "")))
+    color st_bg = (is_cur_atm and is_day_atm) ? color.new(#76FF03, 0) : (is_cur_atm ? colorCurATMHighlight : (is_day_atm ? colorDayATMHighlight : color.black))
+    color st_tc = (is_cur_atm or is_day_atm) ? color.black : color.white
+    table.cell(tbl, 0, r, st_label, bgcolor=st_bg, text_color=st_tc, text_size=t_sz)
+
+    table.cell(tbl, 1, r, na(ce_op) ? "N/A" : str.tostring(ce_op, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+    table.cell(tbl, 2, r, na(ce_ltp) ? "N/A" : str.tostring(ce_ltp, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+
+    float ce_chg = ce_ltp - ce_op
+    string ce_chg_str = na(ce_chg) ? "N/A" : ((ce_chg >= 0 ? "+" : "") + str.tostring(ce_chg, "#.##"))
+    color ce_chg_bg   = na(ce_chg) ? color.black : (ce_chg > 0 ? color.new(#1B5E20, 0) : (ce_chg < 0 ? color.new(#880E4F, 0) : color.black))
+    table.cell(tbl, 3, r, ce_chg_str, bgcolor=ce_chg_bg, text_color=color.white, text_size=t_sz)
+
+    table.cell(tbl, 4, r, na(pe_op) ? "N/A" : str.tostring(pe_op, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+    table.cell(tbl, 5, r, na(pe_ltp) ? "N/A" : str.tostring(pe_ltp, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+
+    float pe_chg = pe_ltp - pe_op
+    string pe_chg_str = na(pe_chg) ? "N/A" : ((pe_chg >= 0 ? "+" : "") + str.tostring(pe_chg, "#.##"))
+    color pe_chg_bg   = na(pe_chg) ? color.black : (pe_chg > 0 ? color.new(#1B5E20, 0) : (pe_chg < 0 ? color.new(#880E4F, 0) : color.black))
+    table.cell(tbl, 6, r, pe_chg_str, bgcolor=pe_chg_bg, text_color=color.white, text_size=t_sz)
+
+    float raw_diff = ce_ltp - pe_ltp
+    float abs_diff = na(raw_diff) ? na : math.abs(raw_diff)
+    string diff_str = na(raw_diff) ? "N/A" : str.tostring(abs_diff, "#.##")
+    color diff_bg = na(raw_diff) ? color.black : (raw_diff > 0 ? color.new(#1B5E20, 0) : (raw_diff < 0 ? color.new(#880E4F, 0) : color.black))
+    table.cell(tbl, 7, r, diff_str, bgcolor=diff_bg, text_color=color.white, text_size=t_sz)
+
+if barstate.islast
+    if not showTableInput
+        table.delete(summaryTable)
+    else
+        string strikeTag = str.tostring(total_count) + "-Strike Basket (" + str.tostring(numStrikesInput) + " ITM + ATM + " + str.tostring(numStrikesInput) + " OTM)"
+        string stepFmt = stepVal == math.floor(stepVal) ? str.tostring(int(stepVal)) : str.tostring(stepVal, "#.##")
+        string dayOpenFmt = dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")
+        string curAtmFmt = curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")
+
+        // Row 0: Top Header Banner
+        table.cell(summaryTable, 0, 0, "Asset: " + underlyingName, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 1, 0, "Step: " + stepFmt, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 2, 0, strikeTag, bgcolor=color.new(#1565C0, 0), text_color=color.yellow, text_size=curTextSize)
+        table.cell(summaryTable, 3, 0, "Day Open ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 4, 0, dayOpenFmt, bgcolor=colorDayATMHighlight, text_color=color.black, text_size=curTextSize)
+        table.cell(summaryTable, 5, 0, "Current ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 6, 0, curAtmFmt, bgcolor=colorCurATMHighlight, text_color=color.black, text_size=curTextSize)
+        table.cell(summaryTable, 7, 0, "", bgcolor=color.new(#1565C0, 0))
+
+        // Row 1: Day Open Averages (CE & PE)
+        table.cell(summaryTable, 0, 1, "Day Open Basket Avg", bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 1, 1, "CE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 2, 1, str.tostring(ceAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#00E676, text_size=curTextSize)
+        table.cell(summaryTable, 3, 1, "PE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 4, 1, str.tostring(peAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#FF1744, text_size=curTextSize)
+        table.cell(summaryTable, 5, 1, "Basket Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 6, 1, str.tostring(basketAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 7, 0, "", bgcolor=color.new(#212121, 0))
+
+        // Row 2: Current Running Averages & Changes
+        table.cell(summaryTable, 0, 2, "Current Running Avg", bgcolor=color.new(#1C1C1C, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 1, 2, "CE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
+
+        string ceAvgStr = str.tostring(ceAvgCur, "#.##") + " (" + (ceAvgChg >= 0 ? "+" : "") + str.tostring(ceAvgChg, "#.##") + ")"
+        color ceAvgColor = ceAvgChg >= 0 ? #00E676 : #FF5252
+        table.cell(summaryTable, 2, 2, ceAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=ceAvgColor, text_size=curTextSize)
+
+        table.cell(summaryTable, 3, 2, "PE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
+        string peAvgStr = str.tostring(peAvgCur, "#.##") + " (" + (peAvgChg >= 0 ? "+" : "") + str.tostring(peAvgChg, "#.##") + ")"
+        color peAvgColor = peAvgChg >= 0 ? #00E676 : #FF5252
+        table.cell(summaryTable, 4, 2, peAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=peAvgColor, text_size=curTextSize)
+
+        table.cell(summaryTable, 5, 2, "Basket Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
+        string basketAvgStr = str.tostring(basketAvgCur, "#.##") + " (" + (basketAvgChg >= 0 ? "+" : "") + str.tostring(basketAvgChg, "#.##") + ")"
+        color basketAvgColor = basketAvgChg >= 0 ? #00E676 : #FF5252
+        table.cell(summaryTable, 6, 2, basketAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=basketAvgColor, text_size=curTextSize)
+        table.cell(summaryTable, 7, 2, "", bgcolor=color.new(#1C1C1C, 0))
+
+        // Row 3: Grid Column Headers
+        table.cell(summaryTable, 0, 3, "Strike",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 1, 3, "CE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 2, 3, "CE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 3, 3, "CE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 4, 3, "PE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 5, 3, "PE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 6, 3, "PE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 7, 3, "|CE-PE| Diff", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+
+        // Rows 4+: Populate active selected strikes grid
+        int rowIdx = 4
+        if numStrikesInput >= 4
+            f_fill_grid_row(summaryTable, rowIdx, k_p4, k_p4 == curATMStrike, k_p4 == dayOpenATMStrike, ce_o_p4, ce_c_p4, pe_o_p4, pe_c_p4, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 3
+            f_fill_grid_row(summaryTable, rowIdx, k_p3, k_p3 == curATMStrike, k_p3 == dayOpenATMStrike, ce_o_p3, ce_c_p3, pe_o_p3, pe_c_p3, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 2
+            f_fill_grid_row(summaryTable, rowIdx, k_p2, k_p2 == curATMStrike, k_p2 == dayOpenATMStrike, ce_o_p2, ce_c_p2, pe_o_p2, pe_c_p2, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 1
+            f_fill_grid_row(summaryTable, rowIdx, k_p1, k_p1 == curATMStrike, k_p1 == dayOpenATMStrike, ce_o_p1, ce_c_p1, pe_o_p1, pe_c_p1, curTextSize)
+            rowIdx += 1
+
+        // ATM Row (0)
+        f_fill_grid_row(summaryTable, rowIdx, k_0, k_0 == curATMStrike, k_0 == dayOpenATMStrike, ce_o_0, ce_c_0, pe_o_0, pe_c_0, curTextSize)
+        rowIdx += 1
+
+        if numStrikesInput >= 1
+            f_fill_grid_row(summaryTable, rowIdx, k_m1, k_m1 == curATMStrike, k_m1 == dayOpenATMStrike, ce_o_m1, ce_c_m1, pe_o_m1, pe_c_m1, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 2
+            f_fill_grid_row(summaryTable, rowIdx, k_m2, k_m2 == curATMStrike, k_m2 == dayOpenATMStrike, ce_o_m2, ce_c_m2, pe_o_m2, pe_c_m2, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 3
+            f_fill_grid_row(summaryTable, rowIdx, k_m3, k_m3 == curATMStrike, k_m3 == dayOpenATMStrike, ce_o_m3, ce_c_m3, pe_o_m3, pe_c_m3, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 4
+            f_fill_grid_row(summaryTable, rowIdx, k_m4, k_m4 == curATMStrike, k_m4 == dayOpenATMStrike, ce_o_m4, ce_c_m4, pe_o_m4, pe_c_m4, curTextSize)
+            rowIdx += 1
