@@ -25,7 +25,7 @@ enum BEPBasis
 G_INST  = "Instrument & Strike Selection"
 G_CALC  = "BEP Calculation Settings"
 G_CONF  = "Golden Confluence Matrix Settings"
-G_PLOTS = "Plot Controls"
+G_PLOTS = "Plot Controls & Signal Display"
 G_COLORS= "Styling & Display"
 
 // 1. Instrument & Strike Selection
@@ -45,18 +45,19 @@ standard_bep_basis = input.string("Day Open Price", "Static BEP Calculation Basi
 // 3. Golden Confluence Matrix Settings
 confluence_tol     = input.float(15.0, "Confluence Alignment Tolerance (Points)", minval=1.0, group=G_CONF, tooltip="Point distance tolerance to trigger Golden Confluence signals.")
 
-// 4. Plot Controls
+// 4. Plot Controls & Signal Display
 show_atm_pivot     = input.bool(true, "Show ATM Strike Pivot Level Line", group=G_PLOTS)
 show_rt_atm_bep    = input.bool(true, "Show Realtime ATM Straddle BEP Lines (Layer 1)", group=G_PLOTS)
 show_rt_otm_bep    = input.bool(true, "Show Realtime OTM Strangle BEP Lines (Layer 2)", group=G_PLOTS)
 show_rt_itm_bep    = input.bool(true, "Show Realtime ITM Gamma Trap BEP Lines (Layer 3)", group=G_PLOTS)
 
-show_stat_atm_bep  = input.bool(true, "Show Static ATM Straddle BEP Lines", group=G_PLOTS)
-show_stat_otm_bep  = input.bool(true, "Show Static OTM Strangle BEP Lines", group=G_PLOTS)
-show_stat_itm_bep  = input.bool(true, "Show Static ITM Gamma Trap BEP Lines", group=G_PLOTS)
+show_stat_atm_bep  = input.bool(false, "Show Static ATM Straddle BEP Lines", group=G_PLOTS)
+show_stat_otm_bep  = input.bool(false, "Show Static OTM Strangle BEP Lines", group=G_PLOTS)
+show_stat_itm_bep  = input.bool(false, "Show Static ITM Gamma Trap BEP Lines", group=G_PLOTS)
 
 show_spot_pdh_pdl  = input.bool(true, "Show Spot Previous Day High (PDH) & Low (PDL)", group=G_PLOTS)
-show_signals       = input.bool(true, "Show Golden Confluence Signals Shapes", group=G_PLOTS)
+show_signals       = input.bool(true, "Show Golden Confluence Signal Shapes", group=G_PLOTS)
+sig_plot_mode      = input.string("Initial Trigger Only", "Signal Shape Frequency", options=["Initial Trigger Only", "Every Candle (Raw)"], group=G_PLOTS, tooltip="Initial Trigger Only plots the shape ONCE when the confluence signal first forms to keep chart clean and un-cluttered.")
 
 // 5. Styling & Colors
 c_atm_pivot        = input.color(#FFEA00, "ATM Strike Pivot Line Color", group=G_COLORS)
@@ -299,6 +300,15 @@ bool is_long_unwinding      = is_long_unwind_align or is_long_unwind_break
 // 4. Theta Box Status (Spot price inside ATM Straddle Support & Resistance)
 bool is_theta_box           = not na(atm_straddle_lower_rt) and not na(atm_straddle_upper_rt) and close >= atm_straddle_lower_rt and close <= atm_straddle_upper_rt
 
+// Filter Signal Triggers (Prevent Spamming Shapes on Every Bar)
+bool rj_trigger = is_rejection_zone and not is_rejection_zone[1]
+bool gs_trigger = (is_gamma_squeeze_align and not is_gamma_squeeze_align[1]) or is_gamma_squeeze_break
+bool lu_trigger = (is_long_unwind_align and not is_long_unwind_align[1]) or is_long_unwind_break
+
+bool plot_rj_shape = show_signals and (sig_plot_mode == "Every Candle (Raw)" ? is_rejection_zone : rj_trigger)
+bool plot_gs_shape = show_signals and (sig_plot_mode == "Every Candle (Raw)" ? is_gamma_squeeze : gs_trigger)
+bool plot_lu_shape = show_signals and (sig_plot_mode == "Every Candle (Raw)" ? is_long_unwinding : lu_trigger)
+
 // =========================================================================
 // PLOTTING ALL SPOT BEP LINES & SIGNALS
 // =========================================================================
@@ -331,15 +341,15 @@ plot(show_stat_itm_bep and not na(itm_put_bep_stat) ? itm_put_bep_stat : na, "St
 plot(show_spot_pdh_pdl and spot_pdh > 0 ? spot_pdh : na, "Spot Previous Day High (PDH)", color=c_spot_pdh, linewidth=1, style=plot.style_linebr)
 plot(show_spot_pdh_pdl and spot_pdl > 0 ? spot_pdl : na, "Spot Previous Day Low (PDL)",  color=c_spot_pdl, linewidth=1, style=plot.style_linebr)
 
-// --- Confluence Signal Plotshapes ---
-plotshape(show_signals and is_rejection_zone, title="Rejection Zone (RJ)", style=shape.diamond, location=location.abovebar, color=#FF9100, size=size.small, text="RJ")
-plotshape(show_signals and is_gamma_squeeze, title="Gamma Squeeze (GS)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.small, text="GS")
-plotshape(show_signals and is_long_unwinding, title="Long Unwinding (LU)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.small, text="LU")
+// --- Clean & Elegant Confluence Signal Shapes ---
+plotshape(plot_rj_shape, title="Rejection Zone (RJ)", style=shape.diamond, location=location.abovebar, color=#FF9100, size=size.tiny, text="RJ", textcolor=#FF9100)
+plotshape(plot_gs_shape, title="Gamma Squeeze (GS)", style=shape.triangleup, location=location.belowbar, color=#00E676, size=size.tiny, text="GS", textcolor=#00E676)
+plotshape(plot_lu_shape, title="Long Unwinding (LU)", style=shape.triangledown, location=location.abovebar, color=#FF1744, size=size.tiny, text="LU", textcolor=#FF1744)
 
 // --- Alert Conditions ---
-alertcondition(is_rejection_zone, title="Rejection Zone Alert", message="REJECTION ZONE: ATM Upper BEP & OTM Call BEP Confluence on {{ticker}}!")
-alertcondition(is_gamma_squeeze, title="Gamma Squeeze Alert", message="GAMMA SQUEEZE ALERT: ITM Call BEP / Spot PDH Breakout triggered on {{ticker}}!")
-alertcondition(is_long_unwinding, title="Long Unwinding Alert", message="LONG UNWINDING ALERT: ITM Put BEP / Spot PDL Breakdown triggered on {{ticker}}!")
+alertcondition(rj_trigger, title="Rejection Zone Alert", message="REJECTION ZONE: ATM Upper BEP & OTM Call BEP Confluence on {{ticker}}!")
+alertcondition(gs_trigger, title="Gamma Squeeze Alert", message="GAMMA SQUEEZE ALERT: ITM Call BEP / Spot PDH Breakout triggered on {{ticker}}!")
+alertcondition(lu_trigger, title="Long Unwinding Alert", message="LONG UNWINDING ALERT: ITM Put BEP / Spot PDL Breakdown triggered on {{ticker}}!")
 
 // =========================================================================
 // SUMMARY DASHBOARD TABLE
