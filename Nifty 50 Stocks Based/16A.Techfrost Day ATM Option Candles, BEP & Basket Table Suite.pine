@@ -1,5 +1,5 @@
 //@version=6
-indicator("16. Techfrost Universal Multi-Strike Option Master Suite", shorttitle="TF Master Suite", overlay=true, precision=2, max_labels_count=500, max_boxes_count=500, max_lines_count=500)
+indicator("16A. Techfrost Day ATM Option Candles, BEP & Basket Table Suite", shorttitle="TF ATM Candles & BEP Suite", overlay=true, precision=2, max_labels_count=500, max_boxes_count=500, max_lines_count=500)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -40,19 +40,11 @@ numStrikesInput      = input.int(4, "Number of ITM/OTM Strikes Each Side", minva
 spotTickerOverride   = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group=G_INST)
 strikeOverride       = input.float(0.0, "Strike Price Override", minval=0.0, group=G_INST)
 strikeStepInput      = input.enum(StepOverrideChoice.auto, "Strike Step Override", group=G_INST)
-calc_basis           = input.string("Day Open Price", "Calculation Basis", options=["Day Open Price", "Previous Day Close", "First 5 Min Close"], group=G_INST,
-  tooltip="Select calculation reference basis for options analytics: Day Open Price (9:15 AM Open), Previous Day Close, or First 5 Min Candle Close.")
+calc_basis           = input.string("Day Open Price", "Calculation Basis", options=["Day Open Price", "Previous Day Close", "First 5 Min Close"], group=G_INST)
 
-// --- [2] Master Module Switches ---
-G_MODULES            = "[2] Master Module Switches"
-enableATMCandles     = input.bool(true, "Enable Realtime ATM Option Candles (from #15)", group=G_MODULES)
-enableBEPLines       = input.bool(true, "Enable Multi-Strike BEP Lines (from #4)", group=G_MODULES)
-enableIntrinsicTV    = input.bool(true, "Enable Intrinsic & Time Value Analytics (from #5)", group=G_MODULES)
-enableBasketAnalytics= input.bool(true, "Enable Basket Averages & Sub-Pane Plots (from #6)", group=G_MODULES)
-enableBasketTable    = input.bool(true, "Enable 9-Strike Basket Analytics Table (from #6/#15)", group=G_MODULES)
-
-// --- [3] Module: Realtime ATM Option Candles Settings (from #15) ---
-G_CANDLES            = "[3] Realtime ATM Option Candles Settings"
+// --- [2] Realtime ATM Option Candles Controls ---
+G_CANDLES            = "[2] Realtime ATM Option Candles Controls"
+enableATMCandles     = input.bool(true, "Enable Realtime ATM Option Candles", group=G_CANDLES)
 atm_candle_source    = input.string("Both (Day Open & Current ATM)", "ATM Candle Selection Source", options=["Both (Day Open & Current ATM)", "Day Open ATM Only", "Current Realtime ATM Only"], group=G_CANDLES)
 showCE_Candles       = input.bool(true, "Show Call (CE) Candles", group=G_CANDLES)
 showPE_Candles       = input.bool(true, "Show Put (PE) Candles", group=G_CANDLES)
@@ -70,8 +62,9 @@ color_cur_pe_bear    = input.color(#F57C00, "Cur ATM PE Bearish Candle Body", gr
 
 show_candle_labels   = input.bool(true, "Show Floating Right-Side LTP Labels", group=G_CANDLES)
 
-// --- [4] Module: Multi-Strike BEP Lines Settings (from #4) ---
-G_BEP                = "[4] Multi-Strike BEP Lines Settings"
+// --- [3] Multi-Strike BEP Lines Settings ---
+G_BEP                = "[3] Multi-Strike BEP Lines Settings"
+enableBEPLines       = input.bool(true, "Enable Multi-Strike BEP Lines", group=G_BEP)
 showATMBEP           = input.bool(true, "Show ATM BEP Lines & Pivot", group=G_BEP)
 showOTMBEP           = input.bool(true, "Show OTM BEP Lines", group=G_BEP)
 showITMBEP           = input.bool(true, "Show ITM BEP Lines", group=G_BEP)
@@ -81,37 +74,17 @@ colorATMPivot        = input.color(#FFEE58, "ATM Pivot Line Color (Yellow)", gro
 colorOTMBEP          = input.color(#FF5252, "OTM BEP Line Color", group=G_BEP)
 colorITMBEP          = input.color(#00E676, "ITM BEP Line Color", group=G_BEP)
 
-// --- [5] Module: Intrinsic & Time Value Signals (from #5) ---
-G_ITM_OTM            = "[5] Intrinsic & Time Value Signals"
-signalFilterInput    = input.string("Alternate Signals Only (Wait for Opposite)", "Signal Filter Mode", options=["Alternate Signals Only (Wait for Opposite)", "Initial Trigger Only", "All Candles (Raw)"], group=G_ITM_OTM)
-showITM_OTM_Signals  = input.bool(true, "Show Buy CE (BC) & Buy PE (BP) Signal Shapes", group=G_ITM_OTM)
-colorSB_CE           = input.color(#00E676, "Buy CE (BC) Arrow Color", group=G_ITM_OTM)
-colorSB_PE           = input.color(#FF1744, "Buy PE (BP) Arrow Color", group=G_ITM_OTM)
-colorSignalTextColor = input.color(color.white, "Signal Text Color", group=G_ITM_OTM)
+// --- [4] Strong Buy Signal Shapes ---
+G_SIGNALS            = "[4] Strong Buy Signal Shapes"
+showStrongBuySignals = input.bool(true, "Show Strong Buy SB CE / SB PE Signals", group=G_SIGNALS)
+requireCandleConfirm = input.bool(true, "Require Next Candle Confirmation for Strong Buy", group=G_SIGNALS)
+colorSB_CE           = input.color(#00E676, "Strong Buy CE (SB CE) Arrow Color", group=G_SIGNALS)
+colorSB_PE           = input.color(#FF1744, "Strong Buy PE (SB PE) Arrow Color", group=G_SIGNALS)
+colorSignalTextColor = input.color(color.white, "Signal Text Color", group=G_SIGNALS)
 
-// --- [6] Module: Basket Averages & Sub-Pane Analytics (from #6) ---
-G_BASKET             = "[6] Basket Averages & Sub-Pane Analytics"
-displayChartModeInput= input.string("Both Lines & Histograms", "Sub-Pane Display Mode", options=["Both Lines & Histograms", "Basket Average Lines Only", "Average Change Histograms / Lines Only"], group=G_BASKET)
-showPlotsInput       = input.bool(true, "Show Basket Average Lines", group=G_BASKET)
-showHistogramsInput  = input.bool(true, "Show Average Change Plots", group=G_BASKET)
-changePlotStyleInput = input.string("Histogram", "Avg Change Plot Style", options=["Histogram", "Columns", "Line"], group=G_BASKET)
-histLineWidthInput   = input.int(3, "Histogram Bar Thickness", minval=1, maxval=5, group=G_BASKET)
-showStrongBuySignals = input.bool(true, "Show Strong Buy SB CE / SB PE Signals", group=G_BASKET)
-requireCandleConfirm = input.bool(true, "Require Next Candle Confirmation for Strong Buy", group=G_BASKET)
-showZeroLineInput    = input.bool(true, "Show Zero Baseline for Avg Change", group=G_BASKET)
-showSubBiasLabel     = input.bool(true, "Show Bias Badge in Sub-Pane", group=G_BASKET)
-biasBadgePosInput    = input.string("Bottom Left", "Bias Badge Position", options=["Bottom Left", "Bottom Right", "Top Right", "Top Left"], group=G_BASKET)
-
-colorCEAvgOpen       = input.color(color.new(#00C853, 50), "CE Day Open Basket Avg Color", group=G_BASKET)
-colorCEAvgCur        = input.color(#00E676, "CE Current Basket Avg Color", group=G_BASKET)
-colorPEAvgOpen       = input.color(color.new(#D50000, 50), "PE Day Open Basket Avg Color", group=G_BASKET)
-colorPEAvgCur        = input.color(#FF1744, "PE Current Basket Avg Color", group=G_BASKET)
-colorZeroLine        = input.color(color.new(color.gray, 30), "Zero Baseline Color", group=G_BASKET)
-
-// --- [7] Dashboard & Analytics Tables Settings ---
-G_TABLE              = "[7] Dashboard & Analytics Tables Settings"
+// --- [5] Dashboard Table Settings ---
+G_TABLE              = "[5] Dashboard Table Settings"
 showTableInput       = input.bool(true, "Show 9-Strike Basket Analytics Table", group=G_TABLE)
-showITMOTMTableInput = input.bool(true, "Show Separate ITM & OTM Intrinsic/TV Table", group=G_TABLE)
 tablePosInput        = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLE)
 tableTextSizeInput   = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLE)
 
@@ -295,71 +268,55 @@ float k_m3 = baseStrike - 3.0 * stepVal
 float k_m4 = baseStrike - 4.0 * stepVal
 
 // ==========================================
-// DATA FETCHING FOR STRIKES (OPTIMIZED LIGHTWEIGHT TUPLE SECURITY QUERIES)
+// DATA FETCHING FOR STRIKES
 // ==========================================
 
-f_get_strike_master_tuple() =>
-    bool is_new_day = ta.change(time("D")) != 0
-    int bars_since_new_day = ta.barssince(is_new_day)
-    float d_op = ta.valuewhen(is_new_day or bar_index == 0, open, 0)
-    float pd_c = ta.valuewhen(is_new_day, close[1], 0)
-    
-    var float f5m_c = na
-    if is_new_day
-        f5m_c := na
-    bool is_first_5m = timeframe.isintraday and timeframe.multiplier <= 5 and not is_new_day and bars_since_new_day == 0
-    if is_first_5m or na(f5m_c)
-        f5m_c := close
+f_get_strike_ohlc() =>
+    [open, high, low, close]
 
-    [d_op, pd_c, f5m_c, open, high, low, close]
+[ce_opn_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_opn_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_dop_p4, ce_pdc_p4, ce_f5m_p4, ce_opn_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_p4, pe_pdc_p4, pe_f5m_p4, pe_opn_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_opn_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_opn_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_dop_p3, ce_pdc_p3, ce_f5m_p3, ce_opn_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_p3, pe_pdc_p3, pe_f5m_p3, pe_opn_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_opn_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_opn_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_dop_p2, ce_pdc_p2, ce_f5m_p2, ce_opn_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_p2, pe_pdc_p2, pe_f5m_p2, pe_opn_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_opn_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_opn_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_dop_p1, ce_pdc_p1, ce_f5m_p1, ce_opn_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_p1, pe_pdc_p1, pe_f5m_p1, pe_opn_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_opn_0,  ce_h_0,  ce_l_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_opn_0,  pe_h_0,  pe_l_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_dop_0,  ce_pdc_0,  ce_f5m_0,  ce_opn_0,  ce_h_0,  ce_l_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_0,  pe_pdc_0,  pe_f5m_0,  pe_opn_0,  pe_h_0,  pe_l_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_opn_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_opn_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_dop_m1, ce_pdc_m1, ce_f5m_m1, ce_opn_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_m1, pe_pdc_m1, pe_f5m_m1, pe_opn_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_opn_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_opn_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_dop_m2, ce_pdc_m2, ce_f5m_m2, ce_opn_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_m2, pe_pdc_m2, pe_f5m_m2, pe_opn_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_opn_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_opn_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_dop_m3, ce_pdc_m3, ce_f5m_m3, ce_opn_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_m3, pe_pdc_m3, pe_f5m_m3, pe_opn_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_opn_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_opn_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_dop_m4, ce_pdc_m4, ce_f5m_m4, ce_opn_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_m4, pe_pdc_m4, pe_f5m_m4, pe_opn_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_master_tuple(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+bool is_new_day = ta.change(time("D")) != 0
 
-f_resolve_basis_open(float dop, float pdc, float f5m) =>
-    switch calc_basis
-        "Previous Day Close" => pdc
-        "First 5 Min Close"  => f5m
-        => dop
+f_get_open_val(float cur_op) =>
+    ta.valuewhen(is_new_day or bar_index == 0, cur_op, 0)
 
-float ce_o_p4 = f_resolve_basis_open(ce_dop_p4, ce_pdc_p4, ce_f5m_p4), float pe_o_p4 = f_resolve_basis_open(pe_dop_p4, pe_pdc_p4, pe_f5m_p4)
-float ce_o_p3 = f_resolve_basis_open(ce_dop_p3, ce_pdc_p3, ce_f5m_p3), float pe_o_p3 = f_resolve_basis_open(pe_dop_p3, pe_pdc_p3, pe_f5m_p3)
-float ce_o_p2 = f_resolve_basis_open(ce_dop_p2, ce_pdc_p2, ce_f5m_p2), float pe_o_p2 = f_resolve_basis_open(pe_dop_p2, pe_pdc_p2, pe_f5m_p2)
-float ce_o_p1 = f_resolve_basis_open(ce_dop_p1, ce_pdc_p1, ce_f5m_p1), float pe_o_p1 = f_resolve_basis_open(pe_dop_p1, pe_pdc_p1, pe_f5m_p1)
-float ce_o_0  = f_resolve_basis_open(ce_dop_0,  ce_pdc_0,  ce_f5m_0),  float pe_o_0  = f_resolve_basis_open(pe_dop_0,  pe_pdc_0,  pe_f5m_0)
-float ce_o_m1 = f_resolve_basis_open(ce_dop_m1, ce_pdc_m1, ce_f5m_m1), float pe_o_m1 = f_resolve_basis_open(pe_dop_m1, pe_pdc_m1, pe_f5m_m1)
-float ce_o_m2 = f_resolve_basis_open(ce_dop_m2, ce_pdc_m2, ce_f5m_m2), float pe_o_m2 = f_resolve_basis_open(pe_dop_m2, pe_pdc_m2, pe_f5m_m2)
-float ce_o_m3 = f_resolve_basis_open(ce_dop_m3, ce_pdc_m3, ce_f5m_m3), float pe_o_m3 = f_resolve_basis_open(pe_dop_m3, pe_pdc_m3, pe_f5m_m3)
-float ce_o_m4 = f_resolve_basis_open(ce_dop_m4, ce_pdc_m4, ce_f5m_m4), float pe_o_m4 = f_resolve_basis_open(pe_dop_m4, pe_pdc_m4, pe_f5m_m4)
+float ce_o_p4 = f_get_open_val(ce_opn_p4), float pe_o_p4 = f_get_open_val(pe_opn_p4)
+float ce_o_p3 = f_get_open_val(ce_opn_p3), float pe_o_p3 = f_get_open_val(pe_opn_p3)
+float ce_o_p2 = f_get_open_val(ce_opn_p2), float pe_o_p2 = f_get_open_val(pe_opn_p2)
+float ce_o_p1 = f_get_open_val(ce_opn_p1), float pe_o_p1 = f_get_open_val(pe_opn_p1)
+float ce_o_0  = f_get_open_val(ce_opn_0),  float pe_o_0  = f_get_open_val(pe_opn_0)
+float ce_o_m1 = f_get_open_val(ce_opn_m1), float pe_o_m1 = f_get_open_val(pe_opn_m1)
+float ce_o_m2 = f_get_open_val(ce_opn_m2), float pe_o_m2 = f_get_open_val(pe_opn_m2)
+float ce_o_m3 = f_get_open_val(ce_opn_m3), float pe_o_m3 = f_get_open_val(pe_opn_m3)
+float ce_o_m4 = f_get_open_val(ce_opn_m4), float pe_o_m4 = f_get_open_val(pe_opn_m4)
 
-// ==========================================
-// DAY OPEN ATM & CURRENT REALTIME ATM CALCULATIONS
-// ==========================================
-
+// Day Open ATM and Current Realtime ATM Calculations
 float diff_open_p4 = math.abs(nz(ce_o_p4) - nz(pe_o_p4))
 float diff_open_p3 = math.abs(nz(ce_o_p3) - nz(pe_o_p3))
 float diff_open_p2 = math.abs(nz(ce_o_p2) - nz(pe_o_p2))
@@ -425,7 +382,7 @@ else if minDiffCur == diff_cur_m4
     curATMStrike := k_m4
 
 // ==========================================
-// MODULE 1: REALTIME ATM OPTION CANDLES (FROM INDICATOR #15)
+// FEATURE 1: REALTIME ATM OPTION CANDLES (FROM INDICATOR #15)
 // ==========================================
 
 f_extract_strike_ohlc(float target_st) =>
@@ -526,7 +483,7 @@ if barstate.islast and enableATMCandles and show_candle_labels
         lbl_cur_pe := label.new(label_x, c_pe_c_plot, "Cur ATM (" + curAtmStr + ") PE LTP: " + str.tostring(cur_pe_c, "#.##"), color=color_cur_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
 
 // ==========================================
-// MODULE 2: MULTI-STRIKE BEP LINES (FROM INDICATOR #4)
+// FEATURE 2: MULTI-STRIKE BEP LINES (FROM INDICATOR #4)
 // ==========================================
 
 float atm_ce_bep = dayOpenATMStrike + ce_o_0
@@ -550,78 +507,7 @@ plot(enableBEPLines and showITMBEP ? itm_ce_bep : na, title="ITM Call Upper BEP"
 plot(enableBEPLines and showITMBEP ? itm_pe_bep : na, title="ITM Put Lower BEP", color=colorITMBEP, linewidth=1, style=plot.style_line)
 
 // ==========================================
-// MODULE 3: INTRINSIC & TIME VALUE ANALYTICS & SIGNALS (FROM INDICATOR #5)
-// ==========================================
-
-float spotLTP = close
-
-f_calc_iv_tv(float st_val, float ce_ltp, float pe_ltp) =>
-    float ce_iv = math.max(0.0, spotLTP - st_val)
-    float pe_iv = math.max(0.0, st_val - spotLTP)
-    float ce_tv = math.max(0.0, ce_ltp - ce_iv)
-    float pe_tv = math.max(0.0, pe_ltp - pe_iv)
-    [ce_iv, ce_tv, pe_iv, pe_tv]
-
-[ce_iv_0, ce_tv_0, pe_iv_0, pe_tv_0] = f_calc_iv_tv(k_0, ce_c_0, pe_c_0)
-[ce_iv_otm, ce_tv_otm, pe_iv_otm, pe_tv_otm] = f_calc_iv_tv(k_p1, ce_c_p1, pe_c_m1)
-[ce_iv_itm, ce_tv_itm, pe_iv_itm, pe_tv_itm] = f_calc_iv_tv(k_m1, ce_c_m1, pe_c_p1)
-
-float otm_avg_tv_rt = (ce_tv_otm + pe_tv_otm) / 2.0
-float otm_avg_iv_rt = (ce_iv_otm + pe_iv_otm) / 2.0
-
-float itm_avg_tv_rt = (ce_tv_itm + pe_tv_itm) / 2.0
-float itm_avg_iv_rt = (ce_iv_itm + pe_iv_itm) / 2.0
-
-// Signal Engine with State Machine Alternation
-bool otm_ce_above = close > otm_avg_tv_rt
-bool otm_pe_below = pe_c_m1 < otm_avg_iv_rt
-bool otm_ce_was_below = not otm_ce_above[1] or not otm_ce_above[2] or not otm_ce_above[3]
-bool otm_pe_was_below = not otm_pe_below[1] or not otm_pe_below[2] or not otm_pe_below[3]
-
-bool otm_bc_signal = (ta.crossover(close, otm_avg_tv_rt) and otm_pe_was_below) or (otm_ce_above and otm_pe_below and not (otm_ce_above[1] and otm_pe_below[1]))
-bool otm_bp_signal = (ta.crossover(pe_c_m1, otm_avg_tv_rt) and otm_ce_was_below) or (not otm_ce_above and not otm_pe_below and not (not otm_ce_above[1] and not otm_pe_below[1]))
-
-bool itm_ce_above = ce_c_m1 > itm_avg_iv_rt
-bool itm_pe_below = pe_c_p1 < itm_avg_tv_rt
-bool itm_ce_was_below = not itm_ce_above[1] or not itm_ce_above[2] or not itm_ce_above[3]
-bool itm_pe_was_below = not itm_pe_below[1] or not itm_pe_below[2] or not itm_pe_below[3]
-
-bool itm_bc_signal = (ta.crossover(ce_c_m1, itm_avg_iv_rt) and itm_pe_was_below) or (itm_ce_above and itm_pe_below and not (itm_ce_above[1] and itm_pe_below[1]))
-bool itm_bp_signal = (ta.crossover(pe_c_p1, itm_avg_tv_rt) and itm_ce_was_below) or (itm_pe_below and not itm_ce_above and not (itm_pe_below[1] and not itm_ce_above[1]))
-
-bool raw_bc_signal = otm_bc_signal or itm_bc_signal
-bool raw_bp_signal = otm_bp_signal or itm_bp_signal
-
-bool init_bc_signal = raw_bc_signal and not raw_bc_signal[1]
-bool init_bp_signal = raw_bp_signal and not raw_bp_signal[1]
-
-var int signal_state_itv = 0 // 0 = None, 1 = Buy CE Active, -1 = Buy PE Active
-
-bool bc_signal = false
-bool bp_signal = false
-
-if signalFilterInput == "All Candles (Raw)"
-    bc_signal := raw_bc_signal
-    bp_signal := raw_bp_signal
-else if signalFilterInput == "Initial Trigger Only"
-    bc_signal := init_bc_signal
-    bp_signal := init_bp_signal
-else // "Alternate Signals Only (Wait for Opposite)"
-    if raw_bc_signal and signal_state_itv != 1
-        bc_signal := true
-        signal_state_itv := 1
-    else if raw_bp_signal and signal_state_itv != -1
-        bp_signal := true
-        signal_state_itv := -1
-
-plotshape(enableIntrinsicTV and showITM_OTM_Signals and bc_signal, title="Buy CE (BC)", style=shape.labelup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="BC")
-plotshape(enableIntrinsicTV and showITM_OTM_Signals and bp_signal, title="Buy PE (BP)", style=shape.labeldown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.small, text="BP")
-
-alertcondition(bc_signal, title="Buy CE (BC) Alert", message="BC ALERT: Buy CE condition (OTM or ITM) triggered on {{ticker}}!")
-alertcondition(bp_signal, title="Buy PE (BP) Alert", message="BP ALERT: Buy PE condition (OTM or ITM) triggered on {{ticker}}!")
-
-// ==========================================
-// MODULE 4: BASKET AVERAGES & SUB-PANE ANALYTICS (FROM INDICATOR #6)
+// FEATURE 3: BASKET AVERAGES & STRONG BUY SIGNALS (FROM INDICATOR #6)
 // ==========================================
 
 float sum_ce_open = nz(ce_o_0)
@@ -666,7 +552,6 @@ float basketAvgOpen = (ceAvgOpen + peAvgOpen) / 2.0
 float basketAvgCur  = (ceAvgCur + peAvgCur) / 2.0
 float basketAvgChg  = basketAvgCur - basketAvgOpen
 
-// Strong Buy Signal Engine (SB CE & SB PE)
 bool isNewDaySession = ta.change(time("D")) != 0 or bar_index == 0
 
 bool ce_trend_maintained = (ceAvgCur > ceAvgOpen) and (peAvgCur <= peAvgOpen) and (ceAvgChg > 0) and (peAvgChg <= 0)
@@ -738,33 +623,14 @@ if ta.crossunder(peAvgCur, peAvgOpen) or ceAvgCur > ceAvgOpen
         signal_state_sb := 0
     pending_pe_cross := false
 
-plotshape(enableBasketAnalytics and showStrongBuySignals and plot_sb_ce and not ce_trend_cont_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="SB CE")
-plotshape(enableBasketAnalytics and showStrongBuySignals and plot_sb_pe and not pe_trend_cont_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.small, text="SB PE")
+plotshape(showStrongBuySignals and plot_sb_ce and not ce_trend_cont_signal, title="Strong Buy CE (SB CE)", style=shape.triangleup, location=location.belowbar, color=colorSB_CE, textcolor=colorSignalTextColor, size=size.small, text="SB CE")
+plotshape(showStrongBuySignals and plot_sb_pe and not pe_trend_cont_signal, title="Strong Buy PE (SB PE)", style=shape.triangledown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.small, text="SB PE")
 
 alertcondition(plot_sb_ce, title="Strong Buy CE (SB CE)", message="STRONG BUY CE Signal: CE Current Avg Crossed Above Day Open Avg on {{ticker}}!")
 alertcondition(plot_sb_pe, title="Strong Buy PE (SB PE)", message="STRONG BUY PE Signal: PE Current Avg Crossed Above Day Open Avg on {{ticker}}!")
 
-// Sub-Pane Plots (Basket Lines & Histograms - Collapsed into single plots to stay within 64 plot limit)
-bool renderLines = enableBasketAnalytics and (displayChartModeInput == "Both Lines & Histograms" or displayChartModeInput == "Basket Average Lines Only") and showPlotsInput
-bool renderHist  = enableBasketAnalytics and (displayChartModeInput == "Both Lines & Histograms" or displayChartModeInput == "Average Change Histograms / Lines Only") and showHistogramsInput
-
-plot(renderLines ? ceAvgOpen : na, title="CE Basket Day Open Avg", color=colorCEAvgOpen, linewidth=1, style=plot.style_stepline)
-plot(renderLines ? ceAvgCur  : na, title="CE Basket Current Avg",  color=colorCEAvgCur,  linewidth=2)
-
-plot(renderLines ? peAvgOpen : na, title="PE Basket Day Open Avg", color=colorPEAvgOpen, linewidth=1, style=plot.style_stepline)
-plot(renderLines ? peAvgCur  : na, title="PE Basket Current Avg",  color=colorPEAvgCur,  linewidth=2)
-
-color col_ceAvgChg = ceAvgChg >= 0 ? #00E676 : #FF1744
-color col_peAvgChg = peAvgChg >= 0 ? #00B0FF : #FF9100
-
-// Use dynamic style to avoid duplicating plot calls
-plot(renderHist ? ceAvgChg : na, title="CE Basket Avg Change", color=color.new(col_ceAvgChg, 20), linewidth=histLineWidthInput, style=changePlotStyleInput == "Columns" ? plot.style_columns : (changePlotStyleInput == "Line" ? plot.style_line : plot.style_histogram), histbase=0.0)
-plot(renderHist ? peAvgChg : na, title="PE Basket Avg Change", color=color.new(col_peAvgChg, 20), linewidth=histLineWidthInput, style=changePlotStyleInput == "Columns" ? plot.style_columns : (changePlotStyleInput == "Line" ? plot.style_line : plot.style_histogram), histbase=0.0)
-
-plot(showZeroLineInput and renderHist ? 0.0 : na, title="Zero Reference Line (0.00)", color=colorZeroLine, linewidth=1, style=plot.style_line)
-
 // ==========================================
-// MODULE 5: DASHBOARD & STRIKE TABLES
+// FEATURE 4: DASHBOARD & STRIKE TABLE (EXACT REPLICA FROM IMAGE)
 // ==========================================
 
 f_get_table_pos(string pos_str) =>
@@ -825,7 +691,7 @@ f_fill_grid_row(table tbl, int r, float st_val, bool is_cur_atm, bool is_day_atm
     table.cell(tbl, 7, r, diff_str, bgcolor=diff_bg, text_color=color.white, text_size=t_sz)
 
 if barstate.islast
-    if not (enableBasketTable and showTableInput)
+    if not showTableInput
         table.delete(summaryTable)
     else
         string strikeTag = str.tostring(total_count) + "-Strike Basket (" + str.tostring(numStrikesInput) + " ITM + ATM + " + str.tostring(numStrikesInput) + " OTM)"
@@ -919,25 +785,3 @@ if barstate.islast
         if numStrikesInput >= 4
             f_fill_grid_row(summaryTable, rowIdx, k_m4, k_m4 == curATMStrike, k_m4 == dayOpenATMStrike, ce_o_m4, ce_c_m4, pe_o_m4, pe_c_m4, curTextSize)
             rowIdx += 1
-
-// Sub-Window Market Bias Badge
-var table biasSubPaneTable = table.new(f_get_table_pos(biasBadgePosInput), 1, 1, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=false)
-
-if barstate.islast
-    if not (enableBasketAnalytics and showSubBiasLabel)
-        table.delete(biasSubPaneTable)
-    else
-        string biasText = "Neutral"
-        color biasBg = #212121
-        color biasTextCol = #9E9E9E
-        
-        if ceAvgChg > peAvgChg and ceAvgChg > 0
-            biasText := "Bullish Bias"
-            biasBg := #1B5E20
-            biasTextCol := #00E676
-        else if peAvgChg > ceAvgChg and peAvgChg > 0
-            biasText := "Bearish Bias"
-            biasBg := #880E4F
-            biasTextCol := #00B0FF
-        
-        table.cell(biasSubPaneTable, 0, 0, biasText, bgcolor=biasBg, text_color=biasTextCol, text_size=size.small)
