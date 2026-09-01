@@ -1,0 +1,566 @@
+//@version=6
+indicator("16. Techfrost Multi-Signal Confluence & BEP Alert Engine", shorttitle="TF Signals & BEP Engine", overlay=true, precision=2, max_labels_count=500, max_boxes_count=500, max_lines_count=500)
+
+// ==========================================
+// ENUMS & INPUTS
+// ==========================================
+
+enum UnderlyingAsset
+    auto      = "Auto-Detect"
+    nifty     = "NIFTY"
+    banknifty = "BANKNIFTY"
+    crudeoil  = "CRUDEOIL"
+    gold      = "GOLD"
+    stock     = "Stock (Equity)"
+
+enum OptionType
+    auto = "Auto-Detect"
+    ce   = "Call (CE)"
+    pe   = "Put (PE)"
+
+enum StepOverrideChoice
+    auto    = "Auto"
+    step1   = "1"
+    step2_5 = "2.5"
+    step5   = "5"
+    step10  = "10"
+    step20  = "20"
+    step25  = "25"
+    step50  = "50"
+    step100 = "100"
+    step200 = "200"
+    step500 = "500"
+
+// --- [1] Instrument & Strike Settings ---
+G_INST               = "[1] Instrument & Strike Settings"
+underlyingInput      = input.enum(UnderlyingAsset.auto, "Underlying Asset", group=G_INST)
+optionTypeInput      = input.enum(OptionType.auto, "Option Type", group=G_INST)
+numStrikesInput      = input.int(4, "Number of ITM/OTM Strikes Each Side", minval=1, maxval=4, group=G_INST,
+  tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
+spotTickerOverride   = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group=G_INST)
+strikeOverride       = input.float(0.0, "Strike Price Override", minval=0.0, group=G_INST)
+strikeStepInput      = input.enum(StepOverrideChoice.auto, "Strike Step Override", group=G_INST)
+calc_basis           = input.string("Day Open Price", "Calculation Basis", options=["Day Open Price", "Previous Day Close", "First 5 Min Close"], group=G_INST)
+
+// --- [2] Trigger 1: Fresh Intrinsic Value Settings ---
+G_FRESH_IV           = "[2] Trigger 1: Fresh Intrinsic Value Creation"
+enableFreshIVAlerts  = input.bool(true, "Enable Fresh Intrinsic Value Creation Alerts", group=G_FRESH_IV, tooltip="Alerts when an Option contract gains fresh Intrinsic Value (> 0 from 0).")
+showFreshIVShapes    = input.bool(true, "Show Fresh Intrinsic Value Signals on Chart", group=G_FRESH_IV)
+
+// --- [3] Trigger 2: Time Value Alert Settings (from 5A) ---
+G_TV                 = "[3] Trigger 2: Time Value Alert Engine (from 5A)"
+enableTVAlerts       = input.bool(true, "Enable Time Value Crossover Alerts", group=G_TV)
+signalFilterInput    = input.string("Alternate Signals Only (Wait for Opposite)", "Signal Filter Mode", options=["Alternate Signals Only (Wait for Opposite)", "Initial Trigger Only", "All Candles (Raw)"], group=G_TV, tooltip="Alternate Signals Only enforces strict alternation: once Buy CE triggers, it waits for Buy PE before triggering Buy CE again.")
+showTVShapes         = input.bool(true, "Show Time Value Signal Shapes (BC / BP)", group=G_TV)
+
+// --- [4] Trigger 3: Basket Averages Crossover Settings (from 6) ---
+G_BASKET             = "[4] Trigger 3: Basket Averages Crossover & Positive Change"
+enableBasketAlerts   = input.bool(true, "Enable Basket Avg Crossover & Positive Change Alerts", group=G_BASKET, tooltip="Alerts when CE/PE Current Average crosses above Day Open Average AND Change is positive (> 0).")
+showBasketShapes     = input.bool(true, "Show Basket Crossover Signals on Chart", group=G_BASKET)
+
+// --- [5] Trigger 4: BEP Proximity / Level Touch Settings ---
+G_BEP                = "[5] Trigger 4: BEP Level Proximity / Touch Alerts"
+enableBEPAlerts      = input.bool(true, "Enable Price at BEP Level Alerts", group=G_BEP, tooltip="Alerts whenever price reaches or touches ATM, OTM, or ITM BEP levels.")
+bepTolerancePts      = input.float(5.0, "BEP Touch Tolerance (Points)", minval=0.5, step=0.5, group=G_BEP, tooltip="Point distance tolerance to trigger BEP touch alert.")
+showBEPLines         = input.bool(true, "Show BEP Reference Lines on Chart", group=G_BEP)
+
+// --- [6] Trigger 5: Strong Confluence Signal Engine ---
+G_CONFLUENCE         = "[6] Trigger 5: Strong Confluence Engine (Strong BC / Strong BP)"
+enableConfluence     = input.bool(true, "Enable Strong Confluence Signal Engine", group=G_CONFLUENCE)
+confluenceMode       = input.string("2 or More Triggers Aligned", "Confluence Required Mode", options=["2 or More Triggers Aligned", "3 or More Triggers Aligned"], group=G_CONFLUENCE)
+showStrongShapes     = input.bool(true, "Show Strong BC & Strong BP Signals on Chart", group=G_CONFLUENCE)
+
+// --- [7] Visual Styling & Candle Protection ---
+G_STYLE              = "[7] Visual Styling & Candle Protection"
+colorBC              = input.color(#00E676, "Buy CE (BC) Arrow Color", group=G_STYLE)
+colorBP              = input.color(#FF1744, "Buy PE (BP) Arrow Color", group=G_STYLE)
+colorStrongBC        = input.color(#76FF03, "Strong Buy CE (Strong BC) Color", group=G_STYLE)
+colorStrongBP        = input.color(#FF1744, "Strong Buy PE (Strong BP) Color", group=G_STYLE)
+colorSignalTextColor = input.color(color.white, "Signal Text Color", group=G_STYLE)
+
+colorATMBEP          = input.color(color.aqua, "ATM BEP Line Color", group=G_STYLE)
+colorATMPivot        = input.color(#FFEE58, "ATM Pivot Line Color", group=G_STYLE)
+colorOTMBEP          = input.color(#FF5252, "OTM BEP Line Color", group=G_STYLE)
+colorITMBEP          = input.color(#00E676, "ITM BEP Line Color", group=G_STYLE)
+
+// --- [8] Dashboard Settings ---
+G_TABLE              = "[8] Dashboard Settings"
+showTableInput       = input.bool(true, "Show Signal & BEP Status Dashboard Table", group=G_TABLE)
+tablePosInput        = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLE)
+tableTextSizeInput   = input.string("Small", "Table Text Size", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLE)
+
+// ==========================================
+// TICKER PARSING & AUTO-DETECTION
+// ==========================================
+
+string cleanTicker = syminfo.ticker
+int colonPos = str.pos(cleanTicker, ":")
+if colonPos != -1
+    cleanTicker := str.substring(cleanTicker, colonPos + 1)
+cleanTicker := str.replace_all(cleanTicker, " ", "")
+
+// ----- Detect underlying -----
+UnderlyingAsset actualUnderlying = na
+if underlyingInput == UnderlyingAsset.auto
+    if str.contains(cleanTicker, "BANKNIFTY")
+        actualUnderlying := UnderlyingAsset.banknifty
+    else if str.contains(cleanTicker, "NIFTY")
+        actualUnderlying := UnderlyingAsset.nifty
+    else if str.contains(cleanTicker, "CRUDEOIL")
+        actualUnderlying := UnderlyingAsset.crudeoil
+    else if str.contains(cleanTicker, "GOLD") and not str.contains(cleanTicker, "GOLDM") and not str.contains(cleanTicker, "GOLDPETAL")
+        actualUnderlying := UnderlyingAsset.gold
+    else if str.contains(cleanTicker, "GOLDM")
+        actualUnderlying := UnderlyingAsset.gold
+    else
+        actualUnderlying := UnderlyingAsset.stock
+else
+    actualUnderlying := underlyingInput
+
+// ----- Detect option type -----
+bool isCall = false
+bool isPut  = false
+
+if optionTypeInput == OptionType.ce
+    isCall := true
+else if optionTypeInput == OptionType.pe
+    isPut := true
+else
+    if str.contains(cleanTicker, "CE")
+        isCall := true
+    else if str.contains(cleanTicker, "PE")
+        isPut := true
+    else if str.match(cleanTicker, "C\\d+$") != ""
+        isCall := true
+    else if str.match(cleanTicker, "P\\d+$") != ""
+        isPut := true
+
+// ----- Strike extraction from chart symbol -----
+float detectedStrike = na
+string tickerWithoutCEPE = ""
+
+int tickerLen = str.length(cleanTicker)
+if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+    tickerWithoutCEPE := str.substring(cleanTicker, 0, tickerLen - 2)
+
+string matchC = str.match(cleanTicker, "C\\d+$")
+string matchP = str.match(cleanTicker, "P\\d+$")
+
+if matchC != ""
+    detectedStrike := str.tonumber(str.substring(matchC, 1))
+else if matchP != ""
+    detectedStrike := str.tonumber(str.substring(matchP, 1))
+else if tickerWithoutCEPE != ""
+    string strikeDigits = str.match(tickerWithoutCEPE, "\\d+$")
+    detectedStrike := str.tonumber(strikeDigits)
+
+float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : detectedStrike
+
+// ==========================================
+// SPOT TICKER RESOLUTION & STRICT DAY OPEN ATM CENTER ANCHORING
+// ==========================================
+
+string spotTicker = ""
+if str.length(spotTickerOverride) > 0
+    spotTicker := spotTickerOverride
+else
+    switch actualUnderlying
+        UnderlyingAsset.banknifty => spotTicker := "NSE:BANKNIFTY"
+        UnderlyingAsset.nifty     => spotTicker := "NSE:NIFTY"
+        UnderlyingAsset.crudeoil  => spotTicker := "MCX:CRUDEOIL1!"
+        UnderlyingAsset.gold      => spotTicker := "MCX:GOLD1!"
+        UnderlyingAsset.stock     =>
+            string rootGuess = str.match(cleanTicker, "^[A-Z&]+")
+            if rootGuess != ""
+                spotTicker := syminfo.prefix + ":" + rootGuess
+            else
+                spotTicker := syminfo.prefix + ":" + cleanTicker
+
+float spotDayOpen = request.security(spotTicker, "D", open, lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+f_auto_detect_step(float ref_p) =>
+    float s_res = 50.0
+    if na(ref_p) or ref_p <= 0
+        s_res := 50.0
+    else if ref_p < 100
+        s_res := 1.0
+    else if ref_p < 250
+        s_res := 2.5
+    else if ref_p < 500
+        s_res := 5.0
+    else if ref_p < 1200
+        s_res := 10.0
+    else if ref_p < 2500
+        s_res := 20.0
+    else
+        s_res := 50.0
+    s_res
+
+float stepVal = 50.0
+switch strikeStepInput
+    StepOverrideChoice.step1   => stepVal := 1.0
+    StepOverrideChoice.step2_5 => stepVal := 2.5
+    StepOverrideChoice.step5   => stepVal := 5.0
+    StepOverrideChoice.step10  => stepVal := 10.0
+    StepOverrideChoice.step20  => stepVal := 20.0
+    StepOverrideChoice.step25  => stepVal := 25.0
+    StepOverrideChoice.step50  => stepVal := 50.0
+    StepOverrideChoice.step100 => stepVal := 100.0
+    StepOverrideChoice.step200 => stepVal := 200.0
+    StepOverrideChoice.step500 => stepVal := 500.0
+    =>
+        switch actualUnderlying
+            UnderlyingAsset.banknifty => stepVal := 100.0
+            UnderlyingAsset.nifty     => stepVal := 50.0
+            UnderlyingAsset.crudeoil  => stepVal := 50.0
+            UnderlyingAsset.gold      => stepVal := 100.0
+            UnderlyingAsset.stock     => stepVal := f_auto_detect_step(not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
+
+var float baseCenterStrike = na
+if barstate.isfirst or na(baseCenterStrike)
+    float refPrice = strikeOverride > 0.0 ? strikeOverride : (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
+    baseCenterStrike := math.round(refPrice / stepVal) * stepVal
+
+float baseStrike = baseCenterStrike
+
+// ==========================================
+// UNIVERSAL FAIL-SAFE CE & PE TICKER CONSTRUCTION
+// ==========================================
+
+f_build_option_symbol(float target_strike, bool target_is_ce) =>
+    string st_digits = not na(chartStrikePrice) and chartStrikePrice > 0 ? (chartStrikePrice == math.floor(chartStrikePrice) ? str.tostring(int(chartStrikePrice)) : str.tostring(chartStrikePrice)) : (target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike))
+    int st_len = str.length(st_digits)
+    string target_st_str = target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike)
+    
+    if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
+        int end_trim = 2
+        string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
+        string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
+        string sfx = target_is_ce ? "CE" : "PE"
+        pfx + target_st_str + sfx
+    else if str.match(cleanTicker, "[CP]\\d+$") != ""
+        string matchCP = str.match(cleanTicker, "[CP]\\d+$")
+        int matchPos = str.pos(cleanTicker, matchCP)
+        string pfx = str.substring(cleanTicker, 0, matchPos)
+        string cp_letter = target_is_ce ? "C" : "P"
+        pfx + cp_letter + target_st_str
+    else
+        string rep_ticker = str.replace(cleanTicker, st_digits, target_st_str)
+        rep_ticker
+
+f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
+f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
+
+// 9 Strikes centered strictly around Day Open ATM (baseStrike is always middle row)
+float k_0  = baseStrike
+float k_p1 = baseStrike + 1.0 * stepVal
+float k_p2 = baseStrike + 2.0 * stepVal
+float k_p3 = baseStrike + 3.0 * stepVal
+float k_p4 = baseStrike + 4.0 * stepVal
+
+float k_m1 = baseStrike - 1.0 * stepVal
+float k_m2 = baseStrike - 2.0 * stepVal
+float k_m3 = baseStrike - 3.0 * stepVal
+float k_m4 = baseStrike - 4.0 * stepVal
+
+// ==========================================
+// DATA FETCHING FOR STRIKES
+// ==========================================
+
+f_get_strike_close() => close
+
+ce_c_p4 = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+pe_c_p4 = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+ce_c_p3 = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+pe_c_p3 = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+ce_c_p2 = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+pe_c_p2 = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+ce_c_p1 = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+pe_c_p1 = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+ce_c_0  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+pe_c_0  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+ce_c_m1 = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+pe_c_m1 = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+ce_c_m2 = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+pe_c_m2 = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+ce_c_m3 = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+pe_c_m3 = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+ce_c_m4 = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+pe_c_m4 = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+bool is_new_day = ta.change(time("D")) != 0
+
+f_get_open_val(float cur_c) =>
+    ta.valuewhen(is_new_day or bar_index == 0, cur_c, 0)
+
+float ce_o_p4 = f_get_open_val(ce_c_p4), float pe_o_p4 = f_get_open_val(pe_c_p4)
+float ce_o_p3 = f_get_open_val(ce_c_p3), float pe_o_p3 = f_get_open_val(pe_c_p3)
+float ce_o_p2 = f_get_open_val(ce_c_p2), float pe_o_p2 = f_get_open_val(pe_c_p2)
+float ce_o_p1 = f_get_open_val(ce_c_p1), float pe_o_p1 = f_get_open_val(pe_c_p1)
+float ce_o_0  = f_get_open_val(ce_c_0),  float pe_o_0  = f_get_open_val(pe_c_0)
+float ce_o_m1 = f_get_open_val(ce_c_m1), float pe_o_m1 = f_get_open_val(pe_c_m1)
+float ce_o_m2 = f_get_open_val(ce_c_m2), float pe_o_m2 = f_get_open_val(pe_c_m2)
+float ce_o_m3 = f_get_open_val(ce_c_m3), float pe_o_m3 = f_get_open_val(pe_c_m3)
+float ce_o_m4 = f_get_open_val(ce_c_m4), float pe_o_m4 = f_get_open_val(pe_c_m4)
+
+// ==========================================
+// TRIGGER 1: FRESH INTRINSIC VALUE CREATION
+// ==========================================
+
+float spotLTP = close
+
+f_calc_iv_tv(float st_val, float ce_ltp, float pe_ltp) =>
+    float ce_iv = math.max(0.0, spotLTP - st_val)
+    float pe_iv = math.max(0.0, st_val - spotLTP)
+    float ce_tv = math.max(0.0, ce_ltp - ce_iv)
+    float pe_tv = math.max(0.0, pe_ltp - pe_iv)
+    [ce_iv, ce_tv, pe_iv, pe_tv]
+
+[ce_iv_0, ce_tv_0, pe_iv_0, pe_tv_0] = f_calc_iv_tv(k_0, ce_c_0, pe_c_0)
+[ce_iv_otm, ce_tv_otm, pe_iv_otm, pe_tv_otm] = f_calc_iv_tv(k_p1, ce_c_p1, pe_c_m1)
+[ce_iv_itm, ce_tv_itm, pe_iv_itm, pe_tv_itm] = f_calc_iv_tv(k_m1, ce_c_m1, pe_c_p1)
+
+// Detect fresh Intrinsic Value creation (0 to > 0 transition)
+bool fresh_ce_iv = enableFreshIVAlerts and (ce_iv_0 > 0 and (na(ce_iv_0[1]) or ce_iv_0[1] == 0))
+bool fresh_pe_iv = enableFreshIVAlerts and (pe_iv_0 > 0 and (na(pe_iv_0[1]) or pe_iv_0[1] == 0))
+
+// Rule: If CE gets fresh Intrinsic Value -> CE Buy; If PE gets fresh Intrinsic Value -> PE Buy
+bool fresh_ce_buy_signal = fresh_ce_iv
+bool fresh_pe_buy_signal = fresh_pe_iv
+
+plotshape(showFreshIVShapes and fresh_ce_buy_signal, title="Fresh IV Call Buy", style=shape.triangleup, location=location.belowbar, color=colorBC, textcolor=colorSignalTextColor, size=size.tiny, text="Fresh IV CE")
+plotshape(showFreshIVShapes and fresh_pe_buy_signal, title="Fresh IV Put Buy", style=shape.triangledown, location=location.abovebar, color=colorBP, textcolor=colorSignalTextColor, size=size.tiny, text="Fresh IV PE")
+
+alertcondition(fresh_ce_buy_signal, title="Fresh Intrinsic CE Buy Alert", message="FRESH IV ALERT: Call Option gained fresh Intrinsic Value on {{ticker}}!")
+alertcondition(fresh_pe_buy_signal, title="Fresh Intrinsic PE Buy Alert", message="FRESH IV ALERT: Put Option gained fresh Intrinsic Value on {{ticker}}!")
+
+// ==========================================
+// TRIGGER 2: TIME VALUE ALERT SETUP (FROM 5A)
+// ==========================================
+
+float otm_avg_tv_rt = (ce_tv_otm + pe_tv_otm) / 2.0
+float otm_avg_iv_rt = (ce_iv_otm + pe_iv_otm) / 2.0
+
+float itm_avg_tv_rt = (ce_tv_itm + pe_tv_itm) / 2.0
+float itm_avg_iv_rt = (ce_iv_itm + pe_iv_itm) / 2.0
+
+bool otm_ce_above = close > otm_avg_tv_rt
+bool otm_pe_below = pe_c_m1 < otm_avg_iv_rt
+bool otm_ce_was_below = not otm_ce_above[1] or not otm_ce_above[2] or not otm_ce_above[3]
+bool otm_pe_was_below = not otm_pe_below[1] or not otm_pe_below[2] or not otm_pe_below[3]
+
+bool otm_bc_signal = (ta.crossover(close, otm_avg_tv_rt) and otm_pe_was_below) or (otm_ce_above and otm_pe_below and not (otm_ce_above[1] and otm_pe_below[1]))
+bool otm_bp_signal = (ta.crossover(pe_c_m1, otm_avg_tv_rt) and otm_ce_was_below) or (not otm_ce_above and not otm_pe_below and not (not otm_ce_above[1] and not otm_pe_below[1]))
+
+bool itm_ce_above = ce_c_m1 > itm_avg_iv_rt
+bool itm_pe_below = pe_c_p1 < itm_avg_tv_rt
+bool itm_ce_was_below = not itm_ce_above[1] or not itm_ce_above[2] or not itm_ce_above[3]
+bool itm_pe_was_below = not itm_pe_below[1] or not itm_pe_below[2] or not itm_pe_below[3]
+
+bool itm_bc_signal = (ta.crossover(ce_c_m1, itm_avg_iv_rt) and itm_pe_was_below) or (itm_ce_above and itm_pe_below and not (itm_ce_above[1] and itm_pe_below[1]))
+bool itm_bp_signal = (ta.crossover(pe_c_p1, itm_avg_tv_rt) and itm_ce_was_below) or (itm_pe_below and not itm_ce_above and not (itm_pe_below[1] and not itm_ce_above[1]))
+
+bool raw_bc_signal = otm_bc_signal or itm_bc_signal
+bool raw_bp_signal = otm_bp_signal or itm_bp_signal
+
+bool init_bc_signal = raw_bc_signal and not raw_bc_signal[1]
+bool init_bp_signal = raw_bp_signal and not raw_bp_signal[1]
+
+var int signal_state_itv = 0
+
+bool tv_bc_signal = false
+bool tv_bp_signal = false
+
+if signalFilterInput == "All Candles (Raw)"
+    tv_bc_signal := raw_bc_signal
+    tv_bp_signal := raw_bp_signal
+else if signalFilterInput == "Initial Trigger Only"
+    tv_bc_signal := init_bc_signal
+    tv_bp_signal := init_bp_signal
+else // "Alternate Signals Only (Wait for Opposite)"
+    if raw_bc_signal and signal_state_itv != 1
+        tv_bc_signal := true
+        signal_state_itv := 1
+    else if raw_bp_signal and signal_state_itv != -1
+        tv_bp_signal := true
+        signal_state_itv := -1
+
+plotshape(showTVShapes and tv_bc_signal, title="Time Value Buy CE (BC)", style=shape.labelup, location=location.belowbar, color=colorBC, textcolor=colorSignalTextColor, size=size.small, text="BC")
+plotshape(showTVShapes and tv_bp_signal, title="Time Value Buy PE (BP)", style=shape.labeldown, location=location.abovebar, color=colorBP, textcolor=colorSignalTextColor, size=size.small, text="BP")
+
+alertcondition(tv_bc_signal, title="Time Value Buy CE (BC) Alert", message="TV BC ALERT: Time Value Buy CE condition triggered on {{ticker}}!")
+alertcondition(tv_bp_signal, title="Time Value Buy PE (BP) Alert", message="TV BP ALERT: Time Value Buy PE condition triggered on {{ticker}}!")
+
+// ==========================================
+// TRIGGER 3: BASKET AVERAGES CROSSOVER & POSITIVE CHANGE
+// ==========================================
+
+float sum_ce_open = nz(ce_o_0)
+float sum_pe_open = nz(pe_o_0)
+float sum_ce_cur  = nz(ce_c_0)
+float sum_pe_cur  = nz(pe_c_0)
+int total_count   = 1 + 2 * numStrikesInput
+
+if numStrikesInput >= 1
+    sum_ce_open += nz(ce_o_p1) + nz(ce_o_m1)
+    sum_pe_open += nz(pe_o_p1) + nz(pe_o_m1)
+    sum_ce_cur  += nz(ce_c_p1) + nz(ce_c_m1)
+    sum_pe_cur  += nz(pe_c_p1) + nz(pe_c_m1)
+
+if numStrikesInput >= 2
+    sum_ce_open += nz(ce_o_p2) + nz(ce_o_m2)
+    sum_pe_open += nz(pe_o_p2) + nz(pe_o_m2)
+    sum_ce_cur  += nz(ce_c_p2) + nz(ce_c_m2)
+    sum_pe_cur  += nz(pe_c_p2) + nz(pe_c_m2)
+
+if numStrikesInput >= 3
+    sum_ce_open += nz(ce_o_p3) + nz(ce_o_m3)
+    sum_pe_open += nz(pe_o_p3) + nz(pe_o_m3)
+    sum_ce_cur  += nz(ce_c_p3) + nz(ce_c_m3)
+    sum_pe_cur  += nz(pe_c_p3) + nz(pe_c_m3)
+
+if numStrikesInput >= 4
+    sum_ce_open += nz(ce_o_p4) + nz(ce_o_m4)
+    sum_pe_open += nz(pe_o_p4) + nz(pe_o_m4)
+    sum_ce_cur  += nz(ce_c_p4) + nz(ce_c_m4)
+    sum_pe_cur  += nz(pe_c_p4) + nz(pe_c_m4)
+
+float ceAvgOpen = sum_ce_open / float(total_count)
+float peAvgOpen = sum_pe_open / float(total_count)
+float ceAvgCur  = sum_ce_cur  / float(total_count)
+float peAvgCur  = sum_pe_cur  / float(total_count)
+
+float ceAvgChg = ceAvgCur - ceAvgOpen
+float peAvgChg = peAvgCur - peAvgOpen
+
+bool ce_cross_above = ta.crossover(ceAvgCur, ceAvgOpen) or (ceAvgCur > ceAvgOpen and ceAvgCur[1] <= ceAvgOpen[1])
+bool pe_cross_above = ta.crossover(peAvgCur, peAvgOpen) or (peAvgCur > peAvgOpen and peAvgCur[1] <= peAvgOpen[1])
+
+bool basket_ce_buy = enableBasketAlerts and ce_cross_above and (ceAvgChg > 0)
+bool basket_pe_buy = enableBasketAlerts and pe_cross_above and (peAvgChg > 0)
+
+plotshape(showBasketShapes and basket_ce_buy, title="Basket Avg Call Buy", style=shape.circle, location=location.belowbar, color=colorBC, textcolor=colorSignalTextColor, size=size.tiny, text="Basket CE")
+plotshape(showBasketShapes and basket_pe_buy, title="Basket Avg Put Buy", style=shape.circle, location=location.abovebar, color=colorBP, textcolor=colorSignalTextColor, size=size.tiny, text="Basket PE")
+
+alertcondition(basket_ce_buy, title="Basket Buy CE Alert", message="BASKET CE ALERT: CE Current Avg crossed above Day Open Avg & Change is positive on {{ticker}}!")
+alertcondition(basket_pe_buy, title="Basket Buy PE Alert", message="BASKET PE ALERT: PE Current Avg crossed above Day Open Avg & Change is positive on {{ticker}}!")
+
+// ==========================================
+// TRIGGER 4: BEP PROXIMITY / TOUCH ALERTS
+// ==========================================
+
+float atm_ce_bep    = baseStrike + ce_o_0
+float atm_pe_bep    = baseStrike - pe_o_0
+float atm_bep_pivot = (atm_ce_bep + atm_pe_bep) / 2.0
+
+float otm_ce_bep    = k_p1 + ce_o_p1
+float otm_pe_bep    = k_m1 - pe_o_m1
+
+float itm_ce_bep    = k_m1 + ce_o_m1
+float itm_pe_bep    = k_p1 - pe_o_p1
+
+f_near_bep(float level) =>
+    enableBEPAlerts and not na(level) and (math.abs(close - level) <= bepTolerancePts or ta.cross(close, level))
+
+bool near_atm_bep = f_near_bep(atm_bep_pivot) or f_near_bep(atm_ce_bep) or f_near_bep(atm_pe_bep)
+bool near_otm_bep = f_near_bep(otm_ce_bep) or f_near_bep(otm_pe_bep)
+bool near_itm_bep = f_near_bep(itm_ce_bep) or f_near_bep(itm_pe_bep)
+
+bool bep_touch_alert = near_atm_bep or near_otm_bep or near_itm_bep
+
+plot(showBEPLines ? atm_bep_pivot : na, title="ATM BEP Pivot Line", color=colorATMPivot, linewidth=2)
+plot(showBEPLines ? otm_ce_bep : na,    title="OTM Call Upper BEP", color=colorOTMBEP,  linewidth=1)
+plot(showBEPLines ? otm_pe_bep : na,    title="OTM Put Lower BEP", color=colorOTMBEP,  linewidth=1)
+plot(showBEPLines ? itm_ce_bep : na,    title="ITM Call Upper BEP", color=colorITMBEP,  linewidth=1)
+plot(showBEPLines ? itm_pe_bep : na,    title="ITM Put Lower BEP", color=colorITMBEP,  linewidth=1)
+
+alertcondition(bep_touch_alert, title="Price at BEP Level Alert", message="BEP ALERT: Price reached an active BEP Level (ATM/OTM/ITM) on {{ticker}}!")
+
+// ==========================================
+// TRIGGER 5: CONFLUENCE SIGNAL ENGINE (STRONG BC & STRONG BP)
+// ==========================================
+
+int ce_confluence_count = (fresh_ce_buy_signal ? 1 : 0) + (tv_bc_signal ? 1 : 0) + (basket_ce_buy ? 1 : 0) + (bep_touch_alert ? 1 : 0)
+int pe_confluence_count = (fresh_pe_buy_signal ? 1 : 0) + (tv_bp_signal ? 1 : 0) + (basket_pe_buy ? 1 : 0) + (bep_touch_alert ? 1 : 0)
+
+int min_required = confluenceMode == "3 or More Triggers Aligned" ? 3 : 2
+
+bool strong_bc_signal = enableConfluence and (ce_confluence_count >= min_required)
+bool strong_bp_signal = enableConfluence and (pe_confluence_count >= min_required)
+
+// Candle protection: Distinct positioning using location & clear styling so candles remain crisp
+plotshape(showStrongShapes and strong_bc_signal, title="Strong Buy CE (Strong BC)", style=shape.labelup, location=location.belowbar, color=colorStrongBC, textcolor=color.black, size=size.normal, text="STRONG BC")
+plotshape(showStrongShapes and strong_bp_signal, title="Strong Buy PE (Strong BP)", style=shape.labeldown, location=location.abovebar, color=colorStrongBP, textcolor=color.white, size=size.normal, text="STRONG BP")
+
+alertcondition(strong_bc_signal, title="Strong Buy CE (Strong BC) Alert", message="STRONG BC CONFLUENCE: Multiple Buy CE triggers aligned on {{ticker}}!")
+alertcondition(strong_bp_signal, title="Strong Buy PE (Strong BP) Alert", message="STRONG BP CONFLUENCE: Multiple Buy PE triggers aligned on {{ticker}}!")
+
+// ==========================================
+// LIVE SIGNAL & BEP DASHBOARD TABLE
+// ==========================================
+
+f_get_table_pos(string pos_str) =>
+    switch pos_str
+        "Top Right"    => position.top_right
+        "Top Left"     => position.top_left
+        "Bottom Left"  => position.bottom_left
+        => position.bottom_right
+
+f_get_table_text_size(string sz_str) =>
+    switch sz_str
+        "Auto"   => size.auto
+        "Tiny"   => size.tiny
+        "Small"  => size.small
+        "Normal" => size.normal
+        "Large"  => size.large
+        => size.small
+
+var table dashTable = table.new(f_get_table_pos(tablePosInput), 4, 10, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+
+if barstate.islast
+    if not showTableInput
+        table.delete(dashTable)
+    else
+        string sz = f_get_table_text_size(tableTextSizeInput)
+        table.cell(dashTable, 0, 0, "Signal Trigger", bgcolor=#1565C0, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 1, 0, "Call (CE)", bgcolor=#1565C0, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 2, 0, "Put (PE)", bgcolor=#1565C0, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 3, 0, "Status", bgcolor=#1565C0, text_color=color.white, text_size=sz)
+
+        // Row 1: Fresh Intrinsic Value
+        table.cell(dashTable, 0, 1, "Fresh Intrinsic Value", bgcolor=#212121, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 1, 1, str.tostring(ce_iv_0, "#.##"), bgcolor=color.black, text_color=ce_iv_0 > 0 ? #00E676 : color.gray, text_size=sz)
+        table.cell(dashTable, 2, 1, str.tostring(pe_iv_0, "#.##"), bgcolor=color.black, text_color=pe_iv_0 > 0 ? #FF1744 : color.gray, text_size=sz)
+        table.cell(dashTable, 3, 1, fresh_ce_buy_signal ? "CE BUY" : (fresh_pe_buy_signal ? "PE BUY" : "NO IV"), bgcolor=fresh_ce_buy_signal ? #1B5E20 : (fresh_pe_buy_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
+
+        // Row 2: Time Value Alert
+        table.cell(dashTable, 0, 2, "Time Value Crossover", bgcolor=#212121, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 1, 2, str.tostring(ce_tv_0, "#.##"), bgcolor=color.black, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 2, 2, str.tostring(pe_tv_0, "#.##"), bgcolor=color.black, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 3, 2, tv_bc_signal ? "BC BUY" : (tv_bp_signal ? "BP BUY" : "WAIT"), bgcolor=tv_bc_signal ? #1B5E20 : (tv_bp_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
+
+        // Row 3: Basket Averages
+        table.cell(dashTable, 0, 3, "Basket Avg Crossover", bgcolor=#212121, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 1, 3, str.tostring(ceAvgCur, "#.##") + " (" + (ceAvgChg >= 0 ? "+" : "") + str.tostring(ceAvgChg, "#.##") + ")", bgcolor=color.black, text_color=ceAvgChg >= 0 ? #00E676 : #FF5252, text_size=sz)
+        table.cell(dashTable, 2, 3, str.tostring(peAvgCur, "#.##") + " (" + (peAvgChg >= 0 ? "+" : "") + str.tostring(peAvgChg, "#.##") + ")", bgcolor=color.black, text_color=peAvgChg >= 0 ? #00E676 : #FF5252, text_size=sz)
+        table.cell(dashTable, 3, 3, basket_ce_buy ? "CE CROSS" : (basket_pe_buy ? "PE CROSS" : "FLAT"), bgcolor=basket_ce_buy ? #1B5E20 : (basket_pe_buy ? #880E4F : color.black), text_color=color.white, text_size=sz)
+
+        // Row 4: BEP Touch Status
+        table.cell(dashTable, 0, 4, "BEP Level Touch", bgcolor=#212121, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 1, 4, "ATM Pivot: " + str.tostring(atm_bep_pivot, "#.##"), bgcolor=color.black, text_color=color.aqua, text_size=sz)
+        table.cell(dashTable, 2, 4, "OTM/ITM BEP", bgcolor=color.black, text_color=color.silver, text_size=sz)
+        table.cell(dashTable, 3, 4, bep_touch_alert ? "AT BEP!" : "CLEAR", bgcolor=bep_touch_alert ? #F57F17 : color.black, text_color=color.white, text_size=sz)
+
+        // Row 5: Confluence State
+        table.cell(dashTable, 0, 5, "Confluence State", bgcolor=#37474F, text_color=color.white, text_size=sz)
+        table.cell(dashTable, 1, 5, "CE Triggers: " + str.tostring(ce_confluence_count), bgcolor=#37474F, text_color=#76FF03, text_size=sz)
+        table.cell(dashTable, 2, 5, "PE Triggers: " + str.tostring(pe_confluence_count), bgcolor=#37474F, text_color=#FF1744, text_size=sz)
+        table.cell(dashTable, 3, 5, strong_bc_signal ? "STRONG BC" : (strong_bp_signal ? "STRONG BP" : "NEUTRAL"), bgcolor=strong_bc_signal ? #76FF03 : (strong_bp_signal ? #FF1744 : color.black), text_color=strong_bc_signal ? color.black : color.white, text_size=sz)
