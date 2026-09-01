@@ -29,7 +29,7 @@ G_PLOTS = "Plot Controls"
 G_COLORS= "Styling & Display"
 
 // 1. Instrument & Strike Selection
-atm_select_mode    = input.string("Auto-Detect (Chart Ticker)", "ATM Strike Selection Mode", options=["Auto-Detect (Chart Ticker)", "Manual Strike Entry"], group=G_INST)
+atm_select_mode    = input.string("Auto-Detect (Chart Ticker)", "ATM Strike Selection Mode", options=["Auto-Detect (Chart Ticker)", "Manual Strike Entry"], group=G_INST, tooltip="Auto-Detect rounds the current spot price to the nearest strike step (e.g. Nifty step 50). Manual lets you input a custom strike.")
 manual_strike_val  = input.int(24000, "Manual ATM Strike Price", group=G_INST)
 stock_name_preset  = input.string("NIFTY", "Preset Underlying", options=["Custom", "NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "CRUDEOIL"], group=G_INST)
 underlying_ticker  = input.string("NIFTY", "Custom Underlying Ticker", group=G_INST)
@@ -46,6 +46,7 @@ standard_bep_basis = input.string("Day Open Price", "Static BEP Calculation Basi
 confluence_tol     = input.float(15.0, "Confluence Alignment Tolerance (Points)", minval=1.0, group=G_CONF, tooltip="Point distance tolerance to trigger Golden Confluence signals.")
 
 // 4. Plot Controls
+show_atm_pivot     = input.bool(true, "Show ATM Strike Pivot Level Line", group=G_PLOTS)
 show_rt_atm_bep    = input.bool(true, "Show Realtime ATM Straddle BEP Lines (Layer 1)", group=G_PLOTS)
 show_rt_otm_bep    = input.bool(true, "Show Realtime OTM Strangle BEP Lines (Layer 2)", group=G_PLOTS)
 show_rt_itm_bep    = input.bool(true, "Show Realtime ITM Gamma Trap BEP Lines (Layer 3)", group=G_PLOTS)
@@ -58,6 +59,7 @@ show_spot_pdh_pdl  = input.bool(true, "Show Spot Previous Day High (PDH) & Low (
 show_signals       = input.bool(true, "Show Golden Confluence Signals Shapes", group=G_PLOTS)
 
 // 5. Styling & Colors
+c_atm_pivot        = input.color(#FFEA00, "ATM Strike Pivot Line Color", group=G_COLORS)
 c_atm_upper        = input.color(#00E676, "ATM Straddle Upper Resistance BEP Color", group=G_COLORS)
 c_atm_lower        = input.color(#FF1744, "ATM Straddle Lower Support BEP Color", group=G_COLORS)
 
@@ -137,6 +139,9 @@ if barstate.isfirst or na(base_center_strike)
     base_center_strike := calc_strike
 
 final_strike = base_center_strike
+
+// Description of ATM Selection Method
+string atm_selection_method = (atm_select_mode == "Manual Strike Entry") ? "Manual Input (" + str.tostring(manual_strike_val) + ")" : "Auto: Spot " + str.tostring(nz(spot_close_today, spot_open), "#.##") + " → Round to Step " + str.tostring(strike_step)
 
 // Universal Fail-Safe Option Ticker Construction
 f_build_option_symbol(int target_strike, bool target_is_ce) =>
@@ -242,8 +247,12 @@ bool has_itm_data_rt   = not na(ce_itm_ltp) and not na(pe_itm_ltp) and (ce_itm_l
 bool has_itm_data_stat = not na(ce_itm_ref) and not na(pe_itm_ref) and (ce_itm_ref > 0 or pe_itm_ref > 0)
 
 // =========================================================================
-// SPOT BEP CALCULATIONS (LAYERS 1, 2, AND 3)
+// SPOT BEP CALCULATIONS & ATM PIVOTS
 // =========================================================================
+
+// --- ATM PIVOT CALCULATIONS ---
+float atm_strike_pivot   = float(st_atm)
+float atm_neutral_pivot  = has_atm_data_rt ? (float(st_atm) + (nz(ce_atm_ltp) - nz(pe_atm_ltp)) / 2.0) : float(st_atm)
 
 // --- LAYER 1: ATM Straddle BEP (The Volatility Anchor) ---
 float atm_cp_rt          = has_atm_data_rt   ? (nz(ce_atm_ltp) + nz(pe_atm_ltp)) : na
@@ -292,6 +301,10 @@ bool is_theta_box           = not na(atm_straddle_lower_rt) and not na(atm_strad
 // =========================================================================
 // PLOTTING ALL SPOT BEP LINES & SIGNALS
 // =========================================================================
+
+// --- ATM Strike Pivot Plot (Distinct Color) ---
+plot(show_atm_pivot and atm_strike_pivot > 0 ? atm_strike_pivot : na, "ATM Strike Pivot Level", color=c_atm_pivot, linewidth=2, style=plot.style_linebr)
+plot(show_atm_pivot and not na(atm_neutral_pivot) ? atm_neutral_pivot : na, "ATM Delta-Neutral BEP Pivot", color=color.new(c_atm_pivot, 30), linewidth=1, style=plot.style_linebr)
 
 // --- Realtime Plots ---
 plot(show_rt_atm_bep and not na(atm_straddle_upper_rt) ? atm_straddle_upper_rt : na, "Realtime ATM Straddle Upper BEP", color=c_atm_upper, linewidth=2)
@@ -342,13 +355,13 @@ if barstate.islast and show_options_table
            table_size_str == "Small" ? size.small :
            table_size_str == "Normal" ? size.normal : size.large
            
-    info_table := table.new(position_choice, 6, 9, border_width=1, border_color=color.gray)
+    info_table := table.new(position_choice, 6, 10, border_width=1, border_color=color.gray)
     
     string basisTag = standard_bep_basis == "Previous Day Close" ? "Prev Settlement" : (standard_bep_basis == "First 5 Min Close" ? "First 5m Close" : "Day Open")
 
     // Header Row 0
     table.cell(info_table, 0, 0, "Spot Asset: " + final_root, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 1, 0, "ATM Strike: " + str.tostring(st_atm), bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
+    table.cell(info_table, 1, 0, "ATM Strike Pivot: " + str.tostring(st_atm), bgcolor=#FFEE58, text_color=color.black, text_size=t_sz)
     table.cell(info_table, 2, 0, "Offset: " + str.tostring(offsetPts) + " pts", bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 3, 0, "Basis: " + basisTag, bgcolor=#1565C0, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 4, 0, "Expiry: " + final_expiry, bgcolor=#1565C0, text_color=color.yellow, text_size=t_sz)
@@ -362,67 +375,75 @@ if barstate.islast and show_options_table
     table.cell(info_table, 4, 1, "Spot Level Comparison", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
     table.cell(info_table, 5, 1, "Confluence Matrix Status", bgcolor=#37474F, text_color=color.orange, text_size=t_sz)
 
-    // Layer 1 Rows
+    // ATM Pivot Explanation Row (Row 2)
+    table.cell(info_table, 0, 2, "ATM Strike Pivot Level", bgcolor=#F57F17, text_color=color.black, text_size=t_sz)
+    table.cell(info_table, 1, 2, atm_selection_method, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 2, 2, "Strike: " + str.tostring(st_atm), bgcolor=color.black, text_color=#FFEA00, text_size=t_sz)
+    table.cell(info_table, 3, 2, "Neutral Pivot: " + str.tostring(atm_neutral_pivot, "#.##"), bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 2, "Spot vs ATM Pivot: " + str.tostring(close - float(st_atm), "+#.##;-#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 5, 2, "Primary Center Anchor", bgcolor=color.black, text_color=#FFEA00, text_size=t_sz)
+
+    // Layer 1 Rows (Rows 3 & 4)
     string atm_up_stat_str = na(atm_straddle_upper_stat) ? "N/A (No Option Data)" : str.tostring(atm_straddle_upper_stat, "#.##")
     string atm_up_rt_str   = na(atm_straddle_upper_rt)   ? "N/A (No Option Data)" : str.tostring(atm_straddle_upper_rt, "#.##")
-    table.cell(info_table, 0, 2, "Layer 1: ATM Upper Resistance", bgcolor=#1B5E20, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 1, 2, "ATM Strike + Straddle CP", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 2, 2, atm_up_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
-    table.cell(info_table, 3, 2, atm_up_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
-    table.cell(info_table, 4, 2, na(atm_straddle_upper_rt) ? "Spot vs Upper: N/A" : "Spot vs Upper: " + str.tostring(close - atm_straddle_upper_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=not na(atm_straddle_upper_rt) and close >= atm_straddle_upper_rt ? #00E676 : color.silver, text_size=t_sz)
-    table.cell(info_table, 5, 2, is_rejection_zone ? "REJECTION CONFLUENCE" : "Normal Resistance", bgcolor=is_rejection_zone ? #FF6D00 : color.black, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 0, 3, "Layer 1: ATM Upper Resistance", bgcolor=#1B5E20, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 3, "ATM Strike + Straddle CP", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 3, atm_up_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 3, atm_up_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 3, na(atm_straddle_upper_rt) ? "Spot vs Upper: N/A" : "Spot vs Upper: " + str.tostring(close - atm_straddle_upper_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=not na(atm_straddle_upper_rt) and close >= atm_straddle_upper_rt ? #00E676 : color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 3, is_rejection_zone ? "REJECTION CONFLUENCE" : "Normal Resistance", bgcolor=is_rejection_zone ? #FF6D00 : color.black, text_color=color.white, text_size=t_sz)
 
     string atm_lo_stat_str = na(atm_straddle_lower_stat) ? "N/A (No Option Data)" : str.tostring(atm_straddle_lower_stat, "#.##")
     string atm_lo_rt_str   = na(atm_straddle_lower_rt)   ? "N/A (No Option Data)" : str.tostring(atm_straddle_lower_rt, "#.##")
-    table.cell(info_table, 0, 3, "Layer 1: ATM Lower Support", bgcolor=#B71C1C, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 1, 3, "ATM Strike - Straddle CP", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 2, 3, atm_lo_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
-    table.cell(info_table, 3, 3, atm_lo_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
-    table.cell(info_table, 4, 3, na(atm_straddle_lower_rt) ? "Spot vs Lower: N/A" : "Spot vs Lower: " + str.tostring(close - atm_straddle_lower_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=not na(atm_straddle_lower_rt) and close <= atm_straddle_lower_rt ? #FF1744 : color.silver, text_size=t_sz)
-    table.cell(info_table, 5, 3, is_theta_box ? "THETA DECAY BOX" : "Out of Theta Box", bgcolor=is_theta_box ? #00838F : color.black, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 0, 4, "Layer 1: ATM Lower Support", bgcolor=#B71C1C, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 4, "ATM Strike - Straddle CP", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 4, atm_lo_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 4, atm_lo_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 4, na(atm_straddle_lower_rt) ? "Spot vs Lower: N/A" : "Spot vs Lower: " + str.tostring(close - atm_straddle_lower_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=not na(atm_straddle_lower_rt) and close <= atm_straddle_lower_rt ? #FF1744 : color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 4, is_theta_box ? "THETA DECAY BOX" : "Out of Theta Box", bgcolor=is_theta_box ? #00838F : color.black, text_color=color.white, text_size=t_sz)
 
-    // Layer 2 Rows
+    // Layer 2 Rows (Rows 5 & 6)
     string otm_c_stat_str = na(otm_call_bep_stat) ? "N/A" : str.tostring(otm_call_bep_stat, "#.##")
     string otm_c_rt_str   = na(otm_call_bep_rt)   ? "N/A" : str.tostring(otm_call_bep_rt, "#.##")
-    table.cell(info_table, 0, 4, "Layer 2: OTM Call Resistance", bgcolor=#01579B, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 1, 4, "OTM Strike " + str.tostring(st_otm_ce) + " + CE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 2, 4, otm_c_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
-    table.cell(info_table, 3, 4, otm_c_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
-    table.cell(info_table, 4, 4, na(otm_call_bep_rt) ? "Spot vs OTM Call: N/A" : "Spot vs OTM Call: " + str.tostring(close - otm_call_bep_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 5, 4, "Institutional Call Wall", bgcolor=color.black, text_color=#00B0FF, text_size=t_sz)
+    table.cell(info_table, 0, 5, "Layer 2: OTM Call Resistance", bgcolor=#01579B, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 5, "OTM Strike " + str.tostring(st_otm_ce) + " + CE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 5, otm_c_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 5, otm_c_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 5, na(otm_call_bep_rt) ? "Spot vs OTM Call: N/A" : "Spot vs OTM Call: " + str.tostring(close - otm_call_bep_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 5, "Institutional Call Wall", bgcolor=color.black, text_color=#00B0FF, text_size=t_sz)
 
     string otm_p_stat_str = na(otm_put_bep_stat) ? "N/A" : str.tostring(otm_put_bep_stat, "#.##")
     string otm_p_rt_str   = na(otm_put_bep_rt)   ? "N/A" : str.tostring(otm_put_bep_rt, "#.##")
-    table.cell(info_table, 0, 5, "Layer 2: OTM Put Support", bgcolor=#E65100, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 1, 5, "OTM Strike " + str.tostring(st_otm_pe) + " - PE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 2, 5, otm_p_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
-    table.cell(info_table, 3, 5, otm_p_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
-    table.cell(info_table, 4, 5, na(otm_put_bep_rt) ? "Spot vs OTM Put: N/A" : "Spot vs OTM Put: " + str.tostring(close - otm_put_bep_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 5, 5, "Institutional Put Wall", bgcolor=color.black, text_color=#FF9100, text_size=t_sz)
+    table.cell(info_table, 0, 6, "Layer 2: OTM Put Support", bgcolor=#E65100, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 6, "OTM Strike " + str.tostring(st_otm_pe) + " - PE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 6, otm_p_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 6, otm_p_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 6, na(otm_put_bep_rt) ? "Spot vs OTM Put: N/A" : "Spot vs OTM Put: " + str.tostring(close - otm_put_bep_rt, "+#.##;-#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 6, "Institutional Put Wall", bgcolor=color.black, text_color=#FF9100, text_size=t_sz)
 
-    // Layer 3 Rows
+    // Layer 3 Rows (Rows 7 & 8)
     string itm_c_stat_str = na(itm_call_bep_stat) ? "N/A" : str.tostring(itm_call_bep_stat, "#.##")
     string itm_c_rt_str   = na(itm_call_bep_rt)   ? "N/A" : str.tostring(itm_call_bep_rt, "#.##")
-    table.cell(info_table, 0, 6, "Layer 3: ITM Call Gamma Trap", bgcolor=#4A148C, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 1, 6, "ITM Strike " + str.tostring(st_itm_ce) + " + CE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 2, 6, itm_c_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
-    table.cell(info_table, 3, 6, itm_c_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
-    table.cell(info_table, 4, 6, "ITM Call vs Spot PDH (" + str.tostring(spot_pdh, "#.##") + ")", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 5, 6, is_gamma_squeeze ? "GAMMA SQUEEZE ACTIVE" : "Short Cover Watch", bgcolor=is_gamma_squeeze ? #00E676 : color.black, text_color=is_gamma_squeeze ? color.black : #AA00FF, text_size=t_sz)
+    table.cell(info_table, 0, 7, "Layer 3: ITM Call Gamma Trap", bgcolor=#4A148C, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 7, "ITM Strike " + str.tostring(st_itm_ce) + " + CE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 7, itm_c_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 7, itm_c_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 7, "ITM Call vs Spot PDH (" + str.tostring(spot_pdh, "#.##") + ")", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 7, is_gamma_squeeze ? "GAMMA SQUEEZE ACTIVE" : "Short Cover Watch", bgcolor=is_gamma_squeeze ? #00E676 : color.black, text_color=is_gamma_squeeze ? color.black : #AA00FF, text_size=t_sz)
 
     string itm_p_stat_str = na(itm_put_bep_stat) ? "N/A" : str.tostring(itm_put_bep_stat, "#.##")
     string itm_p_rt_str   = na(itm_put_bep_rt)   ? "N/A" : str.tostring(itm_put_bep_rt, "#.##")
-    table.cell(info_table, 0, 7, "Layer 3: ITM Put Gamma Trap", bgcolor=#F57F17, text_color=color.black, text_size=t_sz)
-    table.cell(info_table, 1, 7, "ITM Strike " + str.tostring(st_itm_pe) + " - PE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 2, 7, itm_p_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
-    table.cell(info_table, 3, 7, itm_p_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
-    table.cell(info_table, 4, 7, "ITM Put vs Spot PDL (" + str.tostring(spot_pdl, "#.##") + ")", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 5, 7, is_long_unwinding ? "LONG UNWINDING ACTIVE" : "Long Unwind Watch", bgcolor=is_long_unwinding ? #D50000 : color.black, text_color=is_long_unwinding ? color.white : #FFD600, text_size=t_sz)
+    table.cell(info_table, 0, 8, "Layer 3: ITM Put Gamma Trap", bgcolor=#F57F17, text_color=color.black, text_size=t_sz)
+    table.cell(info_table, 1, 8, "ITM Strike " + str.tostring(st_itm_pe) + " - PE Prem", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 2, 8, itm_p_stat_str, bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    table.cell(info_table, 3, 8, itm_p_rt_str, bgcolor=color.black, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 8, "ITM Put vs Spot PDL (" + str.tostring(spot_pdl, "#.##") + ")", bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 8, is_long_unwinding ? "LONG UNWINDING ACTIVE" : "Long Unwind Watch", bgcolor=is_long_unwinding ? #D50000 : color.black, text_color=is_long_unwinding ? color.white : #FFD600, text_size=t_sz)
 
-    // Spot PDH & PDL Summary Row
-    table.cell(info_table, 0, 8, "Spot Previous Day Levels", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 1, 8, "PDH: " + str.tostring(spot_pdh, "#.##") + " | PDL: " + str.tostring(spot_pdl, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 2, 8, "PDC: " + str.tostring(spot_pdc, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
-    table.cell(info_table, 3, 8, "Spot LTP: " + str.tostring(close, "#.##"), bgcolor=#1565C0, text_color=color.yellow, text_size=t_sz)
-    table.cell(info_table, 4, 8, "Daily Range: " + str.tostring(high - low, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
-    table.cell(info_table, 5, 8, is_theta_box ? "Inside Theta Box" : (not na(atm_straddle_upper_rt) and close > atm_straddle_upper_rt ? "Bullish Range Expansion" : "Bearish Range Expansion"), bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
+    // Spot PDH & PDL Summary Row (Row 9)
+    table.cell(info_table, 0, 9, "Spot Previous Day Levels", bgcolor=#37474F, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 1, 9, "PDH: " + str.tostring(spot_pdh, "#.##") + " | PDL: " + str.tostring(spot_pdl, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 2, 9, "PDC: " + str.tostring(spot_pdc, "#.##"), bgcolor=color.black, text_color=color.white, text_size=t_sz)
+    table.cell(info_table, 3, 9, "Spot LTP: " + str.tostring(close, "#.##"), bgcolor=#1565C0, text_color=color.yellow, text_size=t_sz)
+    table.cell(info_table, 4, 9, "Daily Range: " + str.tostring(high - low, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=t_sz)
+    table.cell(info_table, 5, 9, is_theta_box ? "Inside Theta Box" : (not na(atm_straddle_upper_rt) and close > atm_straddle_upper_rt ? "Bullish Range Expansion" : "Bearish Range Expansion"), bgcolor=color.black, text_color=color.aqua, text_size=t_sz)
