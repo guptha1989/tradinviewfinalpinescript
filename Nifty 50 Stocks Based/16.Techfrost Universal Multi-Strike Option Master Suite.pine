@@ -295,14 +295,14 @@ float k_m3 = baseStrike - 3.0 * stepVal
 float k_m4 = baseStrike - 4.0 * stepVal
 
 // ==========================================
-// DATA FETCHING FOR STRIKES (SINGLE TUPLE SECURITY QUERIES)
+// DATA FETCHING FOR STRIKES (OPTIMIZED LIGHTWEIGHT TUPLE SECURITY QUERIES)
 // ==========================================
 
 f_get_strike_master_tuple() =>
     bool is_new_day = ta.change(time("D")) != 0
     int bars_since_new_day = ta.barssince(is_new_day)
     float d_op = ta.valuewhen(is_new_day or bar_index == 0, open, 0)
-    float pd_c = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+    float pd_c = ta.valuewhen(is_new_day, close[1], 0)
     
     var float f5m_c = na
     if is_new_day
@@ -744,7 +744,7 @@ plotshape(enableBasketAnalytics and showStrongBuySignals and plot_sb_pe and not 
 alertcondition(plot_sb_ce, title="Strong Buy CE (SB CE)", message="STRONG BUY CE Signal: CE Current Avg Crossed Above Day Open Avg on {{ticker}}!")
 alertcondition(plot_sb_pe, title="Strong Buy PE (SB PE)", message="STRONG BUY PE Signal: PE Current Avg Crossed Above Day Open Avg on {{ticker}}!")
 
-// Sub-Pane Plots (Basket Lines & Histograms)
+// Sub-Pane Plots (Basket Lines & Histograms - Collapsed into single plots to stay within 64 plot limit)
 bool renderLines = enableBasketAnalytics and (displayChartModeInput == "Both Lines & Histograms" or displayChartModeInput == "Basket Average Lines Only") and showPlotsInput
 bool renderHist  = enableBasketAnalytics and (displayChartModeInput == "Both Lines & Histograms" or displayChartModeInput == "Average Change Histograms / Lines Only") and showHistogramsInput
 
@@ -757,14 +757,9 @@ plot(renderLines ? peAvgCur  : na, title="PE Basket Current Avg",  color=colorPE
 color col_ceAvgChg = ceAvgChg >= 0 ? #00E676 : #FF1744
 color col_peAvgChg = peAvgChg >= 0 ? #00B0FF : #FF9100
 
-plot(renderHist and changePlotStyleInput == "Histogram" ? ceAvgChg : na, title="CE Basket Avg Change (Histogram)", color=color.new(col_ceAvgChg, 20), linewidth=histLineWidthInput, style=plot.style_histogram, histbase=0.0)
-plot(renderHist and changePlotStyleInput == "Histogram" ? peAvgChg : na, title="PE Basket Avg Change (Histogram)", color=color.new(col_peAvgChg, 20), linewidth=histLineWidthInput, style=plot.style_histogram, histbase=0.0)
-
-plot(renderHist and changePlotStyleInput == "Columns" ? ceAvgChg : na, title="CE Basket Avg Change (Columns)", color=color.new(col_ceAvgChg, 20), style=plot.style_columns, histbase=0.0)
-plot(renderHist and changePlotStyleInput == "Columns" ? peAvgChg : na, title="PE Basket Avg Change (Columns)", color=color.new(col_peAvgChg, 20), style=plot.style_columns, histbase=0.0)
-
-plot(renderHist and changePlotStyleInput == "Line" ? ceAvgChg : na, title="CE Basket Avg Change from Open", color=col_ceAvgChg, linewidth=2, style=plot.style_line)
-plot(renderHist and changePlotStyleInput == "Line" ? peAvgChg : na, title="PE Basket Avg Change from Open", color=col_peAvgChg, linewidth=2, style=plot.style_line)
+// Use dynamic style to avoid duplicating plot calls
+plot(renderHist ? ceAvgChg : na, title="CE Basket Avg Change", color=color.new(col_ceAvgChg, 20), linewidth=histLineWidthInput, style=changePlotStyleInput == "Columns" ? plot.style_columns : (changePlotStyleInput == "Line" ? plot.style_line : plot.style_histogram), histbase=0.0)
+plot(renderHist ? peAvgChg : na, title="PE Basket Avg Change", color=color.new(col_peAvgChg, 20), linewidth=histLineWidthInput, style=changePlotStyleInput == "Columns" ? plot.style_columns : (changePlotStyleInput == "Line" ? plot.style_line : plot.style_histogram), histbase=0.0)
 
 plot(showZeroLineInput and renderHist ? 0.0 : na, title="Zero Reference Line (0.00)", color=colorZeroLine, linewidth=1, style=plot.style_line)
 
