@@ -1,5 +1,5 @@
 //@version=6
-indicator("16. Techfrost Combined Intrinsic Time Value, BEP & Multi-Strike ATM Analytics", shorttitle="16.Techfrost Engine", overlay=true, precision=2)
+indicator("16. Techfrost Combined Intrinsic Time Value, BEP & Multi-Strike ATM Analytics", shorttitle="16.Techfrost Alert Engine", overlay=true, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -41,11 +41,13 @@ strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group
 strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
   tooltip="Set to Auto for auto-detection based on underlying stock/index (Auto-detects 1, 2.5, 5, 10, 20, 50, 100).")
 
-// --- Offset Points & Calculation Settings ---
+// --- Offset Points & Basket Settings ---
 offsetChoiceInput  = input.string("100 Points", "Strike Offset Points Dropdown", options=["5 Points", "10 Points", "15 Points", "20 Points", "25 Points", "40 Points", "50 Points", "100 Points", "150 Points", "200 Points"], group="Calculation Settings",
   tooltip="Offset points used to determine ITM / OTM strike levels.")
 customOffsetInput  = input.float(0.0, "Custom Offset Points Override (0 = Use Dropdown)", minval=0.0, group="Calculation Settings",
   tooltip="Set custom offset points (e.g. 50, 100, 150). If > 0, overrides dropdown selection.")
+numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Basket", minval=1, maxval=4, group="Calculation Settings",
+  tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -151,6 +153,52 @@ float offsetPts = customOffsetInput > 0.0 ? customOffsetInput : switch offsetCho
     "200 Points" => 200.0
     => 100.0
 
+// Dynamic Step Size
+f_auto_detect_step(float ref_p) =>
+    float s_res = 50.0
+    if na(ref_p) or ref_p <= 0
+        s_res := 50.0
+    else if ref_p < 100
+        s_res := 1.0
+    else if ref_p < 250
+        s_res := 2.5
+    else if ref_p < 500
+        s_res := 5.0
+    else if ref_p < 1200
+        s_res := 10.0
+    else if ref_p < 2500
+        s_res := 20.0
+    else
+        s_res := 50.0
+    s_res
+
+float stepVal = 50.0
+switch strikeStepInput
+    StepOverrideChoice.step1   => stepVal := 1.0
+    StepOverrideChoice.step2_5 => stepVal := 2.5
+    StepOverrideChoice.step5   => stepVal := 5.0
+    StepOverrideChoice.step10  => stepVal := 10.0
+    StepOverrideChoice.step20  => stepVal := 20.0
+    StepOverrideChoice.step25  => stepVal := 25.0
+    StepOverrideChoice.step50  => stepVal := 50.0
+    StepOverrideChoice.step100 => stepVal := 100.0
+    StepOverrideChoice.step200 => stepVal := 200.0
+    StepOverrideChoice.step500 => stepVal := 500.0
+    =>
+        switch actualUnderlying
+            UnderlyingAsset.banknifty => stepVal := 100.0
+            UnderlyingAsset.nifty     => stepVal := 50.0
+            UnderlyingAsset.crudeoil  => stepVal := 50.0
+            UnderlyingAsset.gold      => stepVal := 100.0
+            UnderlyingAsset.stock     => stepVal := f_auto_detect_step(not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
+
+var float baseCenterStrike = na
+if barstate.isfirst or na(baseCenterStrike)
+    float refPrice = strikeOverride > 0.0 ? strikeOverride : (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
+    baseCenterStrike := math.round(refPrice / stepVal) * stepVal
+
+float baseStrike = baseCenterStrike
+
 // ==========================================
 // UNIVERSAL FAIL-SAFE CE & PE TICKER CONSTRUCTION
 // ==========================================
@@ -182,15 +230,13 @@ f_build_option_symbol(float target_strike, bool target_is_ce) =>
 f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
 f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
 
-// Strike Calculations strictly based on Offset Points
+// Strike Calculations based on Offset Points
 float ce_strike = chartStrikePrice
 float pe_strike = chartStrikePrice
 
-// ITM Strikes (Call ITM = Strike - Offset, Put ITM = Strike + Offset)
 float itm_ce_strike = chartStrikePrice - offsetPts
 float itm_pe_strike = chartStrikePrice + offsetPts
 
-// OTM Strikes (Call OTM = Strike + Offset, Put OTM = Strike - Offset)
 float otm_ce_strike = chartStrikePrice + offsetPts
 float otm_pe_strike = chartStrikePrice - offsetPts
 
@@ -202,6 +248,18 @@ string pe_itm_ticker = f_build_pe_ticker(itm_pe_strike)
 
 string ce_otm_ticker = f_build_ce_ticker(otm_ce_strike)
 string pe_otm_ticker = f_build_pe_ticker(otm_pe_strike)
+
+// Multi-Strike Basket Tickers
+float k_0  = baseStrike
+float k_p1 = baseStrike + 1.0 * stepVal
+float k_p2 = baseStrike + 2.0 * stepVal
+float k_p3 = baseStrike + 3.0 * stepVal
+float k_p4 = baseStrike + 4.0 * stepVal
+
+float k_m1 = baseStrike - 1.0 * stepVal
+float k_m2 = baseStrike - 2.0 * stepVal
+float k_m3 = baseStrike - 3.0 * stepVal
+float k_m4 = baseStrike - 4.0 * stepVal
 
 // ==========================================
 // DATA FETCHING (SECURITY CALLS)
@@ -220,19 +278,47 @@ f_get_strike_open_and_ltp() =>
 [ce_otm_open, ce_otm_ltp] = request.security(syminfo.prefix + ":" + ce_otm_ticker, timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_otm_open, pe_otm_ltp] = request.security(syminfo.prefix + ":" + pe_otm_ticker, timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
+// Fetch Basket Strikes Data
+[ce_o_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
 float spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
 spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 
 // ==========================================
-// CORE CALCULATIONS REQUIRED (FOR BUY/SELL ALERTS)
+// CORE CALCULATIONS
 // ==========================================
 
-// 1. ITM Intrinsic Value Average (strictly selected based on offset points)
+// 1. ITM Intrinsic Value Average
 float itm_ce_iv_rt  = math.max(0.0, spot_ltp - itm_ce_strike)
 float itm_pe_iv_rt  = math.max(0.0, itm_pe_strike - spot_ltp)
 float itm_avg_iv_rt = (itm_ce_iv_rt + itm_pe_iv_rt) / 2.0
 
-// 2. OTM Time Value Average (strictly selected based on offset points)
+// 2. OTM Time Value Average
 float otm_ce_iv_rt  = math.max(0.0, spot_ltp - otm_ce_strike)
 float otm_pe_iv_rt  = math.max(0.0, otm_pe_strike - spot_ltp)
 float otm_ce_tv_rt  = ce_otm_ltp - otm_ce_iv_rt
@@ -247,19 +333,73 @@ float pe_iv_rt = math.max(0.0, pe_strike - spot_ltp)
 float ce_tv_rt = ce_ltp - ce_iv_rt
 float pe_tv_rt = pe_ltp - pe_iv_rt
 
-// 5. Realtime BEP Line of selected strike based on Day Open Price
+// 5. Day Open Static BEP Line
 float day_open_bep = (ce_open + pe_open) / 2.0
 
 // 6. Realtime Dynamic BEP Value
 float realtime_bep = (ce_ltp + pe_ltp) / 2.0
 
+// --- Multi-Strike Basket Averages ---
+int total_count = numStrikesInput == 4 ? 9 : (numStrikesInput == 3 ? 7 : (numStrikesInput == 2 ? 5 : 3))
+
+float sum_ce_open = numStrikesInput == 4 ? (nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1) + nz(ce_o_p2) + nz(ce_o_m2) + nz(ce_o_p3) + nz(ce_o_m3) + nz(ce_o_p4) + nz(ce_o_m4)) : (numStrikesInput == 3 ? (nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1) + nz(ce_o_p2) + nz(ce_o_m2) + nz(ce_o_p3) + nz(ce_o_m3)) : (numStrikesInput == 2 ? (nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1) + nz(ce_o_p2) + nz(ce_o_m2)) : (nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1))))
+float sum_pe_open = numStrikesInput == 4 ? (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2) + nz(pe_o_p3) + nz(pe_o_m3) + nz(pe_o_p4) + nz(pe_o_m4)) : (numStrikesInput == 3 ? (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2) + nz(pe_o_p3) + nz(pe_o_m3)) : (numStrikesInput == 2 ? (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2)) : (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1))))
+
+float ceAvgOpen = sum_ce_open / total_count
+float peAvgOpen = sum_pe_open / total_count
+
+float sum_ce_cur = numStrikesInput == 4 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3) + nz(ce_c_p4) + nz(ce_c_m4)) : (numStrikesInput == 3 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3)) : (numStrikesInput == 2 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2)) : (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1))))
+float sum_pe_cur = numStrikesInput == 4 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3) + nz(pe_c_p4) + nz(pe_c_m4)) : (numStrikesInput == 3 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3)) : (numStrikesInput == 2 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2)) : (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1))))
+
+float ceAvgCur = sum_ce_cur / total_count
+float peAvgCur = sum_pe_cur / total_count
+
+float ceAvgChg = ceAvgCur - ceAvgOpen
+float peAvgChg = peAvgCur - peAvgOpen
+
 // ==========================================
-// BUY / SELL ALERT PLACEHOLDERS (READY FOR USER CONDITIONS)
+// USER BUY & SELL ALERT CONDITIONS ENGINE
 // ==========================================
 
-// User will provide specific Buy / Sell condition rules for these variables:
-bool buy_condition  = false
-bool sell_condition = false
+// --- Common Filters ---
+// CE Filter: CE current average > CE day open average AND CE avg change > 0 AND CE Realtime Intrinsic > PE Realtime Intrinsic
+bool ce_filters_met = (ceAvgCur > ceAvgOpen) and (ceAvgChg > 0) and (ce_iv_rt > pe_iv_rt)
 
-alertcondition(buy_condition,  title="Buy Alert",  message="BUY ALERT triggered on {{ticker}}!")
-alertcondition(sell_condition, title="Sell Alert", message="SELL ALERT triggered on {{ticker}}!")
+// PE Filter: PE current average > PE day open average AND PE avg change > 0 AND PE Realtime Intrinsic > CE Realtime Intrinsic
+bool pe_filters_met = (peAvgCur > peAvgOpen) and (peAvgChg > 0) and (pe_iv_rt > ce_iv_rt)
+
+// --- Trigger 1: Realtime Dynamic BEP ---
+// Price close above Realtime BEP
+bool ce_close_above_rt_bep = ta.crossover(ce_ltp, realtime_bep) or (ce_ltp > realtime_bep and not (ce_ltp[1] > realtime_bep[1]))
+bool pe_close_above_rt_bep = ta.crossover(pe_ltp, realtime_bep) or (pe_ltp > realtime_bep and not (pe_ltp[1] > realtime_bep[1]))
+
+bool t1_buy_alert  = ce_close_above_rt_bep and ce_filters_met
+bool t1_sell_alert = pe_close_above_rt_bep and pe_filters_met
+
+// --- Trigger 2: Day Open Static BEP ---
+// Price close above Day Open Static BEP
+bool ce_close_above_stat_bep = ta.crossover(ce_ltp, day_open_bep) or (ce_ltp > day_open_bep and not (ce_ltp[1] > day_open_bep[1]))
+bool pe_close_above_stat_bep = ta.crossover(pe_ltp, day_open_bep) or (pe_ltp > day_open_bep and not (pe_ltp[1] > day_open_bep[1]))
+
+bool t2_buy_alert  = ce_close_above_stat_bep and ce_filters_met
+bool t2_sell_alert = pe_close_above_stat_bep and pe_filters_met
+
+// --- Combined Triggers ---
+bool overall_buy_alert  = t1_buy_alert or t2_buy_alert
+bool overall_sell_alert = t1_sell_alert or t2_sell_alert
+
+// --- Visual Shape Markers ---
+show_signal_shapes = input.bool(true, "Show Buy / Sell Signal Shape Markers", group="Visual Signals")
+
+plotshape(show_signal_shapes and overall_buy_alert,  title="Buy Signal Marker",  style=shape.labelup,   location=location.belowbar, color=#00E676, textcolor=color.black, size=size.small, text="BUY")
+plotshape(show_signal_shapes and overall_sell_alert, title="Sell Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="SELL")
+
+// --- TradingView Alert Conditions ---
+alertcondition(t1_buy_alert,  title="Trigger 1 Buy Alert (Realtime BEP)",  message="TRIGGER 1 BUY ALERT: CE price closed above Realtime BEP with Call filters met on {{ticker}}!")
+alertcondition(t1_sell_alert, title="Trigger 1 Sell Alert (Realtime BEP)", message="TRIGGER 1 SELL ALERT: PE price closed above Realtime BEP with Put filters met on {{ticker}}!")
+
+alertcondition(t2_buy_alert,  title="Trigger 2 Buy Alert (Day Open BEP)",  message="TRIGGER 2 BUY ALERT: CE price closed above Day Open Static BEP with Call filters met on {{ticker}}!")
+alertcondition(t2_sell_alert, title="Trigger 2 Sell Alert (Day Open BEP)", message="TRIGGER 2 SELL ALERT: PE price closed above Day Open Static BEP with Put filters met on {{ticker}}!")
+
+alertcondition(overall_buy_alert,  title="Combined Buy Alert (Trigger 1 or 2)",  message="BUY ALERT: Price closed above BEP (Realtime or Day Open) with Call filters met on {{ticker}}!")
+alertcondition(overall_sell_alert, title="Combined Sell Alert (Trigger 1 or 2)", message="SELL ALERT: Price closed above BEP (Realtime or Day Open) with Put filters met on {{ticker}}!")
