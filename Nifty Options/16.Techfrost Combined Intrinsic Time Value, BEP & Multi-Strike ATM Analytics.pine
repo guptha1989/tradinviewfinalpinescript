@@ -480,33 +480,50 @@ bool raw_t2_sell = pe_trig_stat and pe_filters_met
 bool raw_buy_alert  = raw_t1_buy or raw_t2_buy
 bool raw_sell_alert = raw_t1_sell or raw_t2_sell
 
-// --- Strict Latching State Machine (One Alert, Wait For Next Opposite Alert Trigger) ---
-var int lastAlertState = 0 // 0 = Start/Neutral, 1 = Last Alert was BUY, -1 = Last Alert was SELL
+// --- Opposite Close Exit Conditions ---
+bool ce_close_below_bep = (ce_ltp < realtime_bep) or (ce_ltp < day_open_bep)
+bool pe_close_below_bep = (pe_ltp < realtime_bep) or (pe_ltp < day_open_bep)
 
-bool filtered_buy  = false
-bool filtered_sell = false
+// --- Trade & Position Management State Machine ---
+var int tradeState = 0 // 0 = Flat/Neutral, 1 = Active BUY, -1 = Active SELL
 
-if raw_buy_alert and lastAlertState != 1
-    filtered_buy   := true
-    lastAlertState := 1
-else if raw_sell_alert and lastAlertState != -1
-    filtered_sell  := true
-    lastAlertState := -1
+bool overall_buy_alert  = false
+bool overall_sell_alert = false
 
-bool overall_buy_alert  = filtered_buy
-bool overall_sell_alert = filtered_sell
+bool exit_buy_alert     = false
+bool exit_sell_alert    = false
 
-bool t1_buy_alert  = raw_t1_buy and filtered_buy
-bool t1_sell_alert = raw_t1_sell and filtered_sell
+// 1. Process Active Position Exits First
+if tradeState == 1 and ce_close_below_bep
+    exit_buy_alert := true
+    tradeState     := 0 // Exited BUY Position (Back to Flat)
+else if tradeState == -1 and pe_close_below_bep
+    exit_sell_alert := true
+    tradeState      := 0 // Exited SELL Position (Back to Flat)
 
-bool t2_buy_alert  = raw_t2_buy and filtered_buy
-bool t2_sell_alert = raw_t2_sell and filtered_sell
+// 2. Process New Entries (Allowed ONLY when Flat / Exited)
+if tradeState == 0
+    if raw_buy_alert
+        overall_buy_alert := true
+        tradeState        := 1 // Enter BUY Position
+    else if raw_sell_alert
+        overall_sell_alert := true
+        tradeState         := -1 // Enter SELL Position
+
+bool t1_buy_alert  = raw_t1_buy and overall_buy_alert
+bool t1_sell_alert = raw_t1_sell and overall_sell_alert
+
+bool t2_buy_alert  = raw_t2_buy and overall_buy_alert
+bool t2_sell_alert = raw_t2_sell and overall_sell_alert
 
 // --- Visual Shape Markers ---
-show_signal_shapes = input.bool(true, "Show Buy / Sell Signal Shape Markers", group="Visual Signals")
+show_signal_shapes = input.bool(true, "Show Buy / Sell / Exit Signal Markers", group="Visual Signals")
 
-plotshape(show_signal_shapes and overall_buy_alert,  title="Buy Signal Marker",  style=shape.labelup,   location=location.belowbar, color=#00E676, textcolor=color.black, size=size.small, text="BUY")
-plotshape(show_signal_shapes and overall_sell_alert, title="Sell Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="SELL")
+plotshape(show_signal_shapes and overall_buy_alert,  title="Buy Entry Signal Marker",   style=shape.labelup,   location=location.belowbar, color=#00E676, textcolor=color.black, size=size.small, text="BUY")
+plotshape(show_signal_shapes and overall_sell_alert, title="Sell Entry Signal Marker",  style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="SELL")
+
+plotshape(show_signal_shapes and exit_buy_alert,     title="Exit Buy Signal Marker",   style=shape.xcross,    location=location.abovebar, color=#FF9800, textcolor=color.white, size=size.small, text="EXIT BUY")
+plotshape(show_signal_shapes and exit_sell_alert,    title="Exit Sell Signal Marker",  style=shape.xcross,    location=location.belowbar, color=#E040FB, textcolor=color.white, size=size.small, text="EXIT SELL")
 
 // ==========================================
 // LIVE ALERT CONDITIONS STATUS TABLE
@@ -541,7 +558,7 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 1, 5, (ce_iv_pass and pe_iv_pass) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(ce_iv_pass and pe_iv_pass) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
     table.cell(statusTable, 0, 6, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 6, overall_buy_alert ? "BUY ALERT ACTIVE" : (overall_sell_alert ? "SELL ALERT ACTIVE" : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 1, 6, overall_buy_alert ? "BUY ENTRY ACTIVE" : (overall_sell_alert ? "SELL ENTRY ACTIVE" : (exit_buy_alert ? "EXIT BUY ACTIVE" : (exit_sell_alert ? "EXIT SELL ACTIVE" : "WAITING"))), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : (exit_buy_alert or exit_sell_alert ? #FF9800 : color.black)), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
 alertcondition(t1_buy_alert,  title="Trigger 1 Buy Alert (Realtime BEP)",  message="TRIGGER 1 BUY ALERT: CE breakout/bounce UP or PE bounce DOWNSIDE on Realtime BEP with Call filters met on {{ticker}}!")
@@ -550,5 +567,8 @@ alertcondition(t1_sell_alert, title="Trigger 1 Sell Alert (Realtime BEP)", messa
 alertcondition(t2_buy_alert,  title="Trigger 2 Buy Alert (Day Open BEP)",  message="TRIGGER 2 BUY ALERT: CE breakout/bounce UP or PE bounce DOWNSIDE on Day Open Static BEP with Call filters met on {{ticker}}!")
 alertcondition(t2_sell_alert, title="Trigger 2 Sell Alert (Day Open BEP)", message="TRIGGER 2 SELL ALERT: PE breakout/bounce UP or CE bounce DOWNSIDE on Day Open Static BEP with Put filters met on {{ticker}}!")
 
-alertcondition(overall_buy_alert,  title="Combined Buy Alert (Trigger 1 or 2)",  message="BUY ALERT: Price breakout/bounce (CE UP or PE DOWNSIDE) on BEP with Call filters met on {{ticker}}!")
-alertcondition(overall_sell_alert, title="Combined Sell Alert (Trigger 1 or 2)", message="SELL ALERT: Price breakout/bounce (PE UP or CE DOWNSIDE) on BEP with Put filters met on {{ticker}}!")
+alertcondition(overall_buy_alert,  title="Combined Buy Alert (Trigger 1 or 2)",  message="BUY ENTRY ALERT: Price breakout/bounce (CE UP or PE DOWNSIDE) on BEP with Call filters met on {{ticker}}!")
+alertcondition(overall_sell_alert, title="Combined Sell Alert (Trigger 1 or 2)", message="SELL ENTRY ALERT: Price breakout/bounce (PE UP or CE DOWNSIDE) on BEP with Put filters met on {{ticker}}!")
+
+alertcondition(exit_buy_alert,  title="Exit Buy Alert",  message="EXIT BUY ALERT: Price closed in opposite direction (below BEP line) on {{ticker}}!")
+alertcondition(exit_sell_alert, title="Exit Sell Alert", message="EXIT SELL ALERT: Price closed in opposite direction (below BEP line) on {{ticker}}!")
