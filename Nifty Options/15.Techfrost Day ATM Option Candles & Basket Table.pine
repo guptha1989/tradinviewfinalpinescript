@@ -71,7 +71,8 @@ show_candle_labels   = input.bool(true, "Show Floating Right-Side LTP Labels", g
 
 // --- Dashboard Table Controls ---
 G_TABLE              = "Dashboard Table Settings"
-showTableInput       = input.bool(true, "Show Summary & Strike Analytics Table", group=G_TABLE, tooltip="Enable or disable the summary & strike analytics table.")
+showTableInput       = input.bool(true, "Show Selected Strikes Table", group=G_TABLE, tooltip="Enable or disable the selected strikes table.")
+tableStyleInput      = input.string("Small Selected Strikes Table", "Table Style", options=["Small Selected Strikes Table", "Full Analytics Grid Table"], group=G_TABLE)
 tablePosInput        = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_TABLE)
 tableTextSizeInput   = input.string("Small", "Table Text Size / Resizing", options=["Auto", "Tiny", "Small", "Normal", "Large"], group=G_TABLE)
 
@@ -412,6 +413,10 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
+// Table 1: Small Compact Selected Strikes Table
+var table compactTable = table.new(f_get_table_pos(tablePosInput), 2, 12, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+
+// Table 2: Full Analytics Grid Table
 var table summaryTable = table.new(f_get_table_pos(tablePosInput), 8, 15, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 f_fill_grid_row(table tbl, int r, float st_val, bool is_cur_atm, bool is_day_atm, float ce_o, float ce_ltp, float pe_o, float pe_ltp, string t_sz) =>
@@ -444,6 +449,7 @@ f_fill_grid_row(table tbl, int r, float st_val, bool is_cur_atm, bool is_day_atm
 
 if barstate.islast
     if not showTableInput
+        table.delete(compactTable)
         table.delete(summaryTable)
     else
         string curTextSize = f_get_table_text_size(tableTextSizeInput)
@@ -453,121 +459,138 @@ if barstate.islast
         string dayOpenFmt = dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")
         string curAtmFmt = curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")
 
-        // Build string of selected strikes list
-        string selStrikesList = ""
-        if activeNumStrikes >= 4
-            selStrikesList += (k_p4 == math.floor(k_p4) ? str.tostring(int(k_p4)) : str.tostring(k_p4, "#.#")) + ", "
-        if activeNumStrikes >= 3
-            selStrikesList += (k_p3 == math.floor(k_p3) ? str.tostring(int(k_p3)) : str.tostring(k_p3, "#.#")) + ", "
-        if activeNumStrikes >= 2
-            selStrikesList += (k_p2 == math.floor(k_p2) ? str.tostring(int(k_p2)) : str.tostring(k_p2, "#.#")) + ", "
-        if activeNumStrikes >= 1
-            selStrikesList += (k_p1 == math.floor(k_p1) ? str.tostring(int(k_p1)) : str.tostring(k_p1, "#.#")) + ", "
+        if tableStyleInput == "Small Selected Strikes Table"
+            table.delete(summaryTable)
 
-        selStrikesList += (k_0 == math.floor(k_0) ? str.tostring(int(k_0)) : str.tostring(k_0, "#.#"))
+            table.cell(compactTable, 0, 0, "Selected Strike Names (" + underlyingName + ")", bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
+            table.cell(compactTable, 1, 0, "Strike Role / Tag", bgcolor=#1565C0, text_color=color.white, text_size=curTextSize)
 
-        if activeNumStrikes >= 1
-            selStrikesList += ", " + (k_m1 == math.floor(k_m1) ? str.tostring(int(k_m1)) : str.tostring(k_m1, "#.#"))
-        if activeNumStrikes >= 2
-            selStrikesList += ", " + (k_m2 == math.floor(k_m2) ? str.tostring(int(k_m2)) : str.tostring(k_m2, "#.#"))
-        if activeNumStrikes >= 3
-            selStrikesList += ", " + (k_m3 == math.floor(k_m3) ? str.tostring(int(k_m3)) : str.tostring(k_m3, "#.#"))
-        if activeNumStrikes >= 4
-            selStrikesList += ", " + (k_m4 == math.floor(k_m4) ? str.tostring(int(k_m4)) : str.tostring(k_m4, "#.#"))
+            int c_row = 1
 
-        // Row 0: Top Header Banner
-        table.cell(summaryTable, 0, 0, "Asset: " + underlyingName, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 1, 0, "Step: " + stepFmt, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 2, 0, strikeTag, bgcolor=color.new(#1565C0, 0), text_color=color.yellow, text_size=curTextSize)
-        table.cell(summaryTable, 3, 0, "Day Open ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 4, 0, dayOpenFmt, bgcolor=colorDayATMHighlight, text_color=color.black, text_size=curTextSize)
-        table.cell(summaryTable, 5, 0, "Current ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 6, 0, curAtmFmt, bgcolor=colorCurATMHighlight, text_color=color.black, text_size=curTextSize)
-        table.cell(summaryTable, 7, 0, "", bgcolor=color.new(#1565C0, 0))
+            f_add_compact_row(float st_val, string role_tag, color bg_col, color tx_col) =>
+                string st_str = st_val == math.floor(st_val) ? str.tostring(int(st_val)) : str.tostring(st_val, "#.##")
+                table.cell(compactTable, 0, c_row, st_str, bgcolor=bg_col, text_color=tx_col, text_size=curTextSize)
+                table.cell(compactTable, 1, c_row, role_tag, bgcolor=bg_col, text_color=tx_col, text_size=curTextSize)
 
-        // Row 1: Selected Strikes List Header
-        table.cell(summaryTable, 0, 1, "Selected Strikes", bgcolor=color.new(#263238, 0), text_color=color.aqua, text_size=curTextSize)
-        table.cell(summaryTable, 1, 1, selStrikesList, bgcolor=color.new(#263238, 0), text_color=color.yellow, text_size=curTextSize)
-        table.cell(summaryTable, 2, 1, "", bgcolor=color.new(#263238, 0))
-        table.cell(summaryTable, 3, 1, "", bgcolor=color.new(#263238, 0))
-        table.cell(summaryTable, 4, 1, "", bgcolor=color.new(#263238, 0))
-        table.cell(summaryTable, 5, 1, "", bgcolor=color.new(#263238, 0))
-        table.cell(summaryTable, 6, 1, "", bgcolor=color.new(#263238, 0))
-        table.cell(summaryTable, 7, 1, "", bgcolor=color.new(#263238, 0))
+            if activeNumStrikes >= 4
+                f_add_compact_row(k_p4, "OTM Call / ITM Put (Upper 4)", color.new(#262626, 0), color.white)
+                c_row += 1
+            if activeNumStrikes >= 3
+                f_add_compact_row(k_p3, "OTM Call / ITM Put (Upper 3)", color.new(#262626, 0), color.white)
+                c_row += 1
+            if activeNumStrikes >= 2
+                f_add_compact_row(k_p2, "OTM Call / ITM Put (Upper 2)", color.new(#262626, 0), color.white)
+                c_row += 1
+            if activeNumStrikes >= 1
+                f_add_compact_row(k_p1, "OTM Call / ITM Put (Upper 1)", color.new(#262626, 0), color.white)
+                c_row += 1
 
-        // Row 2: Day Open Averages (CE & PE)
-        table.cell(summaryTable, 0, 2, "Day Open Basket Avg", bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 1, 2, "CE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 2, 2, str.tostring(ceAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#00E676, text_size=curTextSize)
-        table.cell(summaryTable, 3, 2, "PE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 4, 2, str.tostring(peAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#FF1744, text_size=curTextSize)
-        table.cell(summaryTable, 5, 2, "Basket Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 6, 2, str.tostring(basketAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 7, 2, "", bgcolor=color.new(#212121, 0))
+            // ATM Center Strike
+            color atm_bg = k_0 == curATMStrike ? colorCurATMHighlight : (k_0 == dayOpenATMStrike ? colorDayATMHighlight : #212121)
+            color atm_tx = (k_0 == curATMStrike or k_0 == dayOpenATMStrike) ? color.black : color.white
+            string atm_tag = "ATM Center Strike (" + (k_0 == dayOpenATMStrike ? "Day Open ATM" : "") + (k_0 == curATMStrike ? " / Cur ATM" : "") + ")"
+            f_add_compact_row(k_0, atm_tag, atm_bg, atm_tx)
+            c_row += 1
 
-        // Row 3: Current Running Averages & Changes
-        table.cell(summaryTable, 0, 3, "Current Running Avg", bgcolor=color.new(#1C1C1C, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 1, 3, "CE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
+            if activeNumStrikes >= 1
+                f_add_compact_row(k_m1, "ITM Call / OTM Put (Lower 1)", color.new(#262626, 0), color.white)
+                c_row += 1
+            if activeNumStrikes >= 2
+                f_add_compact_row(k_m2, "ITM Call / OTM Put (Lower 2)", color.new(#262626, 0), color.white)
+                c_row += 1
+            if activeNumStrikes >= 3
+                f_add_compact_row(k_m3, "ITM Call / OTM Put (Lower 3)", color.new(#262626, 0), color.white)
+                c_row += 1
+            if activeNumStrikes >= 4
+                f_add_compact_row(k_m4, "ITM Call / OTM Put (Lower 4)", color.new(#262626, 0), color.white)
+                c_row += 1
 
-        string ceAvgStr = str.tostring(ceAvgCur, "#.##") + " (" + (ceAvgChg >= 0 ? "+" : "") + str.tostring(ceAvgChg, "#.##") + ")"
-        color ceAvgColor = ceAvgChg >= 0 ? #00E676 : #FF5252
-        table.cell(summaryTable, 2, 3, ceAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=ceAvgColor, text_size=curTextSize)
+        else
+            table.delete(compactTable)
 
-        table.cell(summaryTable, 3, 3, "PE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
-        string peAvgStr = str.tostring(peAvgCur, "#.##") + " (" + (peAvgChg >= 0 ? "+" : "") + str.tostring(peAvgChg, "#.##") + ")"
-        color peAvgColor = peAvgChg >= 0 ? #00E676 : #FF5252
-        table.cell(summaryTable, 4, 3, peAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=peAvgColor, text_size=curTextSize)
+            // Row 0: Top Header Banner
+            table.cell(summaryTable, 0, 0, "Asset: " + underlyingName, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 1, 0, "Step: " + stepFmt, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 2, 0, strikeTag, bgcolor=color.new(#1565C0, 0), text_color=color.yellow, text_size=curTextSize)
+            table.cell(summaryTable, 3, 0, "Day Open ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
+            table.cell(summaryTable, 4, 0, dayOpenFmt, bgcolor=colorDayATMHighlight, text_color=color.black, text_size=curTextSize)
+            table.cell(summaryTable, 5, 0, "Current ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
+            table.cell(summaryTable, 6, 0, curAtmFmt, bgcolor=colorCurATMHighlight, text_color=color.black, text_size=curTextSize)
+            table.cell(summaryTable, 7, 0, "", bgcolor=color.new(#1565C0, 0))
 
-        table.cell(summaryTable, 5, 3, "Basket Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
-        string basketAvgStr = str.tostring(basketAvgCur, "#.##") + " (" + (basketAvgChg >= 0 ? "+" : "") + str.tostring(basketAvgChg, "#.##") + ")"
-        color basketAvgColor = basketAvgChg >= 0 ? #00E676 : #FF5252
-        table.cell(summaryTable, 6, 3, basketAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=basketAvgColor, text_size=curTextSize)
-        table.cell(summaryTable, 7, 3, "", bgcolor=color.new(#1C1C1C, 0))
+            // Row 1: Day Open Averages (CE & PE)
+            table.cell(summaryTable, 0, 1, "Day Open Basket Avg", bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 1, 1, "CE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+            table.cell(summaryTable, 2, 1, str.tostring(ceAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#00E676, text_size=curTextSize)
+            table.cell(summaryTable, 3, 1, "PE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+            table.cell(summaryTable, 4, 1, str.tostring(peAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#FF1744, text_size=curTextSize)
+            table.cell(summaryTable, 5, 1, "Basket Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+            table.cell(summaryTable, 6, 1, str.tostring(basketAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 7, 1, "", bgcolor=color.new(#212121, 0))
 
-        // Row 4: Grid Column Headers
-        table.cell(summaryTable, 0, 4, "Strike",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 1, 4, "CE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 2, 4, "CE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 3, 4, "CE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 4, 4, "PE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 5, 4, "PE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 6, 4, "PE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 7, 4, "|CE-PE| Diff", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+            // Row 2: Current Running Averages & Changes
+            table.cell(summaryTable, 0, 2, "Current Running Avg", bgcolor=color.new(#1C1C1C, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 1, 2, "CE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
 
-        // Rows 5+: Populate active selected strikes grid
-        int rowIdx = 5
-        if activeNumStrikes >= 4
-            f_fill_grid_row(summaryTable, rowIdx, k_p4, k_p4 == curATMStrike, k_p4 == dayOpenATMStrike, ce_o_p4, ce_c_p4, pe_o_p4, pe_c_p4, curTextSize)
+            string ceAvgStr = str.tostring(ceAvgCur, "#.##") + " (" + (ceAvgChg >= 0 ? "+" : "") + str.tostring(ceAvgChg, "#.##") + ")"
+            color ceAvgColor = ceAvgChg >= 0 ? #00E676 : #FF5252
+            table.cell(summaryTable, 2, 2, ceAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=ceAvgColor, text_size=curTextSize)
+
+            table.cell(summaryTable, 3, 2, "PE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
+            string peAvgStr = str.tostring(peAvgCur, "#.##") + " (" + (peAvgChg >= 0 ? "+" : "") + str.tostring(peAvgChg, "#.##") + ")"
+            color peAvgColor = peAvgChg >= 0 ? #00E676 : #FF5252
+            table.cell(summaryTable, 4, 2, peAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=peAvgColor, text_size=curTextSize)
+
+            table.cell(summaryTable, 5, 2, "Basket Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
+            string basketAvgStr = str.tostring(basketAvgCur, "#.##") + " (" + (basketAvgChg >= 0 ? "+" : "") + str.tostring(basketAvgChg, "#.##") + ")"
+            color basketAvgColor = basketAvgChg >= 0 ? #00E676 : #FF5252
+            table.cell(summaryTable, 6, 2, basketAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=basketAvgColor, text_size=curTextSize)
+            table.cell(summaryTable, 7, 2, "", bgcolor=color.new(#1C1C1C, 0))
+
+            // Row 3: Grid Column Headers
+            table.cell(summaryTable, 0, 3, "Strike",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 1, 3, "CE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 2, 3, "CE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 3, 3, "CE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 4, 3, "PE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 5, 3, "PE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 6, 3, "PE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+            table.cell(summaryTable, 7, 3, "|CE-PE| Diff", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+
+            // Rows 4+: Populate active selected strikes grid
+            int rowIdx = 4
+            if activeNumStrikes >= 4
+                f_fill_grid_row(summaryTable, rowIdx, k_p4, k_p4 == curATMStrike, k_p4 == dayOpenATMStrike, ce_o_p4, ce_c_p4, pe_o_p4, pe_c_p4, curTextSize)
+                rowIdx += 1
+
+            if activeNumStrikes >= 3
+                f_fill_grid_row(summaryTable, rowIdx, k_p3, k_p3 == curATMStrike, k_p3 == dayOpenATMStrike, ce_o_p3, ce_c_p3, pe_o_p3, pe_c_p3, curTextSize)
+                rowIdx += 1
+
+            if activeNumStrikes >= 2
+                f_fill_grid_row(summaryTable, rowIdx, k_p2, k_p2 == curATMStrike, k_p2 == dayOpenATMStrike, ce_o_p2, ce_c_p2, pe_o_p2, pe_c_p2, curTextSize)
+                rowIdx += 1
+
+            if activeNumStrikes >= 1
+                f_fill_grid_row(summaryTable, rowIdx, k_p1, k_p1 == curATMStrike, k_p1 == dayOpenATMStrike, ce_o_p1, ce_c_p1, pe_o_p1, pe_c_p1, curTextSize)
+                rowIdx += 1
+
+            // ATM Row (0)
+            f_fill_grid_row(summaryTable, rowIdx, k_0, k_0 == curATMStrike, k_0 == dayOpenATMStrike, ce_o_0, ce_c_0, pe_o_0, pe_c_0, curTextSize)
             rowIdx += 1
 
-        if activeNumStrikes >= 3
-            f_fill_grid_row(summaryTable, rowIdx, k_p3, k_p3 == curATMStrike, k_p3 == dayOpenATMStrike, ce_o_p3, ce_c_p3, pe_o_p3, pe_c_p3, curTextSize)
-            rowIdx += 1
+            if activeNumStrikes >= 1
+                f_fill_grid_row(summaryTable, rowIdx, k_m1, k_m1 == curATMStrike, k_m1 == dayOpenATMStrike, ce_o_m1, ce_c_m1, pe_o_m1, pe_c_m1, curTextSize)
+                rowIdx += 1
 
-        if activeNumStrikes >= 2
-            f_fill_grid_row(summaryTable, rowIdx, k_p2, k_p2 == curATMStrike, k_p2 == dayOpenATMStrike, ce_o_p2, ce_c_p2, pe_o_p2, pe_c_p2, curTextSize)
-            rowIdx += 1
+            if activeNumStrikes >= 2
+                f_fill_grid_row(summaryTable, rowIdx, k_m2, k_m2 == curATMStrike, k_m2 == dayOpenATMStrike, ce_o_m2, ce_c_m2, pe_o_m2, pe_c_m2, curTextSize)
+                rowIdx += 1
 
-        if activeNumStrikes >= 1
-            f_fill_grid_row(summaryTable, rowIdx, k_p1, k_p1 == curATMStrike, k_p1 == dayOpenATMStrike, ce_o_p1, ce_c_p1, pe_o_p1, pe_c_p1, curTextSize)
-            rowIdx += 1
+            if activeNumStrikes >= 3
+                f_fill_grid_row(summaryTable, rowIdx, k_m3, k_m3 == curATMStrike, k_m3 == dayOpenATMStrike, ce_o_m3, ce_c_m3, pe_o_m3, pe_c_m3, curTextSize)
+                rowIdx += 1
 
-        // ATM Row (0)
-        f_fill_grid_row(summaryTable, rowIdx, k_0, k_0 == curATMStrike, k_0 == dayOpenATMStrike, ce_o_0, ce_c_0, pe_o_0, pe_c_0, curTextSize)
-        rowIdx += 1
-
-        if activeNumStrikes >= 1
-            f_fill_grid_row(summaryTable, rowIdx, k_m1, k_m1 == curATMStrike, k_m1 == dayOpenATMStrike, ce_o_m1, ce_c_m1, pe_o_m1, pe_c_m1, curTextSize)
-            rowIdx += 1
-
-        if activeNumStrikes >= 2
-            f_fill_grid_row(summaryTable, rowIdx, k_m2, k_m2 == curATMStrike, k_m2 == dayOpenATMStrike, ce_o_m2, ce_c_m2, pe_o_m2, pe_c_m2, curTextSize)
-            rowIdx += 1
-
-        if activeNumStrikes >= 3
-            f_fill_grid_row(summaryTable, rowIdx, k_m3, k_m3 == curATMStrike, k_m3 == dayOpenATMStrike, ce_o_m3, ce_c_m3, pe_o_m3, pe_c_m3, curTextSize)
-            rowIdx += 1
-
-        if activeNumStrikes >= 4
-            f_fill_grid_row(summaryTable, rowIdx, k_m4, k_m4 == curATMStrike, k_m4 == dayOpenATMStrike, ce_o_m4, ce_c_m4, pe_o_m4, pe_c_m4, curTextSize)
-            rowIdx += 1
+            if activeNumStrikes >= 4
+                f_fill_grid_row(summaryTable, rowIdx, k_m4, k_m4 == curATMStrike, k_m4 == dayOpenATMStrike, ce_o_m4, ce_c_m4, pe_o_m4, pe_c_m4, curTextSize)
+                rowIdx += 1
