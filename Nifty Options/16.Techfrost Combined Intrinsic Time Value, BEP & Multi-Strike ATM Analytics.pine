@@ -41,13 +41,19 @@ strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group
 strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
   tooltip="Set to Auto for auto-detection based on underlying stock/index (Auto-detects 1, 2.5, 5, 10, 20, 50, 100).")
 
-// --- Offset Points & Basket Settings ---
+// --- Offset Points & Calculation Settings ---
 offsetChoiceInput  = input.string("100 Points", "Strike Offset Points Dropdown", options=["5 Points", "10 Points", "15 Points", "20 Points", "25 Points", "40 Points", "50 Points", "100 Points", "150 Points", "200 Points"], group="Calculation Settings",
   tooltip="Offset points used to determine ITM / OTM strike levels.")
 customOffsetInput  = input.float(0.0, "Custom Offset Points Override (0 = Use Dropdown)", minval=0.0, group="Calculation Settings",
   tooltip="Set custom offset points (e.g. 50, 100, 150). If > 0, overrides dropdown selection.")
 numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Basket", minval=1, maxval=4, group="Calculation Settings",
   tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
+
+// --- Alert Engine Controls ---
+alert_trigger_mode = input.string("Crossover (First Bar Close Above)", "Signal Trigger Mode", options=["Crossover (First Bar Close Above)", "Continuous (Any Bar Price > BEP)"], group="Alert Engine Controls",
+  tooltip="Crossover triggers ONLY on the first bar where price crosses above BEP. Continuous triggers on every bar where price remains above BEP.")
+strict_iv_filter   = input.bool(true, "Enforce Intrinsic Filter Condition", group="Alert Engine Controls",
+  tooltip="Enforces the Intrinsic Value condition for Buy and Sell signals.")
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -273,8 +279,15 @@ f_get_strike_open_and_ltp() =>
     float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
     [d_op, close]
 
-[ce_open, ce_ltp]         = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_open, pe_ltp]         = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_open_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_open_sec, pe_ltp_sec] = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+// Use direct chart candle close if active chart is Call or Put option
+float ce_open = isCall ? ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0) : ce_open_sec
+float pe_open = isPut  ? ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0) : pe_open_sec
+
+float ce_ltp  = isCall ? close : ce_ltp_sec
+float pe_ltp  = isPut  ? close : pe_ltp_sec
 
 [ce_itm_open, ce_itm_ltp] = request.security(syminfo.prefix + ":" + ce_itm_ticker, timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_itm_open, pe_itm_ltp] = request.security(syminfo.prefix + ":" + pe_itm_ticker, timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
@@ -369,12 +382,9 @@ float pe_iv_signed = pe_strike - spot_ltp
 // USER BUY & SELL ALERT CONDITIONS ENGINE
 // ==========================================
 
-// --- Modified Intrinsic Filter Conditions ---
-// CE Condition: (CE Intrinsic > 0 AND PE Intrinsic < 0) OR (CE Intrinsic > 0 AND PE Intrinsic > CE Intrinsic)
-bool ce_iv_condition = (ce_iv_rt > 0 and pe_iv_signed < 0) or (ce_iv_rt > 0 and pe_iv_rt > ce_iv_rt)
-
-// PE Condition: (PE Intrinsic > 0 AND CE Intrinsic < 0) OR (PE Intrinsic > 0 AND CE Intrinsic > PE Intrinsic)
-bool pe_iv_condition = (pe_iv_rt > 0 and ce_iv_signed < 0) or (pe_iv_rt > 0 and ce_iv_rt > pe_iv_rt)
+// --- Fail-Safe Intrinsic Filter Conditions ---
+bool ce_iv_condition = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0 and pe_iv_signed < 0) or (ce_iv_rt > 0 and pe_iv_rt > ce_iv_rt)
+bool pe_iv_condition = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_iv_rt > ce_iv_rt) or (pe_iv_rt > 0 and ce_iv_signed < 0) or (pe_iv_rt > 0 and ce_iv_rt > pe_iv_rt)
 
 // --- Common Filters ---
 // CE Filter: CE current average > CE day open average AND CE avg change > 0 AND CE Intrinsic condition
@@ -383,21 +393,31 @@ bool ce_filters_met = (ceAvgCur > ceAvgOpen) and (ceAvgChg > 0) and ce_iv_condit
 // PE Filter: PE current average > PE day open average AND PE avg change > 0 AND PE Intrinsic condition
 bool pe_filters_met = (peAvgCur > peAvgOpen) and (peAvgChg > 0) and pe_iv_condition
 
-// --- Trigger 1: Realtime Dynamic BEP ---
-// Price close above Realtime BEP
-bool ce_close_above_rt_bep = ta.crossover(ce_ltp, realtime_bep) or (ce_ltp > realtime_bep and not (ce_ltp[1] > realtime_bep[1]))
-bool pe_close_above_rt_bep = ta.crossover(pe_ltp, realtime_bep) or (pe_ltp > realtime_bep and not (pe_ltp[1] > realtime_bep[1]))
+// --- Price Closing Conditions (Supports Crossover and Continuous modes) ---
+bool ce_price_above_rt   = isCall ? (close > realtime_bep) : (ce_ltp > realtime_bep)
+bool pe_price_above_rt   = isPut  ? (close > realtime_bep) : (pe_ltp > realtime_bep)
 
-bool t1_buy_alert  = ce_close_above_rt_bep and ce_filters_met
-bool t1_sell_alert = pe_close_above_rt_bep and pe_filters_met
+bool ce_price_above_stat = isCall ? (close > day_open_bep) : (ce_ltp > day_open_bep)
+bool pe_price_above_stat = isPut  ? (close > day_open_bep) : (pe_ltp > day_open_bep)
 
-// --- Trigger 2: Day Open Static BEP ---
-// Price close above Day Open Static BEP
-bool ce_close_above_stat_bep = ta.crossover(ce_ltp, day_open_bep) or (ce_ltp > day_open_bep and not (ce_ltp[1] > day_open_bep[1]))
-bool pe_close_above_stat_bep = ta.crossover(pe_ltp, day_open_bep) or (pe_ltp > day_open_bep and not (pe_ltp[1] > day_open_bep[1]))
+bool ce_cross_rt   = ta.crossover(isCall ? close : ce_ltp, realtime_bep) or (ce_price_above_rt and not (isCall ? close[1] > realtime_bep[1] : ce_ltp[1] > realtime_bep[1]))
+bool pe_cross_rt   = ta.crossover(isPut ? close : pe_ltp, realtime_bep) or (pe_price_above_rt and not (isPut ? close[1] > realtime_bep[1] : pe_ltp[1] > realtime_bep[1]))
 
-bool t2_buy_alert  = ce_close_above_stat_bep and ce_filters_met
-bool t2_sell_alert = pe_close_above_stat_bep and pe_filters_met
+bool ce_cross_stat = ta.crossover(isCall ? close : ce_ltp, day_open_bep) or (ce_price_above_stat and not (isCall ? close[1] > day_open_bep[1] : ce_ltp[1] > day_open_bep[1]))
+bool pe_cross_stat = ta.crossover(isPut ? close : pe_ltp, day_open_bep) or (pe_price_above_stat and not (isPut ? close[1] > day_open_bep[1] : pe_ltp[1] > day_open_bep[1]))
+
+bool ce_trig_rt   = alert_trigger_mode == "Continuous (Any Bar Price > BEP)" ? ce_price_above_rt   : ce_cross_rt
+bool pe_trig_rt   = alert_trigger_mode == "Continuous (Any Bar Price > BEP)" ? pe_price_above_rt   : pe_cross_rt
+
+bool ce_trig_stat = alert_trigger_mode == "Continuous (Any Bar Price > BEP)" ? ce_price_above_stat : ce_cross_stat
+bool pe_trig_stat = alert_trigger_mode == "Continuous (Any Bar Price > BEP)" ? pe_price_above_stat : pe_cross_stat
+
+// --- Trigger 1 & Trigger 2 Alerts ---
+bool t1_buy_alert  = ce_trig_rt and ce_filters_met
+bool t1_sell_alert = pe_trig_rt and pe_filters_met
+
+bool t2_buy_alert  = ce_trig_stat and ce_filters_met
+bool t2_sell_alert = pe_trig_stat and pe_filters_met
 
 // --- Combined Triggers ---
 bool overall_buy_alert  = t1_buy_alert or t2_buy_alert
