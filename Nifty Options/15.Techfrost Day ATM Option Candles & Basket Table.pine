@@ -302,59 +302,89 @@ f_get_strike_full_ohlc() =>
 [pe_o_m4, pe_opn_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // ==========================================
-// REALTIME CURRENT ATM RESOLUTION (|CE LTP - PE LTP| MINIMIZATION)
+// DAY OPEN ATM RESOLUTION (MIN |CE OPEN - PE OPEN|)
 // ==========================================
 
-// Calculate absolute |CE LTP - PE LTP| premium difference for each monitored strike
-float diff_p4 = na(ce_c_p4) or na(pe_c_p4) ? 1e10 : math.abs(ce_c_p4 - pe_c_p4)
-float diff_p3 = na(ce_c_p3) or na(pe_c_p3) ? 1e10 : math.abs(ce_c_p3 - pe_c_p3)
-float diff_p2 = na(ce_c_p2) or na(pe_c_p2) ? 1e10 : math.abs(ce_c_p2 - pe_c_p2)
-float diff_p1 = na(ce_c_p1) or na(pe_c_p1) ? 1e10 : math.abs(ce_c_p1 - pe_c_p1)
-float diff_0  = na(ce_c_0)  or na(pe_c_0)  ? 1e10 : math.abs(ce_c_0  - pe_c_0)
-float diff_m1 = na(ce_c_m1) or na(pe_c_m1) ? 1e10 : math.abs(ce_c_m1 - pe_c_m1)
-float diff_m2 = na(ce_c_m2) or na(pe_c_m2) ? 1e10 : math.abs(ce_c_m2 - pe_c_m2)
-float diff_m3 = na(ce_c_m3) or na(pe_c_m3) ? 1e10 : math.abs(ce_c_m3 - pe_c_m3)
-float diff_m4 = na(ce_c_m4) or na(pe_c_m4) ? 1e10 : math.abs(ce_c_m4 - pe_c_m4)
+float diff_open_p4 = na(ce_o_p4) or na(pe_o_p4) ? 1e10 : math.abs(ce_o_p4 - pe_o_p4)
+float diff_open_p3 = na(ce_o_p3) or na(pe_o_p3) ? 1e10 : math.abs(ce_o_p3 - pe_o_p3)
+float diff_open_p2 = na(ce_o_p2) or na(pe_o_p2) ? 1e10 : math.abs(ce_o_p2 - pe_o_p2)
+float diff_open_p1 = na(ce_o_p1) or na(pe_o_p1) ? 1e10 : math.abs(ce_o_p1 - pe_o_p1)
+float diff_open_0  = na(ce_o_0)  or na(pe_o_0)  ? 1e10 : math.abs(ce_o_0  - pe_o_0)
+float diff_open_m1 = na(ce_o_m1) or na(pe_o_m1) ? 1e10 : math.abs(ce_o_m1 - pe_o_m1)
+float diff_open_m2 = na(ce_o_m2) or na(pe_o_m2) ? 1e10 : math.abs(ce_o_m2 - pe_o_m2)
+float diff_open_m3 = na(ce_o_m3) or na(pe_o_m3) ? 1e10 : math.abs(ce_o_m3 - pe_o_m3)
+float diff_open_m4 = na(ce_o_m4) or na(pe_o_m4) ? 1e10 : math.abs(ce_o_m4 - pe_o_m4)
 
-// Select strike with minimum difference between PE and CE LTP
-float minDiff = diff_0
+float minDiffOpen = math.min(diff_open_p4, math.min(diff_open_p3, math.min(diff_open_p2, math.min(diff_open_p1, math.min(diff_open_0, math.min(diff_open_m1, math.min(diff_open_m2, math.min(diff_open_m3, diff_open_m4))))))))
+
+float dayOpenATMStrike = k_0
+if minDiffOpen == diff_open_p4
+    dayOpenATMStrike := k_p4
+else if minDiffOpen == diff_open_p3
+    dayOpenATMStrike := k_p3
+else if minDiffOpen == diff_open_p2
+    dayOpenATMStrike := k_p2
+else if minDiffOpen == diff_open_p1
+    dayOpenATMStrike := k_p1
+else if minDiffOpen == diff_open_0
+    dayOpenATMStrike := k_0
+else if minDiffOpen == diff_open_m1
+    dayOpenATMStrike := k_m1
+else if minDiffOpen == diff_open_m2
+    dayOpenATMStrike := k_m2
+else if minDiffOpen == diff_open_m3
+    dayOpenATMStrike := k_m3
+else if minDiffOpen == diff_open_m4
+    dayOpenATMStrike := k_m4
+
+// ==========================================
+// REALTIME CURRENT ATM RESOLUTION (MIN |CE LTP - PE LTP|)
+// ==========================================
+
+float diff_cur_p4 = na(ce_c_p4) or na(pe_c_p4) ? 1e10 : math.abs(ce_c_p4 - pe_c_p4)
+float diff_cur_p3 = na(ce_c_p3) or na(pe_c_p3) ? 1e10 : math.abs(ce_c_p3 - pe_c_p3)
+float diff_cur_p2 = na(ce_c_p2) or na(pe_c_p2) ? 1e10 : math.abs(ce_c_p2 - pe_c_p2)
+float diff_cur_p1 = na(ce_c_p1) or na(pe_c_p1) ? 1e10 : math.abs(ce_c_p1 - pe_c_p1)
+float diff_cur_0  = na(ce_c_0)  or na(pe_c_0)  ? 1e10 : math.abs(ce_c_0  - pe_c_0)
+float diff_cur_m1 = na(ce_c_m1) or na(pe_c_m1) ? 1e10 : math.abs(ce_c_m1 - pe_c_m1)
+float diff_cur_m2 = na(ce_c_m2) or na(pe_c_m2) ? 1e10 : math.abs(ce_c_m2 - pe_c_m2)
+float diff_cur_m3 = na(ce_c_m3) or na(pe_c_m3) ? 1e10 : math.abs(ce_c_m3 - pe_c_m3)
+float diff_cur_m4 = na(ce_c_m4) or na(pe_c_m4) ? 1e10 : math.abs(ce_c_m4 - pe_c_m4)
+
+float minDiffCur = math.min(diff_cur_p4, math.min(diff_cur_p3, math.min(diff_cur_p2, math.min(diff_cur_p1, math.min(diff_cur_0, math.min(diff_cur_m1, math.min(diff_cur_m2, math.min(diff_cur_m3, diff_cur_m4))))))))
+
 float curATMStrike = k_0
+if minDiffCur == diff_cur_p4
+    curATMStrike := k_p4
+else if minDiffCur == diff_cur_p3
+    curATMStrike := k_p3
+else if minDiffCur == diff_cur_p2
+    curATMStrike := k_p2
+else if minDiffCur == diff_cur_p1
+    curATMStrike := k_p1
+else if minDiffCur == diff_cur_0
+    curATMStrike := k_0
+else if minDiffCur == diff_cur_m1
+    curATMStrike := k_m1
+else if minDiffCur == diff_cur_m2
+    curATMStrike := k_m2
+else if minDiffCur == diff_cur_m3
+    curATMStrike := k_m3
+else if minDiffCur == diff_cur_m4
+    curATMStrike := k_m4
 
-if activeNumStrikes >= 1
-    if diff_p1 < minDiff
-        minDiff := diff_p1
-        curATMStrike := k_p1
-    if diff_m1 < minDiff
-        minDiff := diff_m1
-        curATMStrike := k_m1
+// Extract Day Open ATM Candles (OHLC)
+float day_ce_opn = dayOpenATMStrike == k_p4 ? ce_opn_p4 : (dayOpenATMStrike == k_p3 ? ce_opn_p3 : (dayOpenATMStrike == k_p2 ? ce_opn_p2 : (dayOpenATMStrike == k_p1 ? ce_opn_p1 : (dayOpenATMStrike == k_0 ? ce_opn_0 : (dayOpenATMStrike == k_m1 ? ce_opn_m1 : (dayOpenATMStrike == k_m2 ? ce_opn_m2 : (dayOpenATMStrike == k_m3 ? ce_opn_m3 : ce_opn_m4)))))))
+float day_ce_h   = dayOpenATMStrike == k_p4 ? ce_h_p4   : (dayOpenATMStrike == k_p3 ? ce_h_p3   : (dayOpenATMStrike == k_p2 ? ce_h_p2   : (dayOpenATMStrike == k_p1 ? ce_h_p1   : (dayOpenATMStrike == k_0 ? ce_h_0   : (dayOpenATMStrike == k_m1 ? ce_h_m1   : (dayOpenATMStrike == k_m2 ? ce_h_m2   : (dayOpenATMStrike == k_m3 ? ce_h_m3   : ce_h_m4)))))))
+float day_ce_l   = dayOpenATMStrike == k_p4 ? ce_l_p4   : (dayOpenATMStrike == k_p3 ? ce_l_p3   : (dayOpenATMStrike == k_p2 ? ce_l_p2   : (dayOpenATMStrike == k_p1 ? ce_l_p1   : (dayOpenATMStrike == k_0 ? ce_l_0   : (dayOpenATMStrike == k_m1 ? ce_l_m1   : (dayOpenATMStrike == k_m2 ? ce_l_m2   : (dayOpenATMStrike == k_m3 ? ce_l_m3   : ce_l_m4)))))))
+float day_ce_c   = dayOpenATMStrike == k_p4 ? ce_c_p4   : (dayOpenATMStrike == k_p3 ? ce_c_p3   : (dayOpenATMStrike == k_p2 ? ce_c_p2   : (dayOpenATMStrike == k_p1 ? ce_c_p1   : (dayOpenATMStrike == k_0 ? ce_c_0   : (dayOpenATMStrike == k_m1 ? ce_c_m1   : (dayOpenATMStrike == k_m2 ? ce_c_m2   : (dayOpenATMStrike == k_m3 ? ce_c_m3   : ce_c_m4)))))))
 
-if activeNumStrikes >= 2
-    if diff_p2 < minDiff
-        minDiff := diff_p2
-        curATMStrike := k_p2
-    if diff_m2 < minDiff
-        minDiff := diff_m2
-        curATMStrike := k_m2
+float day_pe_opn = dayOpenATMStrike == k_p4 ? pe_opn_p4 : (dayOpenATMStrike == k_p3 ? pe_opn_p3 : (dayOpenATMStrike == k_p2 ? pe_opn_p2 : (dayOpenATMStrike == k_p1 ? pe_opn_p1 : (dayOpenATMStrike == k_0 ? pe_opn_0 : (dayOpenATMStrike == k_m1 ? pe_opn_m1 : (dayOpenATMStrike == k_m2 ? pe_opn_m2 : (dayOpenATMStrike == k_m3 ? pe_opn_m3 : pe_opn_m4)))))))
+float day_pe_h   = dayOpenATMStrike == k_p4 ? pe_h_p4   : (dayOpenATMStrike == k_p3 ? pe_h_p3   : (dayOpenATMStrike == k_p2 ? pe_h_p2   : (dayOpenATMStrike == k_p1 ? pe_h_p1   : (dayOpenATMStrike == k_0 ? pe_h_0   : (dayOpenATMStrike == k_m1 ? pe_h_m1   : (dayOpenATMStrike == k_m2 ? pe_h_m2   : (dayOpenATMStrike == k_m3 ? pe_h_m3   : pe_h_m4)))))))
+float day_pe_l   = dayOpenATMStrike == k_p4 ? pe_l_p4   : (dayOpenATMStrike == k_p3 ? pe_l_p3   : (dayOpenATMStrike == k_p2 ? pe_l_p2   : (dayOpenATMStrike == k_p1 ? pe_l_p1   : (dayOpenATMStrike == k_0 ? pe_l_0   : (dayOpenATMStrike == k_m1 ? pe_l_m1   : (dayOpenATMStrike == k_m2 ? pe_l_m2   : (dayOpenATMStrike == k_m3 ? pe_l_m3   : pe_l_m4)))))))
+float day_pe_c   = dayOpenATMStrike == k_p4 ? pe_c_p4   : (dayOpenATMStrike == k_p3 ? pe_c_p3   : (dayOpenATMStrike == k_p2 ? pe_c_p2   : (dayOpenATMStrike == k_p1 ? pe_c_p1   : (dayOpenATMStrike == k_0 ? pe_c_0   : (dayOpenATMStrike == k_m1 ? pe_c_m1   : (dayOpenATMStrike == k_m2 ? pe_c_m2   : (dayOpenATMStrike == k_m3 ? pe_c_m3   : pe_c_m4)))))))
 
-if activeNumStrikes >= 3
-    if diff_p3 < minDiff
-        minDiff := diff_p3
-        curATMStrike := k_p3
-    if diff_m3 < minDiff
-        minDiff := diff_m3
-        curATMStrike := k_m3
-
-if activeNumStrikes >= 4
-    if diff_p4 < minDiff
-        minDiff := diff_p4
-        curATMStrike := k_p4
-    if diff_m4 < minDiff
-        minDiff := diff_m4
-        curATMStrike := k_m4
-
-float dayOpenATMStrike = baseStrike
-
-// Find which strike corresponds to Current Realtime ATM
+// Extract Current ATM Candles (OHLC)
 float cur_ce_opn = curATMStrike == k_p4 ? ce_opn_p4 : (curATMStrike == k_p3 ? ce_opn_p3 : (curATMStrike == k_p2 ? ce_opn_p2 : (curATMStrike == k_p1 ? ce_opn_p1 : (curATMStrike == k_0 ? ce_opn_0 : (curATMStrike == k_m1 ? ce_opn_m1 : (curATMStrike == k_m2 ? ce_opn_m2 : (curATMStrike == k_m3 ? ce_opn_m3 : ce_opn_m4)))))))
 float cur_ce_h   = curATMStrike == k_p4 ? ce_h_p4   : (curATMStrike == k_p3 ? ce_h_p3   : (curATMStrike == k_p2 ? ce_h_p2   : (curATMStrike == k_p1 ? ce_h_p1   : (curATMStrike == k_0 ? ce_h_0   : (curATMStrike == k_m1 ? ce_h_m1   : (curATMStrike == k_m2 ? ce_h_m2   : (curATMStrike == k_m3 ? ce_h_m3   : ce_h_m4)))))))
 float cur_ce_l   = curATMStrike == k_p4 ? ce_l_p4   : (curATMStrike == k_p3 ? ce_l_p3   : (curATMStrike == k_p2 ? ce_l_p2   : (curATMStrike == k_p1 ? ce_l_p1   : (curATMStrike == k_0 ? ce_l_0   : (curATMStrike == k_m1 ? ce_l_m1   : (curATMStrike == k_m2 ? ce_l_m2   : (curATMStrike == k_m3 ? ce_l_m3   : ce_l_m4)))))))
@@ -378,12 +408,12 @@ bool plotDayOpenCandles = (atm_candle_source == "Both (Day Open & Current ATM)")
 bool plotCurRealtimeCandles = (atm_candle_source == "Both (Day Open & Current ATM)") or (atm_candle_source == "Current Realtime ATM Only")
 
 // Day Open ATM CE Candle
-plotcandle(showCE_Candles and plotDayOpenCandles ? f_scale_val(ce_opn_0, dayOpenATMStrike) : na, showCE_Candles and plotDayOpenCandles ? f_scale_val(ce_h_0, dayOpenATMStrike) : na, showCE_Candles and plotDayOpenCandles ? f_scale_val(ce_l_0, dayOpenATMStrike) : na, showCE_Candles and plotDayOpenCandles ? f_scale_val(ce_c_0, dayOpenATMStrike) : na,
-  title="Day Open ATM CE Candle", color=ce_c_0 >= ce_opn_0 ? color_day_ce_bull : color_day_ce_bear, wickcolor=ce_c_0 >= ce_opn_0 ? color_day_ce_bull : color_day_ce_bear, bordercolor=ce_c_0 >= ce_opn_0 ? color_day_ce_bull : color_day_ce_bear)
+plotcandle(showCE_Candles and plotDayOpenCandles ? f_scale_val(day_ce_opn, dayOpenATMStrike) : na, showCE_Candles and plotDayOpenCandles ? f_scale_val(day_ce_h, dayOpenATMStrike) : na, showCE_Candles and plotDayOpenCandles ? f_scale_val(day_ce_l, dayOpenATMStrike) : na, showCE_Candles and plotDayOpenCandles ? f_scale_val(day_ce_c, dayOpenATMStrike) : na,
+  title="Day Open ATM CE Candle", color=day_ce_c >= day_ce_opn ? color_day_ce_bull : color_day_ce_bear, wickcolor=day_ce_c >= day_ce_opn ? color_day_ce_bull : color_day_ce_bear, bordercolor=day_ce_c >= day_ce_opn ? color_day_ce_bull : color_day_ce_bear)
 
 // Day Open ATM PE Candle
-plotcandle(showPE_Candles and plotDayOpenCandles ? f_scale_val(pe_opn_0, dayOpenATMStrike) : na, showPE_Candles and plotDayOpenCandles ? f_scale_val(pe_h_0, dayOpenATMStrike) : na, showPE_Candles and plotDayOpenCandles ? f_scale_val(pe_l_0, dayOpenATMStrike) : na, showPE_Candles and plotDayOpenCandles ? f_scale_val(pe_c_0, dayOpenATMStrike) : na,
-  title="Day Open ATM PE Candle", color=pe_c_0 >= pe_opn_0 ? color_day_pe_bull : color_day_pe_bear, wickcolor=pe_c_0 >= pe_opn_0 ? color_day_pe_bull : color_day_pe_bear, bordercolor=pe_c_0 >= pe_opn_0 ? color_day_pe_bull : color_day_pe_bear)
+plotcandle(showPE_Candles and plotDayOpenCandles ? f_scale_val(day_pe_opn, dayOpenATMStrike) : na, showPE_Candles and plotDayOpenCandles ? f_scale_val(day_pe_h, dayOpenATMStrike) : na, showPE_Candles and plotDayOpenCandles ? f_scale_val(day_pe_l, dayOpenATMStrike) : na, showPE_Candles and plotDayOpenCandles ? f_scale_val(day_pe_c, dayOpenATMStrike) : na,
+  title="Day Open ATM PE Candle", color=day_pe_c >= day_pe_opn ? color_day_pe_bull : color_day_pe_bear, wickcolor=day_pe_c >= day_pe_opn ? color_day_pe_bull : color_day_pe_bear, bordercolor=day_pe_c >= day_pe_opn ? color_day_pe_bull : color_day_pe_bear)
 
 // Current Realtime ATM CE Candle
 plotcandle(showCE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_ce_opn, curATMStrike) : na, showCE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_ce_h, curATMStrike) : na, showCE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_ce_l, curATMStrike) : na, showCE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_ce_c, curATMStrike) : na,
@@ -409,8 +439,8 @@ if barstate.islast and show_candle_labels
     string cur_ce_name = "Cur " + (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "CE"
     string cur_pe_name = "Cur " + (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "PE"
 
-    float val_dce = na(ce_c_0) ? close : ce_c_0
-    float val_dpe = na(pe_c_0) ? close : pe_c_0
+    float val_dce = na(day_ce_c) ? close : day_ce_c
+    float val_dpe = na(day_pe_c) ? close : day_pe_c
     float val_cce = na(cur_ce_c) ? val_dce : cur_ce_c
     float val_cpe = na(cur_pe_c) ? val_dpe : cur_pe_c
 
@@ -437,14 +467,14 @@ if barstate.islast and show_candle_labels
 int total_count = activeNumStrikes == 4 ? 9 : (activeNumStrikes == 3 ? 7 : (activeNumStrikes == 2 ? 5 : 3))
 
 float sum_ce_open = activeNumStrikes == 4 ? (nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1) + nz(ce_o_p2) + nz(ce_o_m2) + nz(ce_o_p3) + nz(ce_o_m3) + nz(ce_o_p4) + nz(ce_o_m4)) : (activeNumStrikes == 3 ? (nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1) + nz(ce_o_p2) + nz(ce_o_m2) + nz(ce_o_p3) + nz(ce_o_m3)) : (activeNumStrikes == 2 ? (nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1) + nz(ce_o_p2) + nz(ce_o_m2)) : (nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1))))
-float sum_pe_open = activeNumStrikes == 4 ? (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2) + nz(pe_o_p3) + nz(pe_o_m3) + nz(pe_o_p4) + nz(pe_o_m4)) : (activeNumStrikes == 3 ? (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2) + nz(pe_o_p3) + nz(pe_o_m3)) : (activeNumStrikes == 2 ? (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2)) : (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1))))
+float sum_pe_open = activeNumStrikes == 4 ? (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2) + nz(pe_o_p3) + nz(pe_o_m3) + nz(pe_o_p4) + nz(pe_o_m4)) : (activeNumStrikes == 3 ? (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2) + nz(pe_o_p3) + nz(pe_o_m3)) : (activeNumStrikes == 2 ? (nz(pe_o_0) + nz(pe_o_p1) + nz(pe_o_m1) + nz(pe_o_p2) + nz(pe_o_m2)) : (nz(ce_o_0) + nz(ce_o_p1) + nz(ce_o_m1))))
 
 float ceAvgOpen     = sum_ce_open / total_count
 float peAvgOpen     = sum_pe_open / total_count
 float basketAvgOpen = (ceAvgOpen + peAvgOpen) / 2.0
 
 float sum_ce_cur = activeNumStrikes == 4 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3) + nz(ce_c_p4) + nz(ce_c_m4)) : (activeNumStrikes == 3 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3)) : (activeNumStrikes == 2 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2)) : (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1))))
-float sum_pe_cur = activeNumStrikes == 4 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3) + nz(pe_c_p4) + nz(pe_c_m4)) : (activeNumStrikes == 3 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3)) : (activeNumStrikes == 2 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2)) : (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1))))
+float sum_pe_cur = activeNumStrikes == 4 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3) + nz(pe_c_p4) + nz(pe_c_m4)) : (activeNumStrikes == 3 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3)) : (activeNumStrikes == 2 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2)) : (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1))))
 
 float ceAvgCur     = sum_ce_cur / total_count
 float peAvgCur     = sum_pe_cur / total_count
