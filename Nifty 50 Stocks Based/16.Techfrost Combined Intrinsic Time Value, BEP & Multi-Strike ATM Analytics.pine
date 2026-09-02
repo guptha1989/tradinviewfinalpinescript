@@ -41,9 +41,11 @@ strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group
 strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
   tooltip="Set to Auto for auto-detection based on underlying stock/index (Auto-detects 1, 2.5, 5, 10, 20, 50, 100).")
 
-// --- Offset Points & BEP Settings ---
-offsetChoiceInput  = input.string("100 Points", "Strike Offset Points", options=["5 Points", "10 Points", "15 Points", "20 Points", "25 Points", "40 Points", "50 Points", "100 Points", "150 Points", "200 Points"], group="Calculation Settings",
-  tooltip="Offset points used to determine ITM / OTM strike levels (e.g. 50, 100, 150, 200).")
+// --- Offset Points & Calculation Settings ---
+offsetChoiceInput  = input.string("100 Points", "Strike Offset Points Dropdown", options=["5 Points", "10 Points", "15 Points", "20 Points", "25 Points", "40 Points", "50 Points", "100 Points", "150 Points", "200 Points"], group="Calculation Settings",
+  tooltip="Offset points used to determine ITM / OTM strike levels.")
+customOffsetInput  = input.float(0.0, "Custom Offset Points Override (0 = Use Dropdown)", minval=0.0, group="Calculation Settings",
+  tooltip="Set custom offset points (e.g. 50, 100, 150). If > 0, overrides dropdown selection.")
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -113,7 +115,7 @@ else if tickerWithoutCEPE != ""
 float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : (manualStrikeInput > 0 ? float(manualStrikeInput) : detectedStrike)
 
 // ==========================================
-// SPOT TICKER RESOLUTION & STRIKE STEP CALCULATIONS
+// SPOT TICKER RESOLUTION & OFFSET CALCULATION
 // ==========================================
 
 string spotTicker = ""
@@ -135,7 +137,8 @@ else
 // Fetch Day Open Spot Price for the underlying
 float spotDayOpen = request.security(spotTicker, "D", open, lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-float offsetPts = switch offsetChoiceInput
+// Offset points calculation
+float offsetPts = customOffsetInput > 0.0 ? customOffsetInput : switch offsetChoiceInput
     "5 Points"   => 5.0
     "10 Points"  => 10.0
     "15 Points"  => 15.0
@@ -179,13 +182,15 @@ f_build_option_symbol(float target_strike, bool target_is_ce) =>
 f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
 f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
 
-// Strike Calculations
+// Strike Calculations strictly based on Offset Points
 float ce_strike = chartStrikePrice
 float pe_strike = chartStrikePrice
 
+// ITM Strikes (Call ITM = Strike - Offset, Put ITM = Strike + Offset)
 float itm_ce_strike = chartStrikePrice - offsetPts
 float itm_pe_strike = chartStrikePrice + offsetPts
 
+// OTM Strikes (Call OTM = Strike + Offset, Put OTM = Strike - Offset)
 float otm_ce_strike = chartStrikePrice + offsetPts
 float otm_pe_strike = chartStrikePrice - offsetPts
 
@@ -222,12 +227,12 @@ spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 // CORE CALCULATIONS REQUIRED (FOR BUY/SELL ALERTS)
 // ==========================================
 
-// 1. ITM Intrinsic Value Average (based on offset points)
+// 1. ITM Intrinsic Value Average (strictly selected based on offset points)
 float itm_ce_iv_rt  = math.max(0.0, spot_ltp - itm_ce_strike)
 float itm_pe_iv_rt  = math.max(0.0, itm_pe_strike - spot_ltp)
 float itm_avg_iv_rt = (itm_ce_iv_rt + itm_pe_iv_rt) / 2.0
 
-// 2. OTM Time Value Average (based on offset points)
+// 2. OTM Time Value Average (strictly selected based on offset points)
 float otm_ce_iv_rt  = math.max(0.0, spot_ltp - otm_ce_strike)
 float otm_pe_iv_rt  = math.max(0.0, otm_pe_strike - spot_ltp)
 float otm_ce_tv_rt  = ce_otm_ltp - otm_ce_iv_rt
