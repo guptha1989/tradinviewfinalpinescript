@@ -140,18 +140,22 @@ else
 float spotDayOpen = request.security(spotTicker, "D", open, lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // Offset points calculation
-float offsetPts = customOffsetInput > 0.0 ? customOffsetInput : switch offsetChoiceInput
-    "5 Points"   => 5.0
-    "10 Points"  => 10.0
-    "15 Points"  => 15.0
-    "20 Points"  => 20.0
-    "25 Points"  => 25.0
-    "40 Points"  => 40.0
-    "50 Points"  => 50.0
-    "100 Points" => 100.0
-    "150 Points" => 150.0
-    "200 Points" => 200.0
-    => 100.0
+float offsetPts = 100.0
+if customOffsetInput > 0.0
+    offsetPts := customOffsetInput
+else
+    switch offsetChoiceInput
+        "5 Points"   => offsetPts := 5.0
+        "10 Points"  => offsetPts := 10.0
+        "15 Points"  => offsetPts := 15.0
+        "20 Points"  => offsetPts := 20.0
+        "25 Points"  => offsetPts := 25.0
+        "40 Points"  => offsetPts := 40.0
+        "50 Points"  => offsetPts := 50.0
+        "100 Points" => offsetPts := 100.0
+        "150 Points" => offsetPts := 150.0
+        "200 Points" => offsetPts := 200.0
+        => offsetPts := 100.0
 
 // Dynamic Step Size
 f_auto_detect_step(float ref_p) =>
