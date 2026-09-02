@@ -1,5 +1,5 @@
 //@version=6
-indicator("16.Techfrost Alert Engine", shorttitle="16.Techfrost Alert Engine", overlay=true, precision=2, max_labels_count=500, max_lines_count=500)
+indicator("16.Techfrost Alert Engine", shorttitle="16.Techfrost Alert Engine", overlay=true, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -31,18 +31,9 @@ enum StepOverrideChoice
     step200 = "200"
     step500 = "500"
 
-enum StrikeSelectionMode
-    auto   = "Auto (ATM Center)"
-    manual = "Manual 3 Strikes Selection"
-
 // --- Instrument Settings ---
 underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
-strikeSelectMode   = input.enum(StrikeSelectionMode.auto, "Strike Selection Mode", group="Instrument Settings", tooltip="Auto centers around Day Open ATM. Manual 3 Strikes allows choosing 3 specific custom strikes.")
-manualStrikeLower  = input.float(0.0, "Manual Strike 1 (ITM / Lower)", minval=0.0, group="Instrument Settings")
-manualStrikeCenter = input.float(0.0, "Manual Strike 2 (ATM / Center)", minval=0.0, group="Instrument Settings")
-manualStrikeUpper  = input.float(0.0, "Manual Strike 3 (OTM / Upper)", minval=0.0, group="Instrument Settings")
-
 manualStrikeInput  = input.int(0, "Manual Strike Selection (0 = Auto)", minval=0, group="Instrument Settings",
   tooltip="Enter strike price manually (e.g. 24000). Leave at 0 to auto-detect from chart symbol.")
 spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. RELIANCE)", group="Instrument Settings")
@@ -57,23 +48,6 @@ customOffsetInput  = input.float(0.0, "Custom Offset Points Override (0 = Use Dr
   tooltip="Set custom offset points (e.g. 50, 100, 150). If > 0, overrides dropdown selection.")
 numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Basket", minval=1, maxval=4, group="Calculation Settings",
   tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
-
-// --- Realtime Day Open & Current Realtime ATM Option Candles Controls ---
-G_CANDLES            = "Realtime Day Open & Current Realtime ATM Option Candles Controls"
-enable_atm_candles   = input.bool(true, "Enable Realtime ATM Option Candles Plotting", group=G_CANDLES)
-atm_candle_source    = input.string("Both (Day Open & Current ATM)", "ATM Candle Selection Source", options=["Both (Day Open & Current ATM)", "Day Open ATM Only", "Current Realtime ATM Only"], group=G_CANDLES, tooltip="Select whether to plot candles for Both (Day Open & Current ATM), Day Open ATM Only, or Current Realtime ATM Only. When Day Open ATM Only is selected, all 14 BEP lines and calculations automatically adopt Day Open ATM.")
-showCE_Candles       = input.bool(true, "Show Call (CE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Call (CE) options.")
-showPE_Candles       = input.bool(true, "Show Put (PE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Put (PE) options.")
-
-color_day_ce_bull    = input.color(#26A69A, "Day ATM CE Bullish Candle Body", group=G_CANDLES)
-color_day_ce_bear    = input.color(#EF5350, "Day ATM CE Bearish Candle Body", group=G_CANDLES)
-color_day_pe_bull    = input.color(#00B0FF, "Day ATM PE Bullish Candle Body", group=G_CANDLES)
-color_day_pe_bear    = input.color(#FF9100, "Day ATM PE Bearish Candle Body", group=G_CANDLES)
-
-color_cur_ce_bull    = input.color(#76FF03, "Cur ATM CE Bullish Candle Body", group=G_CANDLES)
-color_cur_ce_bear    = input.color(#FF1744, "Cur ATM CE Bearish Candle Body", group=G_CANDLES)
-color_cur_pe_bull    = input.color(#00E5FF, "Cur ATM PE Bullish Candle Body", group=G_CANDLES)
-color_cur_pe_bear    = input.color(#F57C00, "Cur ATM PE Bearish Candle Body", group=G_CANDLES)
 
 // --- Reference Line Plot Controls ---
 show_prev_close   = input.bool(true, "Show Previous Day Close (CE & PE)", group="Reference Line Plots")
@@ -294,12 +268,6 @@ if barstate.isfirst or na(baseCenterStrike)
 
 float baseStrike = baseCenterStrike
 
-// Manual 3 Strikes Override Selection
-if strikeSelectMode == StrikeSelectionMode.manual and manualStrikeCenter > 0.0
-    baseStrike := manualStrikeCenter
-    if manualStrikeLower > 0.0 and manualStrikeUpper > 0.0
-        offsetPts := math.abs(manualStrikeCenter - manualStrikeLower)
-
 // ==========================================
 // UNIVERSAL FAIL-SAFE CE & PE TICKER CONSTRUCTION
 // ==========================================
@@ -358,10 +326,6 @@ f_get_strike_ohlc() =>
     float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
     [d_op, high, low, close]
 
-f_get_strike_full_ohlc() =>
-    float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
-    [open, d_op, high, low, close]
-
 f_get_strike_prev_day() =>
     [close[1], high[1], low[1]]
 
@@ -369,7 +333,7 @@ f_get_strike_prev_day() =>
 string opp_ticker = f_build_option_symbol(chartStrikePrice, not isCall)
 [opp_o, opp_h, opp_l, opp_c] = request.security(syminfo.prefix + ":" + opp_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
 
-// Plot Opposite Option Candles Overlay (1 plotcandle call = 4 plots)
+// Plot Opposite Option Candles Overlay
 show_opp_candles = input.bool(true, "Show Opposite Option Candles Overlay", group="Visual Signals")
 
 bool opp_is_bull   = nz(opp_c) >= nz(opp_o)
@@ -420,148 +384,39 @@ float pe_prev_high  = isPut  ? request.security(syminfo.tickerid, "D", high[1], 
 float pe_prev_low   = isPut  ? request.security(syminfo.tickerid, "D", low[1],   lookahead=barmerge.lookahead_on) : pe_pdl_sec
 
 // Fetch All 7 Strike Levels OHLC Data
-[ce_o_m3, ce_opn_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m3, pe_opn_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m2, ce_opn_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m2, pe_opn_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m1, ce_opn_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m1, pe_opn_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_0,  ce_opn_0,  ce_h_0,  ce_l_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_0,  pe_opn_0,  pe_h_0,  pe_l_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_0,  ce_h_0,  ce_l_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_0,  pe_h_0,  pe_l_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p1, ce_opn_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p1, pe_opn_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p2, ce_opn_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p2, pe_opn_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p3, ce_opn_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p3, pe_opn_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p4, ce_opn_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p4, pe_opn_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m4, ce_opn_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m4, pe_opn_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 float spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
 spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 
 // ==========================================
-// DAY OPEN ATM & CURRENT REALTIME ATM RESOLUTION
-// ==========================================
-
-float diff_open_p3 = na(ce_o_p3) or na(pe_o_p3) ? 1e10 : math.abs(ce_o_p3 - pe_o_p3)
-float diff_open_p2 = na(ce_o_p2) or na(pe_o_p2) ? 1e10 : math.abs(ce_o_p2 - pe_o_p2)
-float diff_open_p1 = na(ce_o_p1) or na(pe_o_p1) ? 1e10 : math.abs(ce_o_p1 - pe_o_p1)
-float diff_open_0  = na(ce_o_0)  or na(pe_o_0)  ? 1e10 : math.abs(ce_o_0  - pe_o_0)
-float diff_open_m1 = na(ce_o_m1) or na(pe_o_m1) ? 1e10 : math.abs(ce_o_m1 - pe_o_m1)
-float diff_open_m2 = na(ce_o_m2) or na(pe_o_m2) ? 1e10 : math.abs(ce_o_m2 - pe_o_m2)
-float diff_open_m3 = na(ce_o_m3) or na(pe_o_m3) ? 1e10 : math.abs(ce_o_m3 - pe_o_m3)
-
-float minDiffOpen = math.min(diff_open_p3, math.min(diff_open_p2, math.min(diff_open_p1, math.min(diff_open_0, math.min(diff_open_m1, math.min(diff_open_m2, diff_open_m3))))))
-
-float dayOpenATMStrike = k_0
-if minDiffOpen == diff_open_p3
-    dayOpenATMStrike := k_p3
-else if minDiffOpen == diff_open_p2
-    dayOpenATMStrike := k_p2
-else if minDiffOpen == diff_open_p1
-    dayOpenATMStrike := k_p1
-else if minDiffOpen == diff_open_0
-    dayOpenATMStrike := k_0
-else if minDiffOpen == diff_open_m1
-    dayOpenATMStrike := k_m1
-else if minDiffOpen == diff_open_m2
-    dayOpenATMStrike := k_m2
-else if minDiffOpen == diff_open_m3
-    dayOpenATMStrike := k_m3
-
-float diff_cur_p3 = na(ce_c_p3) or na(pe_c_p3) ? 1e10 : math.abs(ce_c_p3 - pe_c_p3)
-float diff_cur_p2 = na(ce_c_p2) or na(pe_c_p2) ? 1e10 : math.abs(ce_c_p2 - pe_c_p2)
-float diff_cur_p1 = na(ce_c_p1) or na(pe_c_p1) ? 1e10 : math.abs(ce_c_p1 - pe_c_p1)
-float diff_cur_0  = na(ce_c_0)  or na(pe_c_0)  ? 1e10 : math.abs(ce_c_0  - pe_c_0)
-float diff_cur_m1 = na(ce_c_m1) or na(pe_c_m1) ? 1e10 : math.abs(ce_c_m1 - pe_c_m1)
-float diff_cur_m2 = na(ce_c_m2) or na(pe_c_m2) ? 1e10 : math.abs(ce_c_m2 - pe_c_m2)
-float diff_cur_m3 = na(ce_c_m3) or na(pe_c_m3) ? 1e10 : math.abs(ce_c_m3 - pe_c_m3)
-
-float minDiffCur = math.min(diff_cur_p3, math.min(diff_cur_p2, math.min(diff_cur_p1, math.min(diff_cur_0, math.min(diff_cur_m1, math.min(diff_cur_m2, diff_cur_m3))))))
-
-float curATMStrike = k_0
-if minDiffCur == diff_cur_p3
-    curATMStrike := k_p3
-else if minDiffCur == diff_cur_p2
-    curATMStrike := k_p2
-else if minDiffCur == diff_cur_p1
-    curATMStrike := k_p1
-else if minDiffCur == diff_cur_0
-    curATMStrike := k_0
-else if minDiffCur == diff_cur_m1
-    curATMStrike := k_m1
-else if minDiffCur == diff_cur_m2
-    curATMStrike := k_m2
-else if minDiffCur == diff_cur_m3
-    curATMStrike := k_m3
-
-// Extract Day Open ATM Candles (OHLC)
-float day_ce_opn = dayOpenATMStrike == k_p3 ? ce_opn_p3 : (dayOpenATMStrike == k_p2 ? ce_opn_p2 : (dayOpenATMStrike == k_p1 ? ce_opn_p1 : (dayOpenATMStrike == k_0 ? ce_opn_0 : (dayOpenATMStrike == k_m1 ? ce_opn_m1 : (dayOpenATMStrike == k_m2 ? ce_opn_m2 : ce_opn_m3)))))
-float day_ce_h   = dayOpenATMStrike == k_p3 ? ce_h_p3   : (dayOpenATMStrike == k_p2 ? ce_h_p2   : (dayOpenATMStrike == k_p1 ? ce_h_p1   : (dayOpenATMStrike == k_0 ? ce_h_0   : (dayOpenATMStrike == k_m1 ? ce_h_m1   : (dayOpenATMStrike == k_m2 ? ce_h_m2   : ce_h_m3)))))
-float day_ce_l   = dayOpenATMStrike == k_p3 ? ce_l_p3   : (dayOpenATMStrike == k_p2 ? ce_l_p2   : (dayOpenATMStrike == k_p1 ? ce_l_p1   : (dayOpenATMStrike == k_0 ? ce_l_0   : (dayOpenATMStrike == k_m1 ? ce_l_m1   : (dayOpenATMStrike == k_m2 ? ce_l_m2   : ce_l_m3)))))
-float day_ce_c   = dayOpenATMStrike == k_p3 ? ce_c_p3   : (dayOpenATMStrike == k_p2 ? ce_c_p2   : (dayOpenATMStrike == k_p1 ? ce_c_p1   : (dayOpenATMStrike == k_0 ? ce_c_0   : (dayOpenATMStrike == k_m1 ? ce_c_m1   : (dayOpenATMStrike == k_m2 ? ce_c_m2   : ce_c_m3)))))
-
-float day_pe_opn = dayOpenATMStrike == k_p3 ? pe_opn_p3 : (dayOpenATMStrike == k_p2 ? pe_opn_p2 : (dayOpenATMStrike == k_p1 ? pe_opn_p1 : (dayOpenATMStrike == k_0 ? pe_opn_0 : (dayOpenATMStrike == k_m1 ? pe_opn_m1 : (dayOpenATMStrike == k_m2 ? pe_opn_m2 : pe_opn_m3)))))
-float day_pe_h   = dayOpenATMStrike == k_p3 ? pe_h_p3   : (dayOpenATMStrike == k_p2 ? pe_h_p2   : (dayOpenATMStrike == k_p1 ? pe_h_p1   : (dayOpenATMStrike == k_0 ? pe_h_0   : (dayOpenATMStrike == k_m1 ? pe_h_m1   : (dayOpenATMStrike == k_m2 ? pe_h_m2   : pe_h_m3)))))
-float day_pe_l   = dayOpenATMStrike == k_p3 ? pe_l_p3   : (dayOpenATMStrike == k_p2 ? pe_l_p2   : (dayOpenATMStrike == k_p1 ? pe_l_p1   : (dayOpenATMStrike == k_0 ? pe_l_0   : (dayOpenATMStrike == k_m1 ? pe_l_m1   : (dayOpenATMStrike == k_m2 ? pe_l_m2   : pe_l_m3)))))
-float day_pe_c   = dayOpenATMStrike == k_p3 ? pe_c_p3   : (dayOpenATMStrike == k_p2 ? pe_c_p2   : (dayOpenATMStrike == k_p1 ? pe_c_p1   : (dayOpenATMStrike == k_0 ? pe_c_0   : (dayOpenATMStrike == k_m1 ? pe_c_m1   : (dayOpenATMStrike == k_m2 ? pe_c_m2   : pe_c_m3)))))
-
-// Extract Current ATM Candles (OHLC)
-float cur_ce_opn = curATMStrike == k_p3 ? ce_opn_p3 : (curATMStrike == k_p2 ? ce_opn_p2 : (curATMStrike == k_p1 ? ce_opn_p1 : (curATMStrike == k_0 ? ce_opn_0 : (curATMStrike == k_m1 ? ce_opn_m1 : (curATMStrike == k_m2 ? ce_opn_m2 : ce_opn_m3)))))
-float cur_ce_h   = curATMStrike == k_p3 ? ce_h_p3   : (curATMStrike == k_p2 ? ce_h_p2   : (curATMStrike == k_p1 ? ce_h_p1   : (curATMStrike == k_0 ? ce_h_0   : (curATMStrike == k_m1 ? ce_h_m1   : (curATMStrike == k_m2 ? ce_h_m2   : ce_h_m3)))))
-float cur_ce_l   = curATMStrike == k_p3 ? ce_l_p3   : (curATMStrike == k_p2 ? ce_l_p2   : (curATMStrike == k_p1 ? ce_l_p1   : (curATMStrike == k_0 ? ce_l_0   : (curATMStrike == k_m1 ? ce_l_m1   : (curATMStrike == k_m2 ? ce_l_m2   : ce_l_m3)))))
-float cur_ce_c   = curATMStrike == k_p3 ? ce_c_p3   : (curATMStrike == k_p2 ? ce_c_p2   : (curATMStrike == k_p1 ? ce_c_p1   : (curATMStrike == k_0 ? ce_c_0   : (curATMStrike == k_m1 ? ce_c_m1   : (curATMStrike == k_m2 ? ce_c_m2   : ce_c_m3)))))
-
-float cur_pe_opn = curATMStrike == k_p3 ? pe_opn_p3 : (curATMStrike == k_p2 ? pe_opn_p2 : (curATMStrike == k_p1 ? pe_opn_p1 : (curATMStrike == k_0 ? pe_opn_0 : (curATMStrike == k_m1 ? pe_opn_m1 : (curATMStrike == k_m2 ? pe_opn_m2 : pe_opn_m3)))))
-float cur_pe_h   = curATMStrike == k_p3 ? pe_h_p3   : (curATMStrike == k_p2 ? pe_h_p2   : (curATMStrike == k_p1 ? pe_h_p1   : (curATMStrike == k_0 ? pe_h_0   : (curATMStrike == k_m1 ? pe_h_m1   : (curATMStrike == k_m2 ? pe_h_m2   : pe_h_m3)))))
-float cur_pe_l   = curATMStrike == k_p3 ? pe_l_p3   : (curATMStrike == k_p2 ? pe_l_p2   : (curATMStrike == k_p1 ? pe_l_p1   : (curATMStrike == k_0 ? pe_l_0   : (curATMStrike == k_m1 ? pe_l_m1   : (curATMStrike == k_m2 ? pe_l_m2   : pe_l_m3)))))
-float cur_pe_c   = curATMStrike == k_p3 ? pe_c_p3   : (curATMStrike == k_p2 ? pe_c_p2   : (curATMStrike == k_p1 ? pe_c_p1   : (curATMStrike == k_0 ? pe_c_0   : (curATMStrike == k_m1 ? pe_c_m1   : (curATMStrike == k_m2 ? pe_c_m2   : pe_c_m3)))))
-
-// Plot Realtime Day Open & Current ATM Option Candles (Consolidated plotcandle calls = 2 calls = 8 plots)
-bool plotDayOpenCandles    = enable_atm_candles and ((atm_candle_source == "Both (Day Open & Current ATM)") or (atm_candle_source == "Day Open ATM Only"))
-bool plotCurRealtimeCandles = enable_atm_candles and ((atm_candle_source == "Both (Day Open & Current ATM)") or (atm_candle_source == "Current Realtime ATM Only"))
-
-float ce_cand_o = plotDayOpenCandles ? day_ce_opn : (plotCurRealtimeCandles ? cur_ce_opn : na)
-float ce_cand_h = plotDayOpenCandles ? day_ce_h   : (plotCurRealtimeCandles ? cur_ce_h   : na)
-float ce_cand_l = plotDayOpenCandles ? day_ce_l   : (plotCurRealtimeCandles ? cur_ce_l   : na)
-float ce_cand_c = plotDayOpenCandles ? day_ce_c   : (plotCurRealtimeCandles ? cur_ce_c   : na)
-
-bool ce_cand_bull = ce_cand_c >= ce_cand_o
-color ce_cand_col = plotDayOpenCandles ? (ce_cand_bull ? color_day_ce_bull : color_day_ce_bear) : (ce_cand_bull ? color_cur_ce_bull : color_cur_ce_bear)
-
-plotcandle(showCE_Candles ? ce_cand_o : na, showCE_Candles ? ce_cand_h : na, showCE_Candles ? ce_cand_l : na, showCE_Candles ? ce_cand_c : na, title="Realtime ATM CE Candle", color=ce_cand_col, wickcolor=ce_cand_col, bordercolor=ce_cand_col)
-
-float pe_cand_o = plotDayOpenCandles ? day_pe_opn : (plotCurRealtimeCandles ? cur_pe_opn : na)
-float pe_cand_h = plotDayOpenCandles ? day_pe_h   : (plotCurRealtimeCandles ? cur_pe_h   : na)
-float pe_cand_l = plotDayOpenCandles ? day_pe_l   : (plotCurRealtimeCandles ? cur_pe_l   : na)
-float pe_cand_c = plotDayOpenCandles ? day_pe_c   : (plotCurRealtimeCandles ? cur_pe_c   : na)
-
-bool pe_cand_bull = pe_cand_c >= pe_cand_o
-color pe_cand_col = plotDayOpenCandles ? (pe_cand_bull ? color_day_pe_bull : color_day_pe_bear) : (pe_cand_bull ? color_cur_pe_bull : color_cur_pe_bear)
-
-plotcandle(showPE_Candles ? pe_cand_o : na, showPE_Candles ? pe_cand_h : na, showPE_Candles ? pe_cand_l : na, showPE_Candles ? pe_cand_c : na, title="Realtime ATM PE Candle", color=pe_cand_col, wickcolor=pe_cand_col, bordercolor=pe_cand_col)
-
-// ==========================================
 // CORE CALCULATIONS, VWAP & MOMENTUM INDICATORS
 // ==========================================
-
-// Dynamic Adaptation of BEP Lines to Active ATM Source (Day Open ATM vs Current Realtime ATM)
-float active_ce_rt_0   = (atm_candle_source == "Day Open ATM Only") ? day_ce_c : (atm_candle_source == "Current Realtime ATM Only" ? cur_ce_c : ce_c_0)
-float active_pe_rt_0   = (atm_candle_source == "Day Open ATM Only") ? day_pe_c : (atm_candle_source == "Current Realtime ATM Only" ? cur_pe_c : pe_c_0)
-
-float active_ce_stat_0 = (atm_candle_source == "Day Open ATM Only") ? day_ce_opn : (atm_candle_source == "Current Realtime ATM Only" ? cur_ce_opn : ce_o_0)
-float active_pe_stat_0 = (atm_candle_source == "Day Open ATM Only") ? day_pe_opn : (atm_candle_source == "Current Realtime ATM Only" ? cur_pe_opn : pe_o_0)
 
 // RSI Calculation
 float rsi_val = ta.rsi(close, rsi_len)
@@ -608,9 +463,9 @@ float bep_stat_m2 = (ce_o_m2 + pe_o_p2) / 2.0
 float bep_rt_m1   = (ce_c_m1 + pe_c_p1) / 2.0
 float bep_stat_m1 = (ce_o_m1 + pe_o_p1) / 2.0
 
-// ATM BEP (CE ATM + PE ATM) - Automatically Adapts to Selected ATM Source
-float bep_rt_0    = (active_ce_rt_0 + active_pe_rt_0) / 2.0
-float bep_stat_0  = (active_ce_stat_0 + active_pe_stat_0) / 2.0
+// ATM BEP (CE ATM + PE ATM)
+float bep_rt_0    = (ce_c_0 + pe_c_0) / 2.0
+float bep_stat_0  = (ce_o_0 + pe_o_0) / 2.0
 
 // OTM 1 BEP (CE OTM 1 + PE ITM 1)
 float bep_rt_p1   = (ce_c_p1 + pe_c_m1) / 2.0
@@ -624,7 +479,7 @@ float bep_stat_p2 = (ce_o_p2 + pe_o_m2) / 2.0
 float bep_rt_p3   = (ce_c_p3 + pe_c_m3) / 2.0
 float bep_stat_p3 = (ce_o_p3 + pe_o_m3) / 2.0
 
-// --- Plot Reference Lines & VWAP (8 plots) ---
+// --- Plot Reference Lines & VWAP ---
 plot(show_prev_close ? ce_prev_close : na, title="CE Prev Day Close", color=color.new(#00E676, 30), linewidth=1, style=plot.style_linebr)
 plot(show_prev_close ? pe_prev_close : na, title="PE Prev Day Close", color=color.new(#FF1744, 30), linewidth=1, style=plot.style_linebr)
 
@@ -637,7 +492,7 @@ plot(show_pe_prev_hl ? pe_prev_low  : na, title="PE Prev Day Low",  color=color.
 plot(show_vwap ? chart_vwap : na, title="Chart Option VWAP", color=col_vwap, linewidth=2)
 plot(show_vwap ? opp_vwap   : na, title="Opposite Option VWAP", color=col_opp_vwap, linewidth=2)
 
-// --- Plot 7 Levels of BEP Lines with Custom User Colors & Formatting (14 plots) ---
+// --- Plot 7 Levels of BEP Lines with Custom User Colors & Formatting ---
 plot(bep_rt_0,    title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
 plot(bep_stat_0,  title="ATM Static BEP (L0)",   color=col_atm_stat, linewidth=width_atm)
 
@@ -669,7 +524,7 @@ float ceAvgOpen = sum_ce_open / total_count
 float peAvgOpen = sum_pe_open / total_count
 
 float sum_ce_cur = numStrikesInput == 4 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3) + nz(ce_c_p4) + nz(ce_c_m4)) : (numStrikesInput == 3 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3)) : (numStrikesInput == 2 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2)) : (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1))))
-float sum_pe_cur = numStrikesInput == 4 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3) + nz(pe_c_p4) + nz(pe_c_m4)) : (numStrikesInput == 3 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3)) : (numStrikesInput == 2 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2)) : (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1))))
+float sum_pe_cur = numStrikesInput == 4 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3) + nz(pe_c_p4) + nz(pe_c_m4)) : (numStrikesInput == 3 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3)) : (numStrikesInput == 2 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2)) : (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1))))
 
 float ceAvgCur = sum_ce_cur / total_count
 float peAvgCur = sum_pe_cur / total_count
@@ -722,7 +577,7 @@ f_bounce_up(float l_val, float c_val, float bep_val) =>
 // 3) Put Resistance Rejection: Put high touches BEP line and closes below
 f_check_ce_bep_trig(float bep_val) =>
     bool ce_cross_prim = isCall ? (close > bep_val and nz(close[1]) <= bep_val) : (opp_c > bep_val and nz(opp_c[1]) <= bep_val)
-    bool ce_cross_sec  = (ce_ltp > bep_val and nz(ce_ltp[1]) <= bep_val) or (chart_ce_close > bep_val and nz(chart_ce_close[1]) <= bep_val)
+    bool ce_cross_sec  = ta.crossover(ce_ltp, bep_val) or (ce_ltp > bep_val and nz(ce_ltp[1]) <= bep_val) or ta.crossover(chart_ce_close, bep_val)
     bool ce_cross      = ce_cross_prim or ce_cross_sec
 
     bool ce_bounce_up_prim = isCall ? f_bounce_up(low, close, bep_val) : f_bounce_up(opp_l, opp_c, bep_val)
@@ -741,7 +596,7 @@ f_check_ce_bep_trig(float bep_val) =>
 // 3) Call Resistance Rejection: Call high touches BEP line and closes below
 f_check_pe_bep_trig(float bep_val) =>
     bool pe_cross_prim = isPut ? (close > bep_val and nz(close[1]) <= bep_val) : (opp_c > bep_val and nz(opp_c[1]) <= bep_val)
-    bool pe_cross_sec  = (pe_ltp > bep_val and nz(pe_ltp[1]) <= bep_val) or (chart_pe_close > bep_val and nz(chart_pe_close[1]) <= bep_val)
+    bool pe_cross_sec  = ta.crossover(pe_ltp, bep_val) or (pe_ltp > bep_val and nz(pe_ltp[1]) <= bep_val) or ta.crossover(chart_pe_close, bep_val)
     bool pe_cross      = pe_cross_prim or pe_cross_sec
 
     bool pe_bounce_up_prim = isPut ? f_bounce_up(low, close, bep_val) : f_bounce_up(opp_l, opp_c, bep_val)
@@ -826,25 +681,24 @@ bool pe_blast_active = overall_sell_alert and pe_rsi_blast_cond and pe_adx_blast
 bool fresh_iv_buy_signal  = overall_buy_alert and ce_fresh_iv
 bool fresh_iv_sell_signal = overall_sell_alert and pe_fresh_iv
 
-// --- Dynamic Label & Shape Drawing using label.new (0 plot slots consumed!) ---
+// --- Visual Shape Markers ---
 show_signal_shapes = input.bool(true, "Show CE / PE Signal Markers", group="Visual Signals")
 
-if show_signal_shapes
-    if overall_buy_alert
-        string ce_lbl = ce_blast_active ? "CE BLAST 🔥" : (ce_fresh_iv ? "FRESH IV CE ★" : "CE")
-        color  ce_col = ce_blast_active ? #00FF66 : (ce_fresh_iv ? #FFD700 : #00E676)
-        color  ce_txt = (ce_blast_active or ce_fresh_iv) ? color.black : color.white
-        label.new(bar_index, low, text=ce_lbl, style=label.style_label_up, color=ce_col, textcolor=ce_txt, size=ce_blast_active ? size.normal : size.small)
-    else if overall_sell_alert
-        string pe_lbl = pe_blast_active ? "PE BLAST 🔥" : (pe_fresh_iv ? "FRESH IV PE ★" : "PE")
-        color  pe_col = pe_blast_active ? #FF0055 : (pe_fresh_iv ? #FFD700 : #FF1744)
-        color  pe_txt = color.white
-        label.new(bar_index, high, text=pe_lbl, style=label.style_label_down, color=pe_col, textcolor=pe_txt, size=pe_blast_active ? size.normal : size.small)
-    
-    if ce_fresh_iv and not overall_buy_alert
-        label.new(bar_index, low, text="CE IV★", style=label.style_diamond, color=#FFD700, textcolor=color.black, size=size.tiny)
-    if pe_fresh_iv and not overall_sell_alert
-        label.new(bar_index, high, text="PE IV★", style=label.style_diamond, color=#FFD700, textcolor=color.black, size=size.tiny)
+// Regular Signals (non-blast, non-fresh-IV)
+plotshape(show_signal_shapes and overall_buy_alert and not ce_blast_active and not ce_fresh_iv, title="CE Regular Signal Marker", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="CE")
+plotshape(show_signal_shapes and overall_sell_alert and not pe_blast_active and not pe_fresh_iv, title="PE Regular Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="PE")
+
+// Momentum BLAST Signal Markers (Vibrant Neon Accent with Flame Emoji)
+plotshape(show_signal_shapes and ce_blast_active, title="CE BLAST Signal Marker", style=shape.labelup, location=location.belowbar, color=#00FF66, textcolor=color.black, size=size.normal, text="CE BLAST 🔥")
+plotshape(show_signal_shapes and pe_blast_active, title="PE BLAST Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF0055, textcolor=color.white, size=size.normal, text="PE BLAST 🔥")
+
+// Special Fresh Intrinsic Value Signal Markers (Gold Star Markers)
+plotshape(show_signal_shapes and fresh_iv_buy_signal and not ce_blast_active, title="Fresh IV CE Signal Marker", style=shape.labelup, location=location.belowbar, color=#FFD700, textcolor=color.white, size=size.normal, text="FRESH IV CE ★")
+plotshape(show_signal_shapes and fresh_iv_sell_signal and not pe_blast_active, title="Fresh IV PE Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FFD700, textcolor=color.black, size=size.normal, text="FRESH IV PE ★")
+
+// Standalone Fresh Intrinsic Value Formation Markers (even outside alerts)
+plotshape(show_signal_shapes and ce_fresh_iv and not overall_buy_alert, title="Fresh CE Intrinsic Value Marker", style=shape.diamond, location=location.belowbar, color=#FFD700, size=size.tiny, text="CE IV★")
+plotshape(show_signal_shapes and pe_fresh_iv and not overall_sell_alert, title="Fresh PE Intrinsic Value Marker", style=shape.diamond, location=location.abovebar, color=#FFD700, size=size.tiny, text="PE IV★")
 
 // ==========================================
 // LIVE ALERT CONDITIONS STATUS TABLE
@@ -888,5 +742,11 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 1, 8, ce_blast_active ? "CE BLAST 🔥" : (pe_blast_active ? "PE BLAST 🔥" : (overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"))), bgcolor=ce_blast_active ? #00FF66 : (pe_blast_active ? #FF0055 : (overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black))), text_color=(ce_blast_active or overall_buy_alert) ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
-alertcondition(overall_buy_alert,  title="CE Signal Alert (Call Buy)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
-alertcondition(overall_sell_alert, title="PE Signal Alert (Put Sell)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
+alertcondition(overall_buy_alert,  title="CE Signal Alert (All 7 BEP Levels)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
+alertcondition(overall_sell_alert, title="PE Signal Alert (All 7 BEP Levels)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
+
+alertcondition(ce_blast_active, title="CE BLAST Signal Alert 🔥", message="CE BLAST ALERT 🔥: High momentum Call alert triggered on {{ticker}}!")
+alertcondition(pe_blast_active, title="PE BLAST Signal Alert 🔥", message="PE BLAST ALERT 🔥: High momentum Put alert triggered on {{ticker}}!")
+
+alertcondition(fresh_iv_buy_signal,  title="Fresh IV CE Alert ★",  message="FRESH IV CE ALERT ★: CE signal with Fresh Intrinsic Value formation on {{ticker}}!")
+alertcondition(fresh_iv_sell_signal, title="Fresh IV PE Alert ★", message="FRESH IV PE ALERT ★: PE signal with Fresh Intrinsic Value formation on {{ticker}}!")
