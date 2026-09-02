@@ -51,14 +51,10 @@ numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Baske
 
 // --- Alert Engine Controls ---
 alert_trigger_mode          = input.string("Both Breakout Crossover & Bounce Back", "Signal Trigger Mode", options=["Both Breakout Crossover & Bounce Back", "Bounce Back Only (Touch & Bounce Off BEP Line)", "Crossover Only (First Bar Close Above)", "Continuous (Any Bar Price > BEP)"], group="Alert Engine Controls",
-  tooltip="Choose whether signals trigger on Breakout Crossover, Bounce Back (CE bounce UP / PE bounce DOWNSIDE for BUY, PE bounce UP / CE bounce DOWNSIDE for SELL), Both, or Continuous.")
+  tooltip="Choose whether signals trigger on Breakout Crossover, Bounce Back (price closes in opposite direction below BEP and comes back above BEP), Both, or Continuous.")
 
-bounce_tolerance            = input.float(2.0, "Bounce Back Touch Tolerance (Points)", minval=0.0, group="Alert Engine Controls",
-  tooltip="Tolerance range in points for price touching or nearing the BEP line before bouncing.")
 prevent_consecutive_signals = input.bool(true, "Strict One Signal Per Swing (No Consecutive Alerts)", group="Alert Engine Controls",
   tooltip="Enforces strict swing alternation (BUY -> SELL -> BUY -> SELL). Exactly 1 alert is triggered per market swing.")
-allow_bounce_reentry        = input.bool(false, "Allow Re-entries during Same Swing", group="Alert Engine Controls",
-  tooltip="Set to true only if you want multiple re-entry alerts in the same swing. Keep false for strict 1 alert per swing.")
 
 use_basket_avg_filter       = input.bool(true, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
@@ -421,7 +417,7 @@ bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_
 bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_iv_pass
 
-// --- Price Closing & Bounce Back Conditions ---
+// --- Price Closing Conditions ---
 bool ce_price_above_rt   = isCall ? (close > realtime_bep) : (ce_ltp > realtime_bep)
 bool pe_price_above_rt   = isPut  ? (close > realtime_bep) : (pe_ltp > realtime_bep)
 
@@ -435,44 +431,37 @@ bool pe_cross_rt   = ta.crossover(isPut ? close : pe_ltp, realtime_bep) or (pe_p
 bool ce_cross_stat = ta.crossover(isCall ? close : ce_ltp, day_open_bep) or (ce_price_above_stat and not (isCall ? close[1] > day_open_bep[1] : ce_ltp[1] > day_open_bep[1]))
 bool pe_cross_stat = ta.crossover(isPut ? close : pe_ltp, day_open_bep) or (pe_price_above_stat and not (isPut ? close[1] > day_open_bep[1] : pe_ltp[1] > day_open_bep[1]))
 
-// Bounce Back UP (Candle low dips to / touches BEP line within tolerance and closes at or above BEP line)
-bool ce_bounce_up_rt   = (ce_low <= realtime_bep + bounce_tolerance or ce_low[1] <= realtime_bep[1] + bounce_tolerance) and (ce_ltp >= realtime_bep)
-bool pe_bounce_up_rt   = (pe_low <= realtime_bep + bounce_tolerance or pe_low[1] <= realtime_bep[1] + bounce_tolerance) and (pe_ltp >= realtime_bep)
+// Bounce Back Pattern: Price must have closed in opposite direction (below BEP), then comes back and closes above BEP
+bool ce_bounce_up_rt   = (ce_ltp[1] < realtime_bep) and (ce_ltp >= realtime_bep)
+bool pe_bounce_up_rt   = (pe_ltp[1] < realtime_bep) and (pe_ltp >= realtime_bep)
 
-bool ce_bounce_up_stat = (ce_low <= day_open_bep + bounce_tolerance or ce_low[1] <= day_open_bep[1] + bounce_tolerance) and (ce_ltp >= day_open_bep)
-bool pe_bounce_up_stat = (pe_low <= day_open_bep + bounce_tolerance or pe_low[1] <= day_open_bep[1] + bounce_tolerance) and (pe_ltp >= day_open_bep)
-
-// Bounce Back DOWNSIDE (Opposite option candle high rallies to / touches BEP line within tolerance from below and bounces back DOWNSIDE below BEP)
-bool ce_bounce_dn_rt   = (ce_high >= realtime_bep - bounce_tolerance or ce_high[1] >= realtime_bep[1] - bounce_tolerance) and (ce_ltp <= realtime_bep)
-bool pe_bounce_dn_rt   = (pe_high >= realtime_bep - bounce_tolerance or pe_high[1] >= realtime_bep[1] - bounce_tolerance) and (pe_ltp <= realtime_bep)
-
-bool ce_bounce_dn_stat = (ce_high >= day_open_bep - bounce_tolerance or ce_high[1] >= day_open_bep[1] - bounce_tolerance) and (ce_ltp <= day_open_bep)
-bool pe_bounce_dn_stat = (pe_high >= day_open_bep - bounce_tolerance or pe_high[1] >= day_open_bep[1] - bounce_tolerance) and (pe_ltp <= day_open_bep)
+bool ce_bounce_up_stat = (ce_ltp[1] < day_open_bep) and (ce_ltp >= day_open_bep)
+bool pe_bounce_up_stat = (pe_ltp[1] < day_open_bep) and (pe_ltp >= day_open_bep)
 
 // Trigger mode resolution
 bool ce_trig_rt = switch alert_trigger_mode
-    "Bounce Back Only (Touch & Bounce Off BEP Line)" => (ce_bounce_up_rt or pe_bounce_dn_rt)
+    "Bounce Back Only (Touch & Bounce Off BEP Line)" => ce_bounce_up_rt
     "Crossover Only (First Bar Close Above)"         => ce_cross_rt
     "Continuous (Any Bar Price > BEP)"              => ce_price_above_rt
-    => (ce_cross_rt or ce_bounce_up_rt or pe_bounce_dn_rt)
+    => (ce_cross_rt or ce_bounce_up_rt)
 
 bool pe_trig_rt = switch alert_trigger_mode
-    "Bounce Back Only (Touch & Bounce Off BEP Line)" => (pe_bounce_up_rt or ce_bounce_dn_rt)
+    "Bounce Back Only (Touch & Bounce Off BEP Line)" => pe_bounce_up_rt
     "Crossover Only (First Bar Close Above)"         => pe_cross_rt
     "Continuous (Any Bar Price > BEP)"              => pe_price_above_rt
-    => (pe_cross_rt or pe_bounce_up_rt or ce_bounce_dn_rt)
+    => (pe_cross_rt or pe_bounce_up_rt)
 
 bool ce_trig_stat = switch alert_trigger_mode
-    "Bounce Back Only (Touch & Bounce Off BEP Line)" => (ce_bounce_up_stat or pe_bounce_dn_stat)
+    "Bounce Back Only (Touch & Bounce Off BEP Line)" => ce_bounce_up_stat
     "Crossover Only (First Bar Close Above)"         => ce_cross_stat
     "Continuous (Any Bar Price > BEP)"              => ce_price_above_stat
-    => (ce_cross_stat or ce_bounce_up_stat or pe_bounce_dn_stat)
+    => (ce_cross_stat or ce_bounce_up_stat)
 
 bool pe_trig_stat = switch alert_trigger_mode
-    "Bounce Back Only (Touch & Bounce Off BEP Line)" => (pe_bounce_up_stat or ce_bounce_dn_stat)
+    "Bounce Back Only (Touch & Bounce Off BEP Line)" => pe_bounce_up_stat
     "Crossover Only (First Bar Close Above)"         => pe_cross_stat
     "Continuous (Any Bar Price > BEP)"              => pe_price_above_stat
-    => (pe_cross_stat or pe_bounce_up_stat or ce_bounce_dn_stat)
+    => (pe_cross_stat or pe_bounce_up_stat)
 
 // --- Raw Trigger 1 & Trigger 2 Alerts ---
 bool raw_t1_buy  = ce_trig_rt and ce_filters_met
@@ -484,23 +473,16 @@ bool raw_t2_sell = pe_trig_stat and pe_filters_met
 bool raw_buy_alert  = raw_t1_buy or raw_t2_buy
 bool raw_sell_alert = raw_t1_sell or raw_t2_sell
 
-// --- Bounce Re-entry Flags ---
-bool ce_is_bounce_raw = ce_bounce_up_rt or pe_bounce_dn_rt or ce_bounce_up_stat or pe_bounce_dn_stat
-bool pe_is_bounce_raw = pe_bounce_up_rt or ce_bounce_dn_rt or pe_bounce_up_stat or ce_bounce_dn_stat
-
-// --- Strict One Signal Per Swing Engine ---
-var int currentSwingState = 0 // 0 = Neutral, 1 = Currently in Bullish Swing (BUY), -1 = Currently in Bearish Swing (SELL)
+// --- Strict One Signal Per Swing State Machine ---
+var int currentSwingState = 0 // 0 = Neutral, 1 = Currently in BUY Swing, -1 = Currently in SELL Swing
 
 bool filtered_buy  = false
 bool filtered_sell = false
 
-bool can_trigger_buy  = not prevent_consecutive_signals or currentSwingState != 1 or (allow_bounce_reentry and ce_is_bounce_raw)
-bool can_trigger_sell = not prevent_consecutive_signals or currentSwingState != -1 or (allow_bounce_reentry and pe_is_bounce_raw)
-
-if raw_buy_alert and can_trigger_buy
+if raw_buy_alert and (not prevent_consecutive_signals or currentSwingState != 1)
     filtered_buy      := true
     currentSwingState := 1
-else if raw_sell_alert and can_trigger_sell
+else if raw_sell_alert and (not prevent_consecutive_signals or currentSwingState != -1)
     filtered_sell     := true
     currentSwingState := -1
 
@@ -555,11 +537,11 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 1, 6, overall_buy_alert ? "BUY ALERT ACTIVE" : (overall_sell_alert ? "SELL ALERT ACTIVE" : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
-alertcondition(t1_buy_alert,  title="Trigger 1 Buy Alert (Realtime BEP)",  message="TRIGGER 1 BUY ALERT: CE breakout/bounce UP or PE bounce DOWNSIDE on Realtime BEP with Call filters met on {{ticker}}!")
-alertcondition(t1_sell_alert, title="Trigger 1 Sell Alert (Realtime BEP)", message="TRIGGER 1 SELL ALERT: PE breakout/bounce UP or CE bounce DOWNSIDE on Realtime BEP with Put filters met on {{ticker}}!")
+alertcondition(t1_buy_alert,  title="Trigger 1 Buy Alert (Realtime BEP)",  message="TRIGGER 1 BUY ALERT: CE breakout/bounce UP on Realtime BEP with Call filters met on {{ticker}}!")
+alertcondition(t1_sell_alert, title="Trigger 1 Sell Alert (Realtime BEP)", message="TRIGGER 1 SELL ALERT: PE breakout/bounce UP on Realtime BEP with Put filters met on {{ticker}}!")
 
-alertcondition(t2_buy_alert,  title="Trigger 2 Buy Alert (Day Open BEP)",  message="TRIGGER 2 BUY ALERT: CE breakout/bounce UP or PE bounce DOWNSIDE on Day Open Static BEP with Call filters met on {{ticker}}!")
-alertcondition(t2_sell_alert, title="Trigger 2 Sell Alert (Day Open BEP)", message="TRIGGER 2 SELL ALERT: PE breakout/bounce UP or CE bounce DOWNSIDE on Day Open Static BEP with Put filters met on {{ticker}}!")
+alertcondition(t2_buy_alert,  title="Trigger 2 Buy Alert (Day Open BEP)",  message="TRIGGER 2 BUY ALERT: CE breakout/bounce UP on Day Open Static BEP with Call filters met on {{ticker}}!")
+alertcondition(t2_sell_alert, title="Trigger 2 Sell Alert (Day Open BEP)", message="TRIGGER 2 SELL ALERT: PE breakout/bounce UP on Day Open Static BEP with Put filters met on {{ticker}}!")
 
-alertcondition(overall_buy_alert,  title="Combined Buy Alert (Trigger 1 or 2)",  message="BUY ALERT: Price breakout/bounce (CE UP or PE DOWNSIDE) on BEP with Call filters met on {{ticker}}!")
-alertcondition(overall_sell_alert, title="Combined Sell Alert (Trigger 1 or 2)", message="SELL ALERT: Price breakout/bounce (PE UP or CE DOWNSIDE) on BEP with Put filters met on {{ticker}}!")
+alertcondition(overall_buy_alert,  title="Combined Buy Alert (Trigger 1 or 2)",  message="BUY ALERT: Price breakout/bounce on BEP with Call filters met on {{ticker}}!")
+alertcondition(overall_sell_alert, title="Combined Sell Alert (Trigger 1 or 2)", message="SELL ALERT: Price breakout/bounce on BEP with Put filters met on {{ticker}}!")
