@@ -52,7 +52,7 @@ strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override",
 
 // --- Realtime ATM Option Candles Controls ---
 G_CANDLES            = "Realtime ATM Option Candles Controls"
-atm_candle_source    = input.string("Day Open ATM Only", "ATM Candle Selection Source", options=["Day Open ATM Only", "Both (Day Open & Current ATM)", "Current Realtime ATM Only"], group=G_CANDLES, tooltip="Select whether to plot candles for Day Open ATM (default), Current Realtime ATM, or Both simultaneously.")
+atm_candle_source    = input.string("Both (Day Open & Current ATM)", "ATM Candle Selection Source", options=["Both (Day Open & Current ATM)", "Day Open ATM Only", "Current Realtime ATM Only"], group=G_CANDLES, tooltip="Select whether to plot candles for Both (Day Open & Current ATM simultaneously), Day Open ATM Only, or Current Realtime ATM Only.")
 showCE_Candles       = input.bool(true, "Show Call (CE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Call (CE) options.")
 showPE_Candles       = input.bool(true, "Show Put (PE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Put (PE) options.")
 plot_candle_mode     = input.string("Auto-Detect (Direct on Option Chart, Overlay on Spot)", "Candle Scaling Mode", options=["Auto-Detect (Direct on Option Chart, Overlay on Spot)", "Direct Option Premium Values", "Overlay on Spot (Strike +/- Premium)"], group=G_CANDLES, tooltip="Auto-Detect automatically plots direct premium on Option charts and scaled overlay on Spot charts.")
@@ -344,7 +344,7 @@ plotcandle(showCE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_ce_opn, c
 
 // Current Realtime ATM PE Candle
 plotcandle(showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_opn, curATMStrike) : na, showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_h, curATMStrike) : na, showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_l, curATMStrike) : na, showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_c, curATMStrike) : na,
-  title="Current Realtime ATM PE Candle", color=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear, wickcolor=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear, bordercolor=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear)
+  title="Current Realtime ATM PE Candle", color=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear, wickcolor=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear)
 
 // Floating Right-Side Labels with Explicit Fail-Safe Contract Strike Names & Prices
 var label lbl_day_ce = na, var label lbl_day_pe = na
@@ -356,11 +356,11 @@ if barstate.islast and show_candle_labels
     
     int labelBar = bar_index + 2
     
-    string day_ce_name = (dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")) + "CE"
-    string day_pe_name = (dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")) + "PE"
+    string day_ce_name = "Day " + (dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")) + "CE"
+    string day_pe_name = "Day " + (dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")) + "PE"
 
-    string cur_ce_name = (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "CE"
-    string cur_pe_name = (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "PE"
+    string cur_ce_name = "Cur " + (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "CE"
+    string cur_pe_name = "Cur " + (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "PE"
 
     float val_dce = na(ce_c_0) ? close : ce_c_0
     float val_dpe = na(pe_c_0) ? close : pe_c_0
@@ -377,11 +377,11 @@ if barstate.islast and show_candle_labels
         
     if showCE_Candles and plotCurRealtimeCandles
         float y_cce = f_scale_val(val_cce, curATMStrike)
-        lbl_cur_ce := label.new(labelBar, y_cce, cur_ce_name + ": " + str.tostring(val_cce, "#.##"), color=color_cur_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        lbl_cur_ce := label.new(labelBar + 12, y_cce, cur_ce_name + ": " + str.tostring(val_cce, "#.##"), color=color_cur_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
         
     if showPE_Candles and plotCurRealtimeCandles
         float y_cpe = f_scale_val(val_cpe, curATMStrike)
-        lbl_cur_pe := label.new(labelBar, y_cpe, cur_pe_name + ": " + str.tostring(val_cpe, "#.##"), color=color_cur_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        lbl_cur_pe := label.new(labelBar + 12, y_cpe, cur_pe_name + ": " + str.tostring(val_cpe, "#.##"), color=color_cur_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
 
 // ==========================================
 // BASKET AVERAGE MATH CALCULATIONS
