@@ -474,7 +474,7 @@ f_get_table_pos(string pos_str) =>
         "Bottom Left"  => position.bottom_left
         => position.bottom_right
 
-var table statusTable = table.new(f_get_table_pos(table_pos_input), 2, 6, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+var table statusTable = table.new(f_get_table_pos(table_pos_input), 2, 7, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 if barstate.islast and show_status_table
     table.cell(statusTable, 0, 0, "Alert Condition Rule", bgcolor=#1565C0, text_color=color.white, text_size=size.small)
@@ -489,11 +489,14 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 0, 3, "Basket & Intrinsic Filters", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 3, (ce_filters_met or pe_filters_met) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(ce_filters_met or pe_filters_met) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 4, "Fresh Intrinsic Value Formation", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 4, (ce_fresh_iv or pe_fresh_iv) ? "FRESH IV ACTIVE ★" : "NONE", bgcolor=(ce_fresh_iv or pe_fresh_iv) ? #FFD700 : #212121, text_color=(ce_fresh_iv or pe_fresh_iv) ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 4, "Both Averages > Day Open (Top Check)", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 4, not both_above_day_open ? "INACTIVE (1 Avg > Open)" : ((ceAvgCur > peAvgCur) ? "CE ON TOP (BUY PASS)" : "PE ON TOP (SELL PASS)"), bgcolor=not both_above_day_open ? #212121 : #1B5E20, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 5, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 5, overall_buy_alert ? (ce_fresh_iv ? "FRESH IV BUY ★" : "BUY ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV SELL ★" : "SELL ALERT ACTIVE") : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 5, "Fresh Intrinsic Value Formation", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 5, (ce_fresh_iv or pe_fresh_iv) ? "FRESH IV ACTIVE ★" : "NONE", bgcolor=(ce_fresh_iv or pe_fresh_iv) ? #FFD700 : #212121, text_color=(ce_fresh_iv or pe_fresh_iv) ? color.black : color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 6, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 6, overall_buy_alert ? (ce_fresh_iv ? "FRESH IV BUY ★" : "BUY ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV SELL ★" : "SELL ALERT ACTIVE") : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
 alertcondition(t1_buy,  title="Trigger 1 Buy Alert (Realtime ATM BEP)",  message="TRIGGER 1 BUY ALERT: CE close above or PE bounce below Realtime ATM BEP on {{ticker}}!")
