@@ -343,7 +343,7 @@ plotcandle(showCE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_ce_opn, c
 plotcandle(showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_opn, curATMStrike) : na, showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_h, curATMStrike) : na, showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_l, curATMStrike) : na, showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_c, curATMStrike) : na,
   title="Current Realtime ATM PE Candle", color=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear, wickcolor=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear, bordercolor=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear)
 
-// Floating Right-Side Labels
+// Floating Right-Side Labels with Explicit Contract Strike Names (e.g. 25300CE, 25400PE)
 var label lbl_day_ce = na, var label lbl_day_pe = na
 var label lbl_cur_ce = na, var label lbl_cur_pe = na
 
@@ -353,21 +353,27 @@ if barstate.islast and show_candle_labels
     
     int labelBar = bar_index + 2
     
+    string day_ce_name = (dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")) + "CE"
+    string day_pe_name = (dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")) + "PE"
+
+    string cur_ce_name = (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "CE"
+    string cur_pe_name = (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "PE"
+
     if showCE_Candles and plotDayOpenCandles
         float y_dce = f_scale_val(ce_c_0, dayOpenATMStrike)
-        lbl_day_ce := label.new(labelBar, y_dce, "Day ATM CE: " + str.tostring(ce_c_0, "#.##"), color=color_day_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        lbl_day_ce := label.new(labelBar, y_dce, day_ce_name + ": " + str.tostring(ce_c_0, "#.##"), color=color_day_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
         
     if showPE_Candles and plotDayOpenCandles
         float y_dpe = f_scale_val(pe_c_0, dayOpenATMStrike)
-        lbl_day_pe := label.new(labelBar, y_dpe, "Day ATM PE: " + str.tostring(pe_c_0, "#.##"), color=color_day_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        lbl_day_pe := label.new(labelBar, y_dpe, day_pe_name + ": " + str.tostring(pe_c_0, "#.##"), color=color_day_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
         
     if showCE_Candles and plotCurRealtimeCandles
         float y_cce = f_scale_val(cur_ce_c, curATMStrike)
-        lbl_cur_ce := label.new(labelBar, y_cce, "Cur ATM CE (" + str.tostring(int(curATMStrike)) + "): " + str.tostring(cur_ce_c, "#.##"), color=color_cur_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        lbl_cur_ce := label.new(labelBar, y_cce, cur_ce_name + ": " + str.tostring(cur_ce_c, "#.##"), color=color_cur_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
         
     if showPE_Candles and plotCurRealtimeCandles
         float y_cpe = f_scale_val(cur_pe_c, curATMStrike)
-        lbl_cur_pe := label.new(labelBar, y_cpe, "Cur ATM PE (" + str.tostring(int(curATMStrike)) + "): " + str.tostring(cur_pe_c, "#.##"), color=color_cur_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        lbl_cur_pe := label.new(labelBar, y_cpe, cur_pe_name + ": " + str.tostring(cur_pe_c, "#.##"), color=color_cur_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
 
 // ==========================================
 // BASKET AVERAGE MATH CALCULATIONS
@@ -415,8 +421,10 @@ f_get_table_text_size(string sz_str) =>
 
 // Global Helper Functions for Table Population
 f_fill_compact_row(table tbl, int r, float st_val, string role_tag, color bg_col, color tx_col, string t_sz) =>
-    string st_str = st_val == math.floor(st_val) ? str.tostring(int(st_val)) : str.tostring(st_val, "#.##")
-    table.cell(tbl, 0, r, st_str, bgcolor=bg_col, text_color=tx_col, text_size=t_sz)
+    string st_fmt = st_val == math.floor(st_val) ? str.tostring(int(st_val)) : str.tostring(st_val, "#.##")
+    string ce_st_name = st_fmt + "CE"
+    string pe_st_name = st_fmt + "PE"
+    table.cell(tbl, 0, r, ce_st_name + " / " + pe_st_name, bgcolor=bg_col, text_color=tx_col, text_size=t_sz)
     table.cell(tbl, 1, r, role_tag, bgcolor=bg_col, text_color=tx_col, text_size=t_sz)
 
 f_fill_grid_row(table tbl, int r, float st_val, bool is_cur_atm, bool is_day_atm, float ce_o, float ce_ltp, float pe_o, float pe_ltp, string t_sz) =>
