@@ -31,9 +31,18 @@ enum StepOverrideChoice
     step200 = "200"
     step500 = "500"
 
+enum StrikeSelectionMode
+    auto   = "Auto (ATM Center)"
+    manual = "Manual 3 Strikes Selection"
+
 // --- Instrument Settings ---
 underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
+strikeSelectMode   = input.enum(StrikeSelectionMode.auto, "Strike Selection Mode", group="Instrument Settings", tooltip="Auto centers around Day Open ATM. Manual 3 Strikes allows choosing 3 specific custom strikes.")
+manualStrikeLower  = input.float(0.0, "Manual Strike 1 (ITM / Lower)", minval=0.0, group="Instrument Settings")
+manualStrikeCenter = input.float(0.0, "Manual Strike 2 (ATM / Center)", minval=0.0, group="Instrument Settings")
+manualStrikeUpper  = input.float(0.0, "Manual Strike 3 (OTM / Upper)", minval=0.0, group="Instrument Settings")
+
 manualStrikeInput  = input.int(0, "Manual Strike Selection (0 = Auto)", minval=0, group="Instrument Settings",
   tooltip="Enter strike price manually (e.g. 24000). Leave at 0 to auto-detect from chart symbol.")
 spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. RELIANCE)", group="Instrument Settings")
@@ -48,6 +57,23 @@ customOffsetInput  = input.float(0.0, "Custom Offset Points Override (0 = Use Dr
   tooltip="Set custom offset points (e.g. 50, 100, 150). If > 0, overrides dropdown selection.")
 numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Basket", minval=1, maxval=4, group="Calculation Settings",
   tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
+
+// --- Realtime Day Open & Current Realtime ATM Option Candles Controls ---
+G_CANDLES            = "Realtime Day Open & Current Realtime ATM Option Candles Controls"
+enable_atm_candles   = input.bool(true, "Enable Realtime ATM Option Candles Plotting", group=G_CANDLES)
+atm_candle_source    = input.string("Both (Day Open & Current ATM)", "ATM Candle Selection Source", options=["Both (Day Open & Current ATM)", "Day Open ATM Only", "Current Realtime ATM Only"], group=G_CANDLES, tooltip="Select whether to plot candles for Both (Day Open & Current ATM), Day Open ATM Only, or Current Realtime ATM Only.")
+showCE_Candles       = input.bool(true, "Show Call (CE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Call (CE) options.")
+showPE_Candles       = input.bool(true, "Show Put (PE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Put (PE) options.")
+
+color_day_ce_bull    = input.color(#26A69A, "Day ATM CE Bullish Candle Body", group=G_CANDLES)
+color_day_ce_bear    = input.color(#EF5350, "Day ATM CE Bearish Candle Body", group=G_CANDLES)
+color_day_pe_bull    = input.color(#00B0FF, "Day ATM PE Bullish Candle Body", group=G_CANDLES)
+color_day_pe_bear    = input.color(#FF9100, "Day ATM PE Bearish Candle Body", group=G_CANDLES)
+
+color_cur_ce_bull    = input.color(#76FF03, "Cur ATM CE Bullish Candle Body", group=G_CANDLES)
+color_cur_ce_bear    = input.color(#FF1744, "Cur ATM CE Bearish Candle Body", group=G_CANDLES)
+color_cur_pe_bull    = input.color(#00E5FF, "Cur ATM PE Bullish Candle Body", group=G_CANDLES)
+color_cur_pe_bear    = input.color(#F57C00, "Cur ATM PE Bearish Candle Body", group=G_CANDLES)
 
 // --- Reference Line Plot Controls ---
 show_prev_close   = input.bool(true, "Show Previous Day Close (CE & PE)", group="Reference Line Plots")
@@ -268,6 +294,12 @@ if barstate.isfirst or na(baseCenterStrike)
 
 float baseStrike = baseCenterStrike
 
+// Manual 3 Strikes Override Selection
+if strikeSelectMode == StrikeSelectionMode.manual and manualStrikeCenter > 0.0
+    baseStrike := manualStrikeCenter
+    if manualStrikeLower > 0.0 and manualStrikeUpper > 0.0
+        offsetPts := math.abs(manualStrikeCenter - manualStrikeLower)
+
 // ==========================================
 // UNIVERSAL FAIL-SAFE CE & PE TICKER CONSTRUCTION
 // ==========================================
@@ -325,6 +357,10 @@ float k_m4 = baseStrike - 4.0 * offsetPts
 f_get_strike_ohlc() =>
     float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
     [d_op, high, low, close]
+
+f_get_strike_full_ohlc() =>
+    float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    [open, d_op, high, low, close]
 
 f_get_strike_prev_day() =>
     [close[1], high[1], low[1]]
@@ -384,35 +420,123 @@ float pe_prev_high  = isPut  ? request.security(syminfo.tickerid, "D", high[1], 
 float pe_prev_low   = isPut  ? request.security(syminfo.tickerid, "D", low[1],   lookahead=barmerge.lookahead_on) : pe_pdl_sec
 
 // Fetch All 7 Strike Levels OHLC Data
-[ce_o_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m3, ce_opn_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m3, pe_opn_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m2, ce_opn_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m2, pe_opn_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m1, ce_opn_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m1, pe_opn_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_0,  ce_h_0,  ce_l_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_0,  pe_h_0,  pe_l_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_0,  ce_opn_0,  ce_h_0,  ce_l_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_0,  pe_opn_0,  pe_h_0,  pe_l_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p1, ce_opn_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p1, pe_opn_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p2, ce_opn_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p2, pe_opn_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p3, ce_opn_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p3, pe_opn_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p4, ce_opn_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p4, pe_opn_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m4, ce_opn_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m4, pe_opn_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 float spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
 spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
+
+// ==========================================
+// DAY OPEN ATM & CURRENT REALTIME ATM RESOLUTION
+// ==========================================
+
+float diff_open_p3 = na(ce_o_p3) or na(pe_o_p3) ? 1e10 : math.abs(ce_o_p3 - pe_o_p3)
+float diff_open_p2 = na(ce_o_p2) or na(pe_o_p2) ? 1e10 : math.abs(ce_o_p2 - pe_o_p2)
+float diff_open_p1 = na(ce_o_p1) or na(pe_o_p1) ? 1e10 : math.abs(ce_o_p1 - pe_o_p1)
+float diff_open_0  = na(ce_o_0)  or na(pe_o_0)  ? 1e10 : math.abs(ce_o_0  - pe_o_0)
+float diff_open_m1 = na(ce_o_m1) or na(pe_o_m1) ? 1e10 : math.abs(ce_o_m1 - pe_o_m1)
+float diff_open_m2 = na(ce_o_m2) or na(pe_o_m2) ? 1e10 : math.abs(ce_o_m2 - pe_o_m2)
+float diff_open_m3 = na(ce_o_m3) or na(pe_o_m3) ? 1e10 : math.abs(ce_o_m3 - pe_o_m3)
+
+float minDiffOpen = math.min(diff_open_p3, math.min(diff_open_p2, math.min(diff_open_p1, math.min(diff_open_0, math.min(diff_open_m1, math.min(diff_open_m2, diff_open_m3))))))
+
+float dayOpenATMStrike = k_0
+if minDiffOpen == diff_open_p3
+    dayOpenATMStrike := k_p3
+else if minDiffOpen == diff_open_p2
+    dayOpenATMStrike := k_p2
+else if minDiffOpen == diff_open_p1
+    dayOpenATMStrike := k_p1
+else if minDiffOpen == diff_open_0
+    dayOpenATMStrike := k_0
+else if minDiffOpen == diff_open_m1
+    dayOpenATMStrike := k_m1
+else if minDiffOpen == diff_open_m2
+    dayOpenATMStrike := k_m2
+else if minDiffOpen == diff_open_m3
+    dayOpenATMStrike := k_m3
+
+float diff_cur_p3 = na(ce_c_p3) or na(pe_c_p3) ? 1e10 : math.abs(ce_c_p3 - pe_c_p3)
+float diff_cur_p2 = na(ce_c_p2) or na(pe_c_p2) ? 1e10 : math.abs(ce_c_p2 - pe_c_p2)
+float diff_cur_p1 = na(ce_c_p1) or na(pe_c_p1) ? 1e10 : math.abs(ce_c_p1 - pe_c_p1)
+float diff_cur_0  = na(ce_c_0)  or na(pe_c_0)  ? 1e10 : math.abs(ce_c_0  - pe_c_0)
+float diff_cur_m1 = na(ce_c_m1) or na(pe_c_m1) ? 1e10 : math.abs(ce_c_m1 - pe_c_m1)
+float diff_cur_m2 = na(ce_c_m2) or na(pe_c_m2) ? 1e10 : math.abs(ce_c_m2 - pe_c_m2)
+float diff_cur_m3 = na(ce_c_m3) or na(pe_c_m3) ? 1e10 : math.abs(ce_c_m3 - pe_c_m3)
+
+float minDiffCur = math.min(diff_cur_p3, math.min(diff_cur_p2, math.min(diff_cur_p1, math.min(diff_cur_0, math.min(diff_cur_m1, math.min(diff_cur_m2, diff_cur_m3))))))
+
+float curATMStrike = k_0
+if minDiffCur == diff_cur_p3
+    curATMStrike := k_p3
+else if minDiffCur == diff_cur_p2
+    curATMStrike := k_p2
+else if minDiffCur == diff_cur_p1
+    curATMStrike := k_p1
+else if minDiffCur == diff_cur_0
+    curATMStrike := k_0
+else if minDiffCur == diff_cur_m1
+    curATMStrike := k_m1
+else if minDiffCur == diff_cur_m2
+    curATMStrike := k_m2
+else if minDiffCur == diff_cur_m3
+    curATMStrike := k_m3
+
+// Extract Day Open ATM Candles (OHLC)
+float day_ce_opn = dayOpenATMStrike == k_p3 ? ce_opn_p3 : (dayOpenATMStrike == k_p2 ? ce_opn_p2 : (dayOpenATMStrike == k_p1 ? ce_opn_p1 : (dayOpenATMStrike == k_0 ? ce_opn_0 : (dayOpenATMStrike == k_m1 ? ce_opn_m1 : (dayOpenATMStrike == k_m2 ? ce_opn_m2 : ce_opn_m3)))))
+float day_ce_h   = dayOpenATMStrike == k_p3 ? ce_h_p3   : (dayOpenATMStrike == k_p2 ? ce_h_p2   : (dayOpenATMStrike == k_p1 ? ce_h_p1   : (dayOpenATMStrike == k_0 ? ce_h_0   : (dayOpenATMStrike == k_m1 ? ce_h_m1   : (dayOpenATMStrike == k_m2 ? ce_h_m2   : ce_h_m3)))))
+float day_ce_l   = dayOpenATMStrike == k_p3 ? ce_l_p3   : (dayOpenATMStrike == k_p2 ? ce_l_p2   : (dayOpenATMStrike == k_p1 ? ce_l_p1   : (dayOpenATMStrike == k_0 ? ce_l_0   : (dayOpenATMStrike == k_m1 ? ce_l_m1   : (dayOpenATMStrike == k_m2 ? ce_l_m2   : ce_l_m3)))))
+float day_ce_c   = dayOpenATMStrike == k_p3 ? ce_c_p3   : (dayOpenATMStrike == k_p2 ? ce_c_p2   : (dayOpenATMStrike == k_p1 ? ce_c_p1   : (dayOpenATMStrike == k_0 ? ce_c_0   : (dayOpenATMStrike == k_m1 ? ce_c_m1   : (dayOpenATMStrike == k_m2 ? ce_c_m2   : ce_c_m3)))))
+
+float day_pe_opn = dayOpenATMStrike == k_p3 ? pe_opn_p3 : (dayOpenATMStrike == k_p2 ? pe_opn_p2 : (dayOpenATMStrike == k_p1 ? pe_opn_p1 : (dayOpenATMStrike == k_0 ? pe_opn_0 : (dayOpenATMStrike == k_m1 ? pe_opn_m1 : (dayOpenATMStrike == k_m2 ? pe_opn_m2 : pe_opn_m3)))))
+float day_pe_h   = dayOpenATMStrike == k_p3 ? pe_h_p3   : (dayOpenATMStrike == k_p2 ? pe_h_p2   : (dayOpenATMStrike == k_p1 ? pe_h_p1   : (dayOpenATMStrike == k_0 ? pe_h_0   : (dayOpenATMStrike == k_m1 ? pe_h_m1   : (dayOpenATMStrike == k_m2 ? pe_h_m2   : pe_h_m3)))))
+float day_pe_l   = dayOpenATMStrike == k_p3 ? pe_l_p3   : (dayOpenATMStrike == k_p2 ? pe_l_p2   : (dayOpenATMStrike == k_p1 ? pe_l_p1   : (dayOpenATMStrike == k_0 ? pe_l_0   : (dayOpenATMStrike == k_m1 ? pe_l_m1   : (dayOpenATMStrike == k_m2 ? pe_l_m2   : pe_l_m3)))))
+float day_pe_c   = dayOpenATMStrike == k_p3 ? pe_c_p3   : (dayOpenATMStrike == k_p2 ? pe_c_p2   : (dayOpenATMStrike == k_p1 ? pe_c_p1   : (dayOpenATMStrike == k_0 ? pe_c_0   : (dayOpenATMStrike == k_m1 ? pe_c_m1   : (dayOpenATMStrike == k_m2 ? pe_c_m2   : pe_c_m3)))))
+
+// Extract Current ATM Candles (OHLC)
+float cur_ce_opn = curATMStrike == k_p3 ? ce_opn_p3 : (curATMStrike == k_p2 ? ce_opn_p2 : (curATMStrike == k_p1 ? ce_opn_p1 : (curATMStrike == k_0 ? ce_opn_0 : (curATMStrike == k_m1 ? ce_opn_m1 : (curATMStrike == k_m2 ? ce_opn_m2 : ce_opn_m3)))))
+float cur_ce_h   = curATMStrike == k_p3 ? ce_h_p3   : (curATMStrike == k_p2 ? ce_h_p2   : (curATMStrike == k_p1 ? ce_h_p1   : (curATMStrike == k_0 ? ce_h_0   : (curATMStrike == k_m1 ? ce_h_m1   : (curATMStrike == k_m2 ? ce_h_m2   : ce_h_m3)))))
+float cur_ce_l   = curATMStrike == k_p3 ? ce_l_p3   : (curATMStrike == k_p2 ? ce_l_p2   : (curATMStrike == k_p1 ? ce_l_p1   : (curATMStrike == k_0 ? ce_l_0   : (curATMStrike == k_m1 ? ce_l_m1   : (curATMStrike == k_m2 ? ce_l_m2   : ce_l_m3)))))
+float cur_ce_c   = curATMStrike == k_p3 ? ce_c_p3   : (curATMStrike == k_p2 ? ce_c_p2   : (curATMStrike == k_p1 ? ce_c_p1   : (curATMStrike == k_0 ? ce_c_0   : (curATMStrike == k_m1 ? ce_c_m1   : (curATMStrike == k_m2 ? ce_c_m2   : ce_c_m3)))))
+
+float cur_pe_opn = curATMStrike == k_p3 ? pe_opn_p3 : (curATMStrike == k_p2 ? pe_opn_p2 : (curATMStrike == k_p1 ? pe_opn_p1 : (curATMStrike == k_0 ? pe_opn_0 : (curATMStrike == k_m1 ? pe_opn_m1 : (curATMStrike == k_m2 ? pe_opn_m2 : pe_opn_m3)))))
+float cur_pe_h   = curATMStrike == k_p3 ? pe_h_p3   : (curATMStrike == k_p2 ? pe_h_p2   : (curATMStrike == k_p1 ? pe_h_p1   : (curATMStrike == k_0 ? pe_h_0   : (curATMStrike == k_m1 ? pe_h_m1   : (curATMStrike == k_m2 ? pe_h_m2   : pe_h_m3)))))
+float cur_pe_l   = curATMStrike == k_p3 ? pe_l_p3   : (curATMStrike == k_p2 ? pe_l_p2   : (curATMStrike == k_p1 ? pe_l_p1   : (curATMStrike == k_0 ? pe_l_0   : (curATMStrike == k_m1 ? pe_l_m1   : (curATMStrike == k_m2 ? pe_l_m2   : pe_l_m3)))))
+float cur_pe_c   = curATMStrike == k_p3 ? pe_c_p3   : (curATMStrike == k_p2 ? pe_c_p2   : (curATMStrike == k_p1 ? pe_c_p1   : (curATMStrike == k_0 ? pe_c_0   : (curATMStrike == k_m1 ? pe_c_m1   : (curATMStrike == k_m2 ? pe_c_m2   : pe_c_m3)))))
+
+// Plot Realtime Day Open & Current ATM Option Candles
+bool plotDayOpenCandles    = enable_atm_candles and ((atm_candle_source == "Both (Day Open & Current ATM)") or (atm_candle_source == "Day Open ATM Only"))
+bool plotCurRealtimeCandles = enable_atm_candles and ((atm_candle_source == "Both (Day Open & Current ATM)") or (atm_candle_source == "Current Realtime ATM Only"))
+
+plotcandle(showCE_Candles and plotDayOpenCandles ? day_ce_opn : na, showCE_Candles and plotDayOpenCandles ? day_ce_h : na, showCE_Candles and plotDayOpenCandles ? day_ce_l : na, showCE_Candles and plotDayOpenCandles ? day_ce_c : na, title="Day Open ATM CE Candle", color=day_ce_c >= day_ce_opn ? color_day_ce_bull : color_day_ce_bear, wickcolor=day_ce_c >= day_ce_opn ? color_day_ce_bull : color_day_ce_bear, bordercolor=day_ce_c >= day_ce_opn ? color_day_ce_bull : color_day_ce_bear)
+plotcandle(showPE_Candles and plotDayOpenCandles ? day_pe_opn : na, showPE_Candles and plotDayOpenCandles ? day_pe_h : na, showPE_Candles and plotDayOpenCandles ? day_pe_l : na, showPE_Candles and plotDayOpenCandles ? day_pe_c : na, title="Day Open ATM PE Candle", color=day_pe_c >= day_pe_opn ? color_day_pe_bull : color_day_pe_bear, wickcolor=day_pe_c >= day_pe_opn ? color_day_pe_bull : color_day_pe_bear, bordercolor=day_pe_c >= day_pe_opn ? color_day_pe_bull : color_day_pe_bear)
+
+plotcandle(showCE_Candles and plotCurRealtimeCandles ? cur_ce_opn : na, showCE_Candles and plotCurRealtimeCandles ? cur_ce_h : na, showCE_Candles and plotCurRealtimeCandles ? cur_ce_l : na, showCE_Candles and plotCurRealtimeCandles ? cur_ce_c : na, title="Current Realtime ATM CE Candle", color=cur_ce_c >= cur_ce_opn ? color_cur_ce_bull : color_cur_ce_bear, wickcolor=cur_ce_c >= cur_ce_opn ? color_cur_ce_bull : color_cur_ce_bear, bordercolor=cur_ce_c >= cur_ce_opn ? color_cur_ce_bull : color_cur_ce_bear)
+plotcandle(showPE_Candles and plotCurRealtimeCandles ? cur_pe_opn : na, showPE_Candles and plotCurRealtimeCandles ? cur_pe_h : na, showPE_Candles and plotCurRealtimeCandles ? cur_pe_l : na, showPE_Candles and plotCurRealtimeCandles ? cur_pe_c : na, title="Current Realtime ATM PE Candle", color=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear, wickcolor=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear, bordercolor=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear)
 
 // ==========================================
 // CORE CALCULATIONS, VWAP & MOMENTUM INDICATORS
@@ -524,7 +648,7 @@ float ceAvgOpen = sum_ce_open / total_count
 float peAvgOpen = sum_pe_open / total_count
 
 float sum_ce_cur = numStrikesInput == 4 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3) + nz(ce_c_p4) + nz(ce_c_m4)) : (numStrikesInput == 3 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3)) : (numStrikesInput == 2 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2)) : (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1))))
-float sum_pe_cur = numStrikesInput == 4 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3) + nz(pe_c_p4) + nz(pe_c_m4)) : (numStrikesInput == 3 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3)) : (numStrikesInput == 2 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2)) : (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1))))
+float sum_pe_cur = numStrikesInput == 4 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2) + nz(pe_c_p3) + nz(pe_c_m3) + nz(pe_c_p4) + nz(pe_c_m4)) : (numStrikesInput == 3 ? (nz(ce_c_0) + nz(ce_c_p1) + nz(ce_c_m1) + nz(ce_c_p2) + nz(ce_c_m2) + nz(ce_c_p3) + nz(ce_c_m3)) : (numStrikesInput == 2 ? (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1) + nz(pe_c_p2) + nz(pe_c_m2)) : (nz(pe_c_0) + nz(pe_c_p1) + nz(pe_c_m1))))
 
 float ceAvgCur = sum_ce_cur / total_count
 float peAvgCur = sum_pe_cur / total_count
