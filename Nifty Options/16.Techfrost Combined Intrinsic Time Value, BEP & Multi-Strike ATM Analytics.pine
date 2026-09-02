@@ -1,5 +1,5 @@
 //@version=6
-indicator("16. Techfrost Combined Intrinsic Time Value, BEP & Multi-Strike ATM Analytics", shorttitle="16.Techfrost IVTV BEP & ATM Analytics", overlay=false, precision=2, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
+indicator("16. Techfrost Combined Intrinsic Time Value, BEP & Multi-Strike ATM Analytics", shorttitle="16.Techfrost IVTV BEP & ATM Analytics", overlay=true, precision=2, max_labels_count=500, max_lines_count=500, max_boxes_count=500)
 
 // ==========================================
 // ENUMS & INPUTS
