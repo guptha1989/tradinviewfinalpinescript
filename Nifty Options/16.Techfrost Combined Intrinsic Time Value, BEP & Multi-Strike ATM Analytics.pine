@@ -54,6 +54,11 @@ show_prev_close   = input.bool(true, "Show Previous Day Close (CE & PE)", group=
 show_ce_prev_hl   = input.bool(true, "Show CE Previous Day High & Low", group="Reference Line Plots")
 show_pe_prev_hl   = input.bool(true, "Show PE Previous Day High & Low", group="Reference Line Plots")
 
+// --- Momentum Blast Filters (RSI & ADX) ---
+rsi_len  = input.int(14, "RSI Period Length", group="Momentum Blast Filters (RSI & ADX)")
+adx_len  = input.int(14, "ADX Smoothing Period", group="Momentum Blast Filters (RSI & ADX)")
+di_len   = input.int(14, "DI Period Length", group="Momentum Blast Filters (RSI & ADX)")
+
 // --- BEP Line Colors & Formatting ---
 col_atm_rt    = input.color(color.white, "ATM Realtime BEP (L0)", group="BEP Line Formatting")
 col_atm_stat  = input.color(color.yellow, "ATM Static BEP (L0)", group="BEP Line Formatting")
@@ -381,6 +386,17 @@ spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 // CORE CALCULATIONS
 // ==========================================
 
+// RSI & ADX Momentum Calculations
+float rsi_val = ta.rsi(close, rsi_len)
+[plusDI, minusDI, adx_val] = ta.dmi(di_len, adx_len)
+
+// ADX > 20 and slanting upwards (increasing from previous bar)
+bool adx_up_slant = (adx_val > 20.0) and (adx_val > adx_val[1])
+
+// RSI Blast threshold conditions
+bool ce_rsi_blast_cond = (rsi_val > 60.0)
+bool pe_rsi_blast_cond = (rsi_val < 40.0)
+
 // Selected chart's Realtime Intrinsic Value (CE and PE)
 float ce_iv_rt = math.max(0.0, spot_ltp - ce_strike)
 float pe_iv_rt = math.max(0.0, pe_strike - spot_ltp)
@@ -602,6 +618,10 @@ else if raw_sell_alert and activeSwing != -1
     overall_sell_alert := true
     activeSwing        := -1
 
+// Special Momentum BLAST Signals (ADX > 20 slanting UP + RSI > 60 for CE / < 40 for PE)
+bool ce_blast_active = overall_buy_alert  and adx_up_slant and ce_rsi_blast_cond
+bool pe_blast_active = overall_sell_alert and adx_up_slant and pe_rsi_blast_cond
+
 // Special Fresh Intrinsic Value Signals
 bool fresh_iv_buy_signal  = overall_buy_alert and ce_fresh_iv
 bool fresh_iv_sell_signal = overall_sell_alert and pe_fresh_iv
@@ -609,13 +629,17 @@ bool fresh_iv_sell_signal = overall_sell_alert and pe_fresh_iv
 // --- Visual Shape Markers ---
 show_signal_shapes = input.bool(true, "Show CE / PE Signal Markers", group="Visual Signals")
 
-// Regular Signals
-plotshape(show_signal_shapes and overall_buy_alert and not ce_fresh_iv, title="CE Signal Marker", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="CE")
-plotshape(show_signal_shapes and overall_sell_alert and not pe_fresh_iv, title="PE Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="PE")
+// Regular Signals (non-blast, non-fresh-IV)
+plotshape(show_signal_shapes and overall_buy_alert and not ce_blast_active and not ce_fresh_iv, title="CE Regular Signal Marker", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="CE")
+plotshape(show_signal_shapes and overall_sell_alert and not pe_blast_active and not pe_fresh_iv, title="PE Regular Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="PE")
+
+// Momentum BLAST Signal Markers (Vibrant Neon Accent with Flame Emoji)
+plotshape(show_signal_shapes and ce_blast_active, title="CE BLAST Signal Marker", style=shape.labelup, location=location.belowbar, color=#00FF66, textcolor=color.black, size=size.normal, text="CE BLAST 🔥")
+plotshape(show_signal_shapes and pe_blast_active, title="PE BLAST Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF0055, textcolor=color.white, size=size.normal, text="PE BLAST 🔥")
 
 // Special Fresh Intrinsic Value Signal Markers (Gold Star Markers)
-plotshape(show_signal_shapes and fresh_iv_buy_signal, title="Fresh IV CE Signal Marker", style=shape.labelup, location=location.belowbar, color=#FFD700, textcolor=color.white, size=size.normal, text="FRESH IV CE ★")
-plotshape(show_signal_shapes and fresh_iv_sell_signal, title="Fresh IV PE Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FFD700, textcolor=color.black, size=size.normal, text="FRESH IV PE ★")
+plotshape(show_signal_shapes and fresh_iv_buy_signal and not ce_blast_active, title="Fresh IV CE Signal Marker", style=shape.labelup, location=location.belowbar, color=#FFD700, textcolor=color.white, size=size.normal, text="FRESH IV CE ★")
+plotshape(show_signal_shapes and fresh_iv_sell_signal and not pe_blast_active, title="Fresh IV PE Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FFD700, textcolor=color.black, size=size.normal, text="FRESH IV PE ★")
 
 // Standalone Fresh Intrinsic Value Formation Markers (even outside alerts)
 plotshape(show_signal_shapes and ce_fresh_iv and not overall_buy_alert, title="Fresh CE Intrinsic Value Marker", style=shape.diamond, location=location.belowbar, color=#FFD700, size=size.tiny, text="CE IV★")
@@ -632,7 +656,7 @@ f_get_table_pos(string pos_str) =>
         "Bottom Left"  => position.bottom_left
         => position.bottom_right
 
-var table statusTable = table.new(f_get_table_pos(table_pos_input), 2, 7, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+var table statusTable = table.new(f_get_table_pos(table_pos_input), 2, 8, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 if barstate.islast and show_status_table
     table.cell(statusTable, 0, 0, "Alert Condition Rule", bgcolor=#1565C0, text_color=color.white, text_size=size.small)
@@ -650,15 +674,21 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 0, 4, "Basket Top Position Rule", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 4, (ceAvgCur > peAvgCur) ? "CE ON TOP (CE OK)" : "PE ON TOP (PE OK)", bgcolor=(ceAvgCur > peAvgCur) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 5, "Fresh Intrinsic Value Formation", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 5, (ce_fresh_iv or pe_fresh_iv) ? "FRESH IV ACTIVE ★" : "NONE", bgcolor=(ce_fresh_iv or pe_fresh_iv) ? #FFD700 : #212121, text_color=(ce_fresh_iv or pe_fresh_iv) ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 5, "ADX > 20 (Slanting UP)", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 5, adx_up_slant ? "PASS (" + str.tostring(adx_val, "#.1") + ")" : "FAIL (" + str.tostring(adx_val, "#.1") + ")", bgcolor=adx_up_slant ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 6, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 6, overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 6, "RSI Level (CE > 60 / PE < 40)", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 6, ce_rsi_blast_cond ? "CE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : (pe_rsi_blast_cond ? "PE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : "NEUTRAL (" + str.tostring(rsi_val, "#.1") + ")"), bgcolor=ce_rsi_blast_cond ? #00FF66 : (pe_rsi_blast_cond ? #FF0055 : #212121), text_color=ce_rsi_blast_cond ? color.black : color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 7, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 7, ce_blast_active ? "CE BLAST 🔥" : (pe_blast_active ? "PE BLAST 🔥" : (overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"))), bgcolor=ce_blast_active ? #00FF66 : (pe_blast_active ? #FF0055 : (overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black))), text_color=(ce_blast_active or overall_buy_alert) ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
 alertcondition(overall_buy_alert,  title="CE Signal Alert (All 7 BEP Levels)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
 alertcondition(overall_sell_alert, title="PE Signal Alert (All 7 BEP Levels)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
+
+alertcondition(ce_blast_active, title="CE BLAST Signal Alert 🔥", message="CE BLAST ALERT 🔥: High momentum Call alert triggered with ADX > 20 (slanting UP) and RSI > 60 on {{ticker}}!")
+alertcondition(pe_blast_active, title="PE BLAST Signal Alert 🔥", message="PE BLAST ALERT 🔥: High momentum Put alert triggered with ADX > 20 (slanting UP) and RSI < 40 on {{ticker}}!")
 
 alertcondition(fresh_iv_buy_signal,  title="Fresh IV CE Alert ★",  message="FRESH IV CE ALERT ★: CE signal with Fresh Intrinsic Value formation on {{ticker}}!")
 alertcondition(fresh_iv_sell_signal, title="Fresh IV PE Alert ★", message="FRESH IV PE ALERT ★: PE signal with Fresh Intrinsic Value formation on {{ticker}}!")
