@@ -50,10 +50,19 @@ numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Baske
   tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
 
 // --- Alert Engine Controls ---
-alert_trigger_mode = input.string("Crossover (First Bar Close Above)", "Signal Trigger Mode", options=["Crossover (First Bar Close Above)", "Continuous (Any Bar Price > BEP)"], group="Alert Engine Controls",
+alert_trigger_mode    = input.string("Crossover (First Bar Close Above)", "Signal Trigger Mode", options=["Crossover (First Bar Close Above)", "Continuous (Any Bar Price > BEP)"], group="Alert Engine Controls",
   tooltip="Crossover triggers ONLY on the first bar where price crosses above BEP. Continuous triggers on every bar where price remains above BEP.")
-strict_iv_filter   = input.bool(true, "Enforce Intrinsic Filter Condition", group="Alert Engine Controls",
+
+use_basket_avg_filter = input.bool(true, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
+  tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
+use_basket_chg_filter = input.bool(true, "Require Basket Average Change > 0", group="Alert Engine Controls",
+  tooltip="Requires CE/PE Basket Average Change from Day Open to be positive (> 0).")
+strict_iv_filter      = input.bool(false, "Require Intrinsic Filter Condition", group="Alert Engine Controls",
   tooltip="Enforces the Intrinsic Value condition for Buy and Sell signals.")
+
+show_status_table     = input.bool(true, "Show Alert Conditions Status Table", group="Alert Engine Controls",
+  tooltip="Displays a live status panel in the corner showing the exact pass/fail state of all alert conditions.")
+table_pos_input       = input.string("Top Right", "Status Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Alert Engine Controls")
 
 // ==========================================
 // TICKER PARSING & AUTO-DETECTION
@@ -382,16 +391,18 @@ float pe_iv_signed = pe_strike - spot_ltp
 // USER BUY & SELL ALERT CONDITIONS ENGINE
 // ==========================================
 
-// --- Fail-Safe Intrinsic Filter Conditions ---
-bool ce_iv_condition = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0 and pe_iv_signed < 0) or (ce_iv_rt > 0 and pe_iv_rt > ce_iv_rt)
-bool pe_iv_condition = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_iv_rt > ce_iv_rt) or (pe_iv_rt > 0 and ce_iv_signed < 0) or (pe_iv_rt > 0 and ce_iv_rt > pe_iv_rt)
+// --- Individual Filter Evaluations ---
+bool ce_avg_pass = not use_basket_avg_filter or (ceAvgCur > ceAvgOpen)
+bool pe_avg_pass = not use_basket_avg_filter or (peAvgCur > peAvgOpen)
 
-// --- Common Filters ---
-// CE Filter: CE current average > CE day open average AND CE avg change > 0 AND CE Intrinsic condition
-bool ce_filters_met = (ceAvgCur > ceAvgOpen) and (ceAvgChg > 0) and ce_iv_condition
+bool ce_chg_pass = not use_basket_chg_filter or (ceAvgChg > 0)
+bool pe_chg_pass = not use_basket_chg_filter or (peAvgChg > 0)
 
-// PE Filter: PE current average > PE day open average AND PE avg change > 0 AND PE Intrinsic condition
-bool pe_filters_met = (peAvgCur > peAvgOpen) and (peAvgChg > 0) and pe_iv_condition
+bool ce_iv_pass  = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0 and pe_iv_signed < 0) or (ce_iv_rt > 0 and pe_iv_rt > ce_iv_rt)
+bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_iv_rt > ce_iv_rt) or (pe_iv_rt > 0 and ce_iv_signed < 0) or (pe_iv_rt > 0 and ce_iv_rt > pe_iv_rt)
+
+bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_iv_pass
+bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_iv_pass
 
 // --- Price Closing Conditions (Supports Crossover and Continuous modes) ---
 bool ce_price_above_rt   = isCall ? (close > realtime_bep) : (ce_ltp > realtime_bep)
@@ -428,6 +439,41 @@ show_signal_shapes = input.bool(true, "Show Buy / Sell Signal Shape Markers", gr
 
 plotshape(show_signal_shapes and overall_buy_alert,  title="Buy Signal Marker",  style=shape.labelup,   location=location.belowbar, color=#00E676, textcolor=color.black, size=size.small, text="BUY")
 plotshape(show_signal_shapes and overall_sell_alert, title="Sell Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="SELL")
+
+// ==========================================
+// LIVE ALERT CONDITIONS STATUS TABLE
+// ==========================================
+
+f_get_table_pos(string pos_str) =>
+    switch pos_str
+        "Top Right"    => position.top_right
+        "Top Left"     => position.top_left
+        "Bottom Left"  => position.bottom_left
+        => position.bottom_right
+
+var table statusTable = table.new(f_get_table_pos(table_pos_input), 2, 7, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+
+if barstate.islast and show_status_table
+    table.cell(statusTable, 0, 0, "Alert Condition Rule", bgcolor=#1565C0, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 0, "Current Status", bgcolor=#1565C0, text_color=color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 1, "Price > Realtime BEP", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 1, (ce_price_above_rt or pe_price_above_rt) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(ce_price_above_rt or pe_price_above_rt) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 2, "Price > Day Open BEP", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 2, (ce_price_above_stat or pe_price_above_stat) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(ce_price_above_stat or pe_price_above_stat) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 3, "Basket Avg > Day Open Avg", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 3, (ce_avg_pass or pe_avg_pass) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(ce_avg_pass or pe_avg_pass) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 4, "Basket Change > 0", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 4, (ce_chg_pass or pe_chg_pass) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(ce_chg_pass or pe_chg_pass) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 5, "Intrinsic Filter", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 5, (ce_iv_pass or pe_iv_pass) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(ce_iv_pass or pe_iv_pass) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 6, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 6, overall_buy_alert ? "BUY ALERT ACTIVE" : (overall_sell_alert ? "SELL ALERT ACTIVE" : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
 alertcondition(t1_buy_alert,  title="Trigger 1 Buy Alert (Realtime BEP)",  message="TRIGGER 1 BUY ALERT: CE price closed above Realtime BEP with Call filters met on {{ticker}}!")
