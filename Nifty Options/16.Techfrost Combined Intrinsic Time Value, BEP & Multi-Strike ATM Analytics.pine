@@ -372,8 +372,15 @@ float pe_tv_rt = pe_ltp - pe_iv_rt
 // 5. Day Open Static BEP Line
 float day_open_bep = (ce_open + pe_open) / 2.0
 
-// 6. Realtime Dynamic BEP Value
-float realtime_bep = (ce_ltp + pe_ltp) / 2.0
+// 6. Realtime Dynamic BEP Values (ATM, ITM, OTM)
+float realtime_bep     = (ce_ltp + pe_ltp) / 2.0          // ATM Realtime BEP
+float itm_realtime_bep = (ce_itm_ltp + pe_itm_ltp) / 2.0  // ITM Realtime BEP
+float otm_realtime_bep = (ce_otm_ltp + pe_otm_ltp) / 2.0  // OTM Realtime BEP
+
+// --- Plot all 3 Realtime Dynamic BEP Lines ---
+plot(realtime_bep,     title="ATM Realtime BEP", color=color.new(color.white, 0),  linewidth=2)
+plot(itm_realtime_bep, title="ITM Realtime BEP", color=color.new(color.cyan, 20),   linewidth=1, style=plot.style_linebr)
+plot(otm_realtime_bep, title="OTM Realtime BEP", color=color.new(color.orange, 20), linewidth=1, style=plot.style_linebr)
 
 // --- Multi-Strike Basket Averages ---
 int total_count = numStrikesInput == 4 ? 9 : (numStrikesInput == 3 ? 7 : (numStrikesInput == 2 ? 5 : 3))
@@ -414,22 +421,31 @@ bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_
 bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_iv_pass
 
-// --- Mutually Exclusive Breakout Crossovers ---
-bool ce_cross_rt   = ta.crossover(ce_ltp, realtime_bep)
-bool pe_cross_rt   = ta.crossover(pe_ltp, realtime_bep)
+// --- Mutually Exclusive Breakout Crossovers Across All 3 Realtime BEP Lines ---
+bool ce_cross_rt   = ta.crossover(ce_ltp, realtime_bep) or ta.crossover(ce_ltp, itm_realtime_bep) or ta.crossover(ce_ltp, otm_realtime_bep)
+bool pe_cross_rt   = ta.crossover(pe_ltp, realtime_bep) or ta.crossover(pe_ltp, itm_realtime_bep) or ta.crossover(pe_ltp, otm_realtime_bep)
 
 bool ce_cross_stat = ta.crossover(ce_ltp, day_open_bep)
 bool pe_cross_stat = ta.crossover(pe_ltp, day_open_bep)
 
-// --- Mutually Exclusive Touch & Rejection Breakouts ---
-bool ce_touch_rej_rt   = (ce_low <= realtime_bep or ce_high >= realtime_bep) and (ce_ltp < realtime_bep)
-bool pe_touch_rej_rt   = (pe_low <= realtime_bep or pe_high >= realtime_bep) and (pe_ltp < realtime_bep)
+// --- Mutually Exclusive Touch & Rejection Breakouts Across All 3 Realtime BEP Lines ---
+bool ce_touch_atm = (ce_low <= realtime_bep or ce_high >= realtime_bep) and (ce_ltp < realtime_bep)
+bool ce_touch_itm = (ce_low <= itm_realtime_bep or ce_high >= itm_realtime_bep) and (ce_ltp < itm_realtime_bep)
+bool ce_touch_otm = (ce_low <= otm_realtime_bep or ce_high >= otm_realtime_bep) and (ce_ltp < otm_realtime_bep)
+
+bool ce_touch_rej_rt = ce_touch_atm or ce_touch_itm or ce_touch_otm
+
+bool pe_touch_atm = (pe_low <= realtime_bep or pe_high >= realtime_bep) and (pe_ltp < realtime_bep)
+bool pe_touch_itm = (pe_low <= itm_realtime_bep or pe_high >= itm_realtime_bep) and (pe_ltp < itm_realtime_bep)
+bool pe_touch_otm = (pe_low <= otm_realtime_bep or pe_high >= otm_realtime_bep) and (pe_ltp < otm_realtime_bep)
+
+bool pe_touch_rej_rt = pe_touch_atm or pe_touch_itm or pe_touch_otm
 
 bool ce_touch_rej_stat = (ce_low <= day_open_bep or ce_high >= day_open_bep) and (ce_ltp < day_open_bep)
 bool pe_touch_rej_stat = (pe_low <= day_open_bep or pe_high >= day_open_bep) and (pe_ltp < day_open_bep)
 
-bool ce_break_prev_rt   = ce_touch_rej_rt[1] and (ce_ltp > ce_high[1] or ce_ltp > realtime_bep)
-bool pe_break_prev_rt   = pe_touch_rej_rt[1] and (pe_ltp > pe_high[1] or pe_ltp > realtime_bep)
+bool ce_break_prev_rt   = ce_touch_rej_rt[1] and (ce_ltp > ce_high[1] or ce_ltp > realtime_bep or ce_ltp > itm_realtime_bep or ce_ltp > otm_realtime_bep)
+bool pe_break_prev_rt   = pe_touch_rej_rt[1] and (pe_ltp > pe_high[1] or pe_ltp > realtime_bep or pe_ltp > itm_realtime_bep or pe_ltp > otm_realtime_bep)
 
 bool ce_break_prev_stat = ce_touch_rej_stat[1] and (ce_ltp > ce_high[1] or ce_ltp > day_open_bep)
 bool pe_break_prev_stat = pe_touch_rej_stat[1] and (pe_ltp > pe_high[1] or pe_ltp > day_open_bep)
@@ -438,13 +454,13 @@ bool pe_break_prev_stat = pe_touch_rej_stat[1] and (pe_ltp > pe_high[1] or pe_lt
 bool ce_trig_rt = switch alert_trigger_mode
     "Bounce Back Only (Touch & Bounce Off BEP Line)" => ce_break_prev_rt
     "Crossover Only (First Bar Close Above)"         => ce_cross_rt
-    "Continuous (Any Bar Price > BEP)"              => ce_ltp > realtime_bep
+    "Continuous (Any Bar Price > BEP)"              => (ce_ltp > realtime_bep or ce_ltp > itm_realtime_bep or ce_ltp > otm_realtime_bep)
     => (ce_cross_rt or ce_break_prev_rt)
 
 bool pe_trig_rt = switch alert_trigger_mode
     "Bounce Back Only (Touch & Bounce Off BEP Line)" => pe_break_prev_rt
     "Crossover Only (First Bar Close Above)"         => pe_cross_rt
-    "Continuous (Any Bar Price > BEP)"              => pe_ltp > realtime_bep
+    "Continuous (Any Bar Price > BEP)"              => (pe_ltp > realtime_bep or pe_ltp > itm_realtime_bep or pe_ltp > otm_realtime_bep)
     => (pe_cross_rt or pe_break_prev_rt)
 
 bool ce_trig_stat = switch alert_trigger_mode
@@ -460,8 +476,11 @@ bool pe_trig_stat = switch alert_trigger_mode
     => (pe_cross_stat or pe_break_prev_stat)
 
 // --- Raw Trigger 1 & Trigger 2 Alerts ---
-bool raw_t1_buy  = ce_trig_rt and ce_filters_met and (ce_ltp >= realtime_bep)
-bool raw_t1_sell = pe_trig_rt and pe_filters_met and (pe_ltp >= realtime_bep)
+bool ce_above_any_bep = (ce_ltp >= realtime_bep or ce_ltp >= itm_realtime_bep or ce_ltp >= otm_realtime_bep)
+bool pe_above_any_bep = (pe_ltp >= realtime_bep or pe_ltp >= itm_realtime_bep or pe_ltp >= otm_realtime_bep)
+
+bool raw_t1_buy  = ce_trig_rt and ce_filters_met and ce_above_any_bep
+bool raw_t1_sell = pe_trig_rt and pe_filters_met and pe_above_any_bep
 
 bool raw_t2_buy  = ce_trig_stat and ce_filters_met and (ce_ltp >= day_open_bep)
 bool raw_t2_sell = pe_trig_stat and pe_filters_met and (pe_ltp >= day_open_bep)
