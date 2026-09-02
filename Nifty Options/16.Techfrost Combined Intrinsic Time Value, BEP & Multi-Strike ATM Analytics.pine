@@ -874,11 +874,5 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 1, 8, ce_blast_active ? "CE BLAST 🔥" : (pe_blast_active ? "PE BLAST 🔥" : (overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"))), bgcolor=ce_blast_active ? #00FF66 : (pe_blast_active ? #FF0055 : (overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black))), text_color=(ce_blast_active or overall_buy_alert) ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
-alertcondition(overall_buy_alert,  title="CE Signal Alert (All 7 BEP Levels)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
-alertcondition(overall_sell_alert, title="PE Signal Alert (All 7 BEP Levels)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
-
-alertcondition(ce_blast_active, title="CE BLAST Signal Alert 🔥", message="CE BLAST ALERT 🔥: High momentum Call alert triggered on {{ticker}}!")
-alertcondition(pe_blast_active, title="PE BLAST Signal Alert 🔥", message="PE BLAST ALERT 🔥: High momentum Put alert triggered on {{ticker}}!")
-
-alertcondition(fresh_iv_buy_signal,  title="Fresh IV CE Alert ★",  message="FRESH IV CE ALERT ★: CE signal with Fresh Intrinsic Value formation on {{ticker}}!")
-alertcondition(fresh_iv_sell_signal, title="Fresh IV PE Alert ★", message="FRESH IV PE ALERT ★: PE signal with Fresh Intrinsic Value formation on {{ticker}}!")
+alertcondition(overall_buy_alert,  title="CE Signal Alert (Call Buy)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
+alertcondition(overall_sell_alert, title="PE Signal Alert (Put Sell)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
