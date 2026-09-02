@@ -575,35 +575,47 @@ f_bounce_dn(float h_val, float c_val, float bep_val) =>
 f_bounce_up(float l_val, float c_val, float bep_val) =>
     (l_val <= bep_val) and (c_val > bep_val)
 
+// Breakdown: Previous close was above or equal to BEP line (prev_c >= bep), Current close finishes below (curr_c < bep)
+f_breakdown_dn(float curr_c, float prev_c, float bep_val) =>
+    (curr_c < bep_val) and (nz(prev_c) >= bep_val)
+
+// Crossover: Previous close was below or equal to BEP line (prev_c <= bep), Current close finishes above (curr_c > bep)
+f_crossover_up(float curr_c, float prev_c, float bep_val) =>
+    (curr_c > bep_val) and (nz(prev_c) <= bep_val)
+
 // Call Buy Alert on a specific BEP line level:
-// Evaluates Call crossover, Call support bounce UP, or Put resistance rejection DOWN (both active chart candles & security pair)
+// Evaluates Call crossover UP, Call support bounce UP, Put resistance rejection DOWN, or Put breakdown DOWN
 f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
-    // Active Chart Option Candle Crossover / Bounce
-    bool chart_ce_cross     = (chart_ce_close > bep_val) and (nz(chart_ce_close[1]) <= bep_val)
+    // Active Chart Option Candle Triggers
+    bool chart_ce_cross     = f_crossover_up(chart_ce_close, chart_ce_close[1], bep_val)
     bool chart_ce_bounce_up = f_bounce_up(chart_ce_low, chart_ce_close, bep_val)
     bool chart_pe_bounce_dn = f_bounce_dn(chart_pe_high, chart_pe_close, bep_val)
+    bool chart_pe_breakdown = f_breakdown_dn(chart_pe_close, chart_pe_close[1], bep_val)
 
-    // Level-specific Security Option Candle Crossover / Bounce
-    bool sec_ce_cross       = not na(c_c) and (c_c > bep_val) and (nz(c_c[1]) <= bep_val)
+    // Level-specific Security Option Candle Triggers
+    bool sec_ce_cross       = not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val)
     bool sec_ce_bounce_up   = not na(c_l) and not na(c_c) and f_bounce_up(c_l, c_c, bep_val)
     bool sec_pe_bounce_dn   = not na(p_h) and not na(p_c) and f_bounce_dn(p_h, p_c, bep_val)
+    bool sec_pe_breakdown   = not na(p_c) and f_breakdown_dn(p_c, p_c[1], bep_val)
 
-    chart_ce_cross or chart_ce_bounce_up or chart_pe_bounce_dn or sec_ce_cross or sec_ce_bounce_up or sec_pe_bounce_dn
+    chart_ce_cross or chart_ce_bounce_up or chart_pe_bounce_dn or chart_pe_breakdown or sec_ce_cross or sec_ce_bounce_up or sec_pe_bounce_dn or sec_pe_breakdown
 
 // Put Sell Alert on a specific BEP line level:
-// Evaluates Put crossover, Put support bounce UP, or Call resistance rejection DOWN (both active chart candles & security pair)
+// Evaluates Put crossover UP, Put support bounce UP, Call resistance rejection DOWN, or Call breakdown DOWN
 f_eval_pe_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
-    // Active Chart Option Candle Crossover / Bounce
-    bool chart_pe_cross     = (chart_pe_close > bep_val) and (nz(chart_pe_close[1]) <= bep_val)
+    // Active Chart Option Candle Triggers
+    bool chart_pe_cross     = f_crossover_up(chart_pe_close, chart_pe_close[1], bep_val)
     bool chart_pe_bounce_up = f_bounce_up(chart_pe_low, chart_pe_close, bep_val)
     bool chart_ce_bounce_dn = f_bounce_dn(chart_ce_high, chart_ce_close, bep_val)
+    bool chart_ce_breakdown = f_breakdown_dn(chart_ce_close, chart_ce_close[1], bep_val)
 
-    // Level-specific Security Option Candle Crossover / Bounce
-    bool sec_pe_cross       = not na(p_c) and (p_c > bep_val) and (nz(p_c[1]) <= bep_val)
+    // Level-specific Security Option Candle Triggers
+    bool sec_pe_cross       = not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val)
     bool sec_pe_bounce_up   = not na(p_l) and not na(p_c) and f_bounce_up(p_l, p_c, bep_val)
     bool sec_ce_bounce_dn   = not na(c_h) and not na(c_c) and f_bounce_dn(c_h, c_c, bep_val)
+    bool sec_ce_breakdown   = not na(c_c) and f_breakdown_dn(c_c, c_c[1], bep_val)
 
-    chart_pe_cross or chart_pe_bounce_up or chart_ce_bounce_dn or sec_pe_cross or sec_pe_bounce_up or sec_ce_bounce_dn
+    chart_pe_cross or chart_pe_bounce_up or chart_ce_bounce_dn or chart_ce_breakdown or sec_pe_cross or sec_pe_bounce_up or sec_ce_bounce_dn or sec_ce_breakdown
 
 // Evaluate Triggers Across All 14 BEP Lines with Exact Matching Option Strike Pairs
 bool ce_trig_m3_rt   = f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
