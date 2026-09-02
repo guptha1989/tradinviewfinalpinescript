@@ -1,5 +1,5 @@
 //@version=6
-indicator("16. Techfrost Combined Intrinsic Time Value, BEP & Multi-Strike ATM Analytics", shorttitle="16.Techfrost Alert Engine", overlay=true, precision=2)
+indicator("16.Techfrost Alert Engine", shorttitle="16.Techfrost Alert Engine", overlay=true, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -436,7 +436,22 @@ bool pe_cross_stat    = ta.crossover(pe_ltp, day_open_bep)
 
 bool pe_cross_rt      = pe_cross_atm_val or pe_cross_itm_val or pe_cross_otm_val
 
-// --- Mutually Exclusive Touch & Rejection Breakouts Across All 3 Realtime BEP Lines ---
+// --- Cross-Under Calls (Opposite Candle Dropping Below BEP Line) ---
+bool ce_cross_under_atm = ta.crossunder(ce_ltp, realtime_bep)
+bool ce_cross_under_itm = ta.crossunder(ce_ltp, itm_realtime_bep)
+bool ce_cross_under_otm = ta.crossunder(ce_ltp, otm_realtime_bep)
+bool ce_cross_under_stat= ta.crossunder(ce_ltp, day_open_bep)
+
+bool ce_cross_under_rt  = ce_cross_under_atm or ce_cross_under_itm or ce_cross_under_otm
+
+bool pe_cross_under_atm = ta.crossunder(pe_ltp, realtime_bep)
+bool pe_cross_under_itm = ta.crossunder(pe_ltp, itm_realtime_bep)
+bool pe_cross_under_otm = ta.crossunder(pe_ltp, otm_realtime_bep)
+bool pe_cross_under_stat= ta.crossunder(pe_ltp, day_open_bep)
+
+bool pe_cross_under_rt  = pe_cross_under_atm or pe_cross_under_itm or pe_cross_under_otm
+
+// --- Touch & Rejection Breakouts Across All 3 Realtime BEP Lines ---
 bool ce_touch_atm = (ce_low <= realtime_bep or ce_high >= realtime_bep) and (ce_ltp < realtime_bep)
 bool ce_touch_itm = (ce_low <= itm_realtime_bep or ce_high >= itm_realtime_bep) and (ce_ltp < itm_realtime_bep)
 bool ce_touch_otm = (ce_low <= otm_realtime_bep or ce_high >= otm_realtime_bep) and (ce_ltp < otm_realtime_bep)
@@ -458,40 +473,46 @@ bool pe_break_prev_rt   = pe_touch_rej_rt[1] and (pe_ltp > pe_high[1] or pe_ltp 
 bool ce_break_prev_stat = ce_touch_rej_stat[1] and (ce_ltp > ce_high[1] or ce_ltp > day_open_bep)
 bool pe_break_prev_stat = pe_touch_rej_stat[1] and (pe_ltp > pe_high[1] or pe_ltp > day_open_bep)
 
-// --- Raw Trigger Mode Resolution ---
-bool ce_trig_rt = switch alert_trigger_mode
-    "Bounce Back Only (Touch & Bounce Off BEP Line)" => ce_break_prev_rt
-    "Crossover Only (First Bar Close Above)"         => ce_cross_rt
-    "Continuous (Any Bar Price > BEP)"              => (ce_ltp > realtime_bep or ce_ltp > itm_realtime_bep or ce_ltp > otm_realtime_bep)
-    => (ce_cross_rt or ce_break_prev_rt)
+// --- Opposite Candle Downside Bounce / Rejection ---
+bool ce_bounce_dn_rt   = ce_touch_rej_rt[1] and (ce_ltp < ce_low[1] or ce_ltp < realtime_bep)
+bool pe_bounce_dn_rt   = pe_touch_rej_rt[1] and (pe_ltp < pe_low[1] or pe_ltp < realtime_bep)
 
+bool ce_bounce_dn_stat = ce_touch_rej_stat[1] and (ce_ltp < ce_low[1] or ce_ltp < day_open_bep)
+bool pe_bounce_dn_stat = pe_touch_rej_stat[1] and (pe_ltp < pe_low[1] or pe_ltp < day_open_bep)
+
+// --- Raw Trigger Mode Resolution ---
+// BUY Alert Triggers: Direct Call Breakout/Bounce OR Opposite Put Cross-Under/Downside Bounce
+bool ce_trig_rt = switch alert_trigger_mode
+    "Bounce Back Only (Touch & Bounce Off BEP Line)" => (ce_break_prev_rt or pe_bounce_dn_rt)
+    "Crossover Only (First Bar Close Above)"         => (ce_cross_rt or pe_cross_under_rt)
+    "Continuous (Any Bar Price > BEP)"              => (ce_ltp > realtime_bep or ce_ltp > itm_realtime_bep or ce_ltp > otm_realtime_bep or pe_ltp < realtime_bep)
+    => (ce_cross_rt or ce_break_prev_rt or pe_cross_under_rt or pe_bounce_dn_rt)
+
+// SELL Alert Triggers: Direct Put Breakout/Bounce OR Opposite Call Cross-Under/Downside Bounce
 bool pe_trig_rt = switch alert_trigger_mode
-    "Bounce Back Only (Touch & Bounce Off BEP Line)" => pe_break_prev_rt
-    "Crossover Only (First Bar Close Above)"         => pe_cross_rt
-    "Continuous (Any Bar Price > BEP)"              => (pe_ltp > realtime_bep or pe_ltp > itm_realtime_bep or pe_ltp > otm_realtime_bep)
-    => (pe_cross_rt or pe_break_prev_rt)
+    "Bounce Back Only (Touch & Bounce Off BEP Line)" => (pe_break_prev_rt or ce_bounce_dn_rt)
+    "Crossover Only (First Bar Close Above)"         => (pe_cross_rt or ce_cross_under_rt)
+    "Continuous (Any Bar Price > BEP)"              => (pe_ltp > realtime_bep or pe_ltp > itm_realtime_bep or pe_ltp > otm_realtime_bep or ce_ltp < realtime_bep)
+    => (pe_cross_rt or pe_break_prev_rt or ce_cross_under_rt or ce_bounce_dn_rt)
 
 bool ce_trig_stat = switch alert_trigger_mode
-    "Bounce Back Only (Touch & Bounce Off BEP Line)" => ce_break_prev_stat
-    "Crossover Only (First Bar Close Above)"         => ce_cross_stat
-    "Continuous (Any Bar Price > BEP)"              => ce_ltp > day_open_bep
-    => (ce_cross_stat or ce_break_prev_stat)
+    "Bounce Back Only (Touch & Bounce Off BEP Line)" => (ce_break_prev_stat or pe_bounce_dn_stat)
+    "Crossover Only (First Bar Close Above)"         => (ce_cross_stat or pe_cross_under_stat)
+    "Continuous (Any Bar Price > BEP)"              => (ce_ltp > day_open_bep or pe_ltp < day_open_bep)
+    => (ce_cross_stat or ce_break_prev_stat or pe_cross_under_stat or pe_bounce_dn_stat)
 
 bool pe_trig_stat = switch alert_trigger_mode
-    "Bounce Back Only (Touch & Bounce Off BEP Line)" => pe_break_prev_stat
-    "Crossover Only (First Bar Close Above)"         => pe_cross_stat
-    "Continuous (Any Bar Price > BEP)"              => pe_ltp > day_open_bep
-    => (pe_cross_stat or pe_break_prev_stat)
+    "Bounce Back Only (Touch & Bounce Off BEP Line)" => (pe_break_prev_stat or ce_bounce_dn_stat)
+    "Crossover Only (First Bar Close Above)"         => (pe_cross_stat or ce_cross_under_stat)
+    "Continuous (Any Bar Price > BEP)"              => (pe_ltp > day_open_bep or ce_ltp < day_open_bep)
+    => (pe_cross_stat or pe_break_prev_stat or ce_cross_under_stat or ce_bounce_dn_stat)
 
 // --- Raw Trigger 1 & Trigger 2 Alerts ---
-bool ce_above_any_bep = (ce_ltp >= realtime_bep or ce_ltp >= itm_realtime_bep or ce_ltp >= otm_realtime_bep)
-bool pe_above_any_bep = (pe_ltp >= realtime_bep or pe_ltp >= itm_realtime_bep or pe_ltp >= otm_realtime_bep)
+bool raw_t1_buy  = ce_trig_rt and ce_filters_met
+bool raw_t1_sell = pe_trig_rt and pe_filters_met
 
-bool raw_t1_buy  = ce_trig_rt and ce_filters_met and ce_above_any_bep
-bool raw_t1_sell = pe_trig_rt and pe_filters_met and pe_above_any_bep
-
-bool raw_t2_buy  = ce_trig_stat and ce_filters_met and (ce_ltp >= day_open_bep)
-bool raw_t2_sell = pe_trig_stat and pe_filters_met and (pe_ltp >= day_open_bep)
+bool raw_t2_buy  = ce_trig_stat and ce_filters_met
+bool raw_t2_sell = pe_trig_stat and pe_filters_met
 
 bool raw_buy_alert  = (raw_t1_buy or raw_t2_buy) and not (raw_t1_sell or raw_t2_sell)
 bool raw_sell_alert = (raw_t1_sell or raw_t2_sell) and not (raw_t1_buy or raw_t2_buy)
