@@ -285,26 +285,20 @@ f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, f
 float ce_strike = chartStrikePrice
 float pe_strike = chartStrikePrice
 
-float itm_ce_strike = chartStrikePrice - offsetPts
-float itm_pe_strike = chartStrikePrice + offsetPts
-
-float otm_ce_strike = chartStrikePrice + offsetPts
-float otm_pe_strike = chartStrikePrice - offsetPts
-
 string ce_ticker = f_build_ce_ticker(ce_strike)
 string pe_ticker = f_build_pe_ticker(pe_strike)
 
 // Multi-Strike Basket Tickers (7 Levels: -3, -2, -1, 0, +1, +2, +3)
 float k_0  = baseStrike
-float k_p1 = baseStrike + 1.0 * stepVal
-float k_p2 = baseStrike + 2.0 * stepVal
-float k_p3 = baseStrike + 3.0 * stepVal
-float k_p4 = baseStrike + 4.0 * stepVal
+float k_p1 = baseStrike + 1.0 * offsetPts
+float k_p2 = baseStrike + 2.0 * offsetPts
+float k_p3 = baseStrike + 3.0 * offsetPts
+float k_p4 = baseStrike + 4.0 * offsetPts
 
-float k_m1 = baseStrike - 1.0 * stepVal
-float k_m2 = baseStrike - 2.0 * stepVal
-float k_m3 = baseStrike - 3.0 * stepVal
-float k_m4 = baseStrike - 4.0 * stepVal
+float k_m1 = baseStrike - 1.0 * offsetPts
+float k_m2 = baseStrike - 2.0 * offsetPts
+float k_m3 = baseStrike - 3.0 * offsetPts
+float k_m4 = baseStrike - 4.0 * offsetPts
 
 // ==========================================
 // DATA FETCHING (SECURITY CALLS)
@@ -405,27 +399,34 @@ float pe_iv_rt = math.max(0.0, pe_strike - spot_ltp)
 bool ce_fresh_iv = (ce_iv_rt > 0) and (nz(ce_iv_rt[1]) == 0)
 bool pe_fresh_iv = (pe_iv_rt > 0) and (nz(pe_iv_rt[1]) == 0)
 
-// --- 7 Levels of Realtime & Static BEP Lines (14 Lines Total) ---
-float bep_rt_m3   = (ce_c_m3 + pe_c_m3) / 2.0
-float bep_stat_m3 = (ce_o_m3 + pe_o_m3) / 2.0
+// --- 7 Levels of Realtime & Static BEP Lines (Exact Options Synthetic Straddle Pairing) ---
+// ITM 3 BEP (CE ITM 3 + PE OTM 3)
+float bep_rt_m3   = (ce_c_m3 + pe_c_p3) / 2.0
+float bep_stat_m3 = (ce_o_m3 + pe_o_p3) / 2.0
 
-float bep_rt_m2   = (ce_c_m2 + pe_c_m2) / 2.0
-float bep_stat_m2 = (ce_o_m2 + pe_o_m2) / 2.0
+// ITM 2 BEP (CE ITM 2 + PE OTM 2)
+float bep_rt_m2   = (ce_c_m2 + pe_c_p2) / 2.0
+float bep_stat_m2 = (ce_o_m2 + pe_o_p2) / 2.0
 
-float bep_rt_m1   = (ce_c_m1 + pe_c_m1) / 2.0
-float bep_stat_m1 = (ce_o_m1 + pe_o_m1) / 2.0
+// ITM 1 BEP (CE ITM 1 + PE OTM 1)
+float bep_rt_m1   = (ce_c_m1 + pe_c_p1) / 2.0
+float bep_stat_m1 = (ce_o_m1 + pe_o_p1) / 2.0
 
+// ATM BEP (CE ATM + PE ATM)
 float bep_rt_0    = (ce_c_0 + pe_c_0) / 2.0
 float bep_stat_0  = (ce_o_0 + pe_o_0) / 2.0
 
-float bep_rt_p1   = (ce_c_p1 + pe_c_p1) / 2.0
-float bep_stat_p1 = (ce_o_p1 + pe_o_p1) / 2.0
+// OTM 1 BEP (CE OTM 1 + PE ITM 1)
+float bep_rt_p1   = (ce_c_p1 + pe_c_m1) / 2.0
+float bep_stat_p1 = (ce_o_p1 + pe_o_m1) / 2.0
 
-float bep_rt_p2   = (ce_c_p2 + pe_c_p2) / 2.0
-float bep_stat_p2 = (ce_o_p2 + pe_o_p2) / 2.0
+// OTM 2 BEP (CE OTM 2 + PE ITM 2)
+float bep_rt_p2   = (ce_c_p2 + pe_c_m2) / 2.0
+float bep_stat_p2 = (ce_o_p2 + pe_o_m2) / 2.0
 
-float bep_rt_p3   = (ce_c_p3 + pe_c_p3) / 2.0
-float bep_stat_p3 = (ce_o_p3 + pe_o_p3) / 2.0
+// OTM 3 BEP (CE OTM 3 + PE ITM 3)
+float bep_rt_p3   = (ce_c_p3 + pe_c_m3) / 2.0
+float bep_stat_p3 = (ce_o_p3 + pe_o_m3) / 2.0
 
 // --- Plot Reference Lines ---
 plot(show_prev_close ? ce_prev_close : na, title="CE Prev Day Close", color=color.new(#00E676, 30), linewidth=1, style=plot.style_linebr)
