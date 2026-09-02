@@ -455,12 +455,12 @@ bool fresh_iv_sell_signal = overall_sell_alert and pe_fresh_iv
 show_signal_shapes = input.bool(true, "Show Buy / Sell Signal Markers", group="Visual Signals")
 
 // Regular Signals
-plotshape(show_signal_shapes and overall_buy_alert and not ce_fresh_iv, title="Buy Signal Marker", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BUY")
-plotshape(show_signal_shapes and overall_sell_alert and not pe_fresh_iv, title="Sell Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="SELL")
+plotshape(show_signal_shapes and overall_buy_alert and not ce_fresh_iv, title="CE Signal Marker", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="CE")
+plotshape(show_signal_shapes and overall_sell_alert and not pe_fresh_iv, title="PE Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="PE")
 
 // Special Fresh Intrinsic Value Signal Markers (Gold Star Markers)
-plotshape(show_signal_shapes and fresh_iv_buy_signal, title="Fresh IV Buy Signal Marker", style=shape.labelup, location=location.belowbar, color=#FFD700, textcolor=color.white, size=size.normal, text="FRESH IV BUY ★")
-plotshape(show_signal_shapes and fresh_iv_sell_signal, title="Fresh IV Sell Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FFD700, textcolor=color.black, size=size.normal, text="FRESH IV SELL ★")
+plotshape(show_signal_shapes and fresh_iv_buy_signal, title="Fresh IV CE Signal Marker", style=shape.labelup, location=location.belowbar, color=#FFD700, textcolor=color.white, size=size.normal, text="FRESH IV CE ★")
+plotshape(show_signal_shapes and fresh_iv_sell_signal, title="Fresh IV PE Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FFD700, textcolor=color.black, size=size.normal, text="FRESH IV PE ★")
 
 // Standalone Fresh Intrinsic Value Formation Markers (even outside alerts)
 plotshape(show_signal_shapes and ce_fresh_iv and not overall_buy_alert, title="Fresh CE Intrinsic Value Marker", style=shape.diamond, location=location.belowbar, color=#FFD700, size=size.tiny, text="CE IV★")
@@ -493,13 +493,13 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 1, 3, (ce_filters_met or pe_filters_met) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(ce_filters_met or pe_filters_met) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
     table.cell(statusTable, 0, 4, "Basket Top Position Rule", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 4, (ceAvgCur > peAvgCur) ? "CE ON TOP (BUY OK)" : "PE ON TOP (SELL OK)", bgcolor=(ceAvgCur > peAvgCur) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 4, (ceAvgCur > peAvgCur) ? "CE ON TOP (CE OK)" : "PE ON TOP (PE OK)", bgcolor=(ceAvgCur > peAvgCur) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
     table.cell(statusTable, 0, 5, "Fresh Intrinsic Value Formation", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 5, (ce_fresh_iv or pe_fresh_iv) ? "FRESH IV ACTIVE ★" : "NONE", bgcolor=(ce_fresh_iv or pe_fresh_iv) ? #FFD700 : #212121, text_color=(ce_fresh_iv or pe_fresh_iv) ? color.black : color.white, text_size=size.small)
 
     table.cell(statusTable, 0, 6, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 6, overall_buy_alert ? (ce_fresh_iv ? "FRESH IV BUY ★" : "BUY ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV SELL ★" : "SELL ALERT ACTIVE") : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 1, 6, overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
 alertcondition(t1_buy,  title="Trigger 1 Buy Alert (Realtime ATM BEP)",  message="TRIGGER 1 BUY ALERT: CE close above or PE bounce below Realtime ATM BEP on {{ticker}}!")
