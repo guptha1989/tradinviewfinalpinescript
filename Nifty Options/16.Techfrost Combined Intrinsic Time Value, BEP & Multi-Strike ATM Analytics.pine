@@ -53,6 +53,7 @@ numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Baske
 show_prev_close   = input.bool(true, "Show Previous Day Close (CE & PE)", group="Reference Line Plots")
 show_ce_prev_hl   = input.bool(true, "Show CE Previous Day High & Low", group="Reference Line Plots")
 show_pe_prev_hl   = input.bool(true, "Show PE Previous Day High & Low", group="Reference Line Plots")
+show_vwap         = input.bool(true, "Show VWAP Lines (Chart Option & Opposite Option)", group="Reference Line Plots")
 
 // --- Momentum Blast Filters (RSI & ADX) ---
 rsi_len  = input.int(14, "RSI Period Length", group="Momentum Blast Filters (RSI & ADX)")
@@ -80,6 +81,9 @@ col_otm2_stat = input.color(color.new(color.teal, 40), "OTM2 Static BEP (L+2)", 
 
 col_otm3_rt   = input.color(color.lime, "OTM3 Realtime BEP (L+3)", group="BEP Line Formatting")
 col_otm3_stat = input.color(color.new(color.lime, 40), "OTM3 Static BEP (L+3)", group="BEP Line Formatting")
+
+col_vwap      = input.color(color.new(#E91E63, 0), "Chart Option VWAP Color", group="BEP Line Formatting")
+col_opp_vwap  = input.color(color.new(#9C27B0, 0), "Opposite Option VWAP Color", group="BEP Line Formatting")
 
 width_atm     = input.int(2, "ATM BEP Lines Width", minval=1, maxval=4, group="BEP Line Formatting")
 width_others  = input.int(1, "ITM/OTM BEP Lines Width", minval=1, maxval=4, group="BEP Line Formatting")
@@ -301,7 +305,7 @@ float k_m3 = baseStrike - 3.0 * offsetPts
 float k_m4 = baseStrike - 4.0 * offsetPts
 
 // ==========================================
-// DATA FETCHING (SECURITY CALLS)
+// DATA FETCHING & OPPOSITE CANDLES OVERLAY
 // ==========================================
 
 f_get_strike_open_and_ltp() =>
@@ -314,6 +318,23 @@ f_get_strike_ohlc() =>
 
 f_get_strike_prev_day() =>
     [close[1], high[1], low[1]]
+
+// Fetch Opposite Option Ticker & Candle Data for Overlay
+string opp_ticker = f_build_option_symbol(chartStrikePrice, not isCall)
+[opp_o, opp_h, opp_l, opp_c] = request.security(syminfo.prefix + ":" + opp_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+// Plot Opposite Option Candles Overlay
+show_opp_candles = input.bool(true, "Show Opposite Option Candles Overlay", group="Visual Signals")
+
+bool opp_is_bull   = nz(opp_c) >= nz(opp_o)
+color opp_body_col = opp_is_bull ? color.new(#2962FF, 40) : color.new(#FF6D00, 40)
+color opp_wick_col = opp_is_bull ? color.new(#2962FF, 60) : color.new(#FF6D00, 60)
+
+plotcandle(show_opp_candles ? opp_o : na,
+           show_opp_candles ? opp_h : na,
+           show_opp_candles ? opp_l : na,
+           show_opp_candles ? opp_c : na,
+           title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
 
 // Fetch ATM Option OHLC & Previous Day Data
 [ce_open_sec, ce_high_sec, ce_low_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
@@ -377,7 +398,7 @@ float spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_in
 spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 
 // ==========================================
-// CORE CALCULATIONS
+// CORE CALCULATIONS & VWAP
 // ==========================================
 
 // RSI & ADX Momentum Calculations
@@ -390,6 +411,10 @@ bool adx_up_slant = (adx_val > 20.0) and (adx_val > adx_val[1])
 // RSI Blast threshold conditions
 bool ce_rsi_blast_cond = (rsi_val > 60.0)
 bool pe_rsi_blast_cond = (rsi_val < 40.0)
+
+// VWAP Calculations (Chart Option & Opposite Option)
+float chart_vwap = ta.vwap(hlc3)
+float opp_vwap   = request.security(syminfo.prefix + ":" + opp_ticker, timeframe.period, ta.vwap(hlc3), ignore_invalid_symbol=true)
 
 // Selected chart's Realtime Intrinsic Value (CE and PE)
 float ce_iv_rt = math.max(0.0, spot_ltp - ce_strike)
@@ -428,7 +453,7 @@ float bep_stat_p2 = (ce_o_p2 + pe_o_m2) / 2.0
 float bep_rt_p3   = (ce_c_p3 + pe_c_m3) / 2.0
 float bep_stat_p3 = (ce_o_p3 + pe_o_m3) / 2.0
 
-// --- Plot Reference Lines ---
+// --- Plot Reference Lines & VWAP ---
 plot(show_prev_close ? ce_prev_close : na, title="CE Prev Day Close", color=color.new(#00E676, 30), linewidth=1, style=plot.style_linebr)
 plot(show_prev_close ? pe_prev_close : na, title="PE Prev Day Close", color=color.new(#FF1744, 30), linewidth=1, style=plot.style_linebr)
 
@@ -437,6 +462,9 @@ plot(show_ce_prev_hl ? ce_prev_low  : na, title="CE Prev Day Low",  color=color.
 
 plot(show_pe_prev_hl ? pe_prev_high : na, title="PE Prev Day High", color=color.new(#FF1744, 50), linewidth=1, style=plot.style_linebr)
 plot(show_pe_prev_hl ? pe_prev_low  : na, title="PE Prev Day Low",  color=color.new(#FF1744, 50), linewidth=1, style=plot.style_linebr)
+
+plot(show_vwap ? chart_vwap : na, title="Chart Option VWAP", color=col_vwap, linewidth=2)
+plot(show_vwap ? opp_vwap   : na, title="Opposite Option VWAP", color=col_opp_vwap, linewidth=2)
 
 // --- Plot 7 Levels of BEP Lines with Custom User Colors & Formatting ---
 plot(bep_rt_0,    title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
