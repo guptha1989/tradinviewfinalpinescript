@@ -332,6 +332,13 @@ plotcandle(show_opp_candles ? opp_o : na,
            show_opp_candles ? opp_c : na,
            title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
 
+// Explicit Call and Put Chart Candle Values
+float chart_ce_close = isCall ? close : opp_c
+float chart_ce_high  = isCall ? high  : opp_h
+
+float chart_pe_close = isCall ? opp_c : close
+float chart_pe_high  = isCall ? opp_h : high
+
 // Fetch ATM Option OHLC & Previous Day Data
 [ce_open_sec, ce_high_sec, ce_low_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_open_sec, pe_high_sec, pe_low_sec, pe_ltp_sec] = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
@@ -536,21 +543,21 @@ bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_
 bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
 
-// --- Universal BEP Line Trigger Helper (Crossover & Downside Bounce) ---
+// --- Universal BEP Line Trigger Helper (Dual-Directional Crossover & Downside Bounce) ---
 // For a CE (Call Buy) Alert on BEP line:
-// 1) Call price closes above BEP line (Crossover)
-// 2) OR Put price touched/crossed above BEP line but closed below (Downside Bounce rejection on Put)
+// 1) Call price (whether main chart candle or opposite overlay candle) closes above BEP line
+// 2) OR Put price (whether opposite overlay candle or main chart candle) touched/crossed above BEP line but closed below (Downside Bounce rejection on Put)
 f_check_ce_bep_trig(float bep_val) =>
-    bool ce_cross  = ta.crossover(close, bep_val) or (close > bep_val and nz(close[1]) <= bep_val) or ta.crossover(ce_ltp, bep_val) or (ce_ltp > bep_val and nz(ce_ltp[1]) <= bep_val)
-    bool pe_bounce = (opp_h >= bep_val and opp_c < bep_val) or (pe_high >= bep_val and pe_ltp < bep_val) or (pe_h_p3 >= bep_val and pe_c_p3 < bep_val) or (pe_h_p2 >= bep_val and pe_c_p2 < bep_val) or (pe_h_p1 >= bep_val and pe_c_p1 < bep_val) or (pe_h_0 >= bep_val and pe_c_0 < bep_val) or (pe_h_m1 >= bep_val and pe_c_m1 < bep_val) or (pe_h_m2 >= bep_val and pe_c_m2 < bep_val) or (pe_h_m3 >= bep_val and pe_c_m3 < bep_val)
+    bool ce_cross  = ta.crossover(chart_ce_close, bep_val) or (chart_ce_close > bep_val and nz(chart_ce_close[1]) <= bep_val) or ta.crossover(ce_ltp, bep_val) or (ce_ltp > bep_val and nz(ce_ltp[1]) <= bep_val)
+    bool pe_bounce = (chart_pe_high >= bep_val and chart_pe_close < bep_val) or (pe_high >= bep_val and pe_ltp < bep_val) or (pe_h_p3 >= bep_val and pe_c_p3 < bep_val) or (pe_h_p2 >= bep_val and pe_c_p2 < bep_val) or (pe_h_p1 >= bep_val and pe_c_p1 < bep_val) or (pe_h_0 >= bep_val and pe_c_0 < bep_val) or (pe_h_m1 >= bep_val and pe_c_m1 < bep_val) or (pe_h_m2 >= bep_val and pe_c_m2 < bep_val) or (pe_h_m3 >= bep_val and pe_c_m3 < bep_val)
     ce_cross or pe_bounce
 
 // For a PE (Put Sell) Alert on BEP line:
-// 1) Put price closes above BEP line (Crossover)
-// 2) OR Call price touched/crossed above BEP line but closed below (Downside Bounce rejection on Call)
+// 1) Put price (whether main chart candle or opposite overlay candle) closes above BEP line
+// 2) OR Call price (whether opposite overlay candle or main chart candle) touched/crossed above BEP line but closed below (Downside Bounce rejection on Call)
 f_check_pe_bep_trig(float bep_val) =>
-    bool pe_cross  = ta.crossover(opp_c, bep_val) or (opp_c > bep_val and nz(opp_c[1]) <= bep_val) or ta.crossover(pe_ltp, bep_val) or (pe_ltp > bep_val and nz(pe_ltp[1]) <= bep_val)
-    bool ce_bounce = (high >= bep_val and close < bep_val) or (ce_high >= bep_val and ce_ltp < bep_val) or (ce_h_m3 >= bep_val and ce_c_m3 < bep_val) or (ce_h_m2 >= bep_val and ce_c_m2 < bep_val) or (ce_h_m1 >= bep_val and ce_c_m1 < bep_val) or (ce_h_0 >= bep_val and ce_c_0 < bep_val) or (ce_h_p1 >= bep_val and ce_c_p1 < bep_val) or (ce_h_p2 >= bep_val and ce_c_p2 < bep_val) or (ce_h_p3 >= bep_val and ce_c_p3 < bep_val)
+    bool pe_cross  = ta.crossover(chart_pe_close, bep_val) or (chart_pe_close > bep_val and nz(chart_pe_close[1]) <= bep_val) or ta.crossover(pe_ltp, bep_val) or (pe_ltp > bep_val and nz(pe_ltp[1]) <= bep_val)
+    bool ce_bounce = (chart_ce_high >= bep_val and chart_ce_close < bep_val) or (ce_high >= bep_val and ce_ltp < bep_val) or (ce_h_m3 >= bep_val and ce_c_m3 < bep_val) or (ce_h_m2 >= bep_val and ce_c_m2 < bep_val) or (ce_h_m1 >= bep_val and ce_c_m1 < bep_val) or (ce_h_0 >= bep_val and ce_c_0 < bep_val) or (ce_h_p1 >= bep_val and ce_c_p1 < bep_val) or (ce_h_p2 >= bep_val and ce_c_p2 < bep_val) or (ce_h_p3 >= bep_val and ce_c_p3 < bep_val)
     pe_cross or ce_bounce
 
 // Evaluate Triggers Across All 14 BEP Lines (7 Realtime & 7 Static)
