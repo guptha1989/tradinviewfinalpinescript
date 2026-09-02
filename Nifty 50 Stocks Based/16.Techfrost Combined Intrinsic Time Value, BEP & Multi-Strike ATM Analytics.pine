@@ -521,7 +521,7 @@ float day_pe_c   = dayOpenATMStrike == k_p3 ? pe_c_p3   : (dayOpenATMStrike == k
 float cur_ce_opn = curATMStrike == k_p3 ? ce_opn_p3 : (curATMStrike == k_p2 ? ce_opn_p2 : (curATMStrike == k_p1 ? ce_opn_p1 : (curATMStrike == k_0 ? ce_opn_0 : (curATMStrike == k_m1 ? ce_opn_m1 : (curATMStrike == k_m2 ? ce_opn_m2 : ce_opn_m3)))))
 float cur_ce_h   = curATMStrike == k_p3 ? ce_h_p3   : (curATMStrike == k_p2 ? ce_h_p2   : (curATMStrike == k_p1 ? ce_h_p1   : (curATMStrike == k_0 ? ce_h_0   : (curATMStrike == k_m1 ? ce_h_m1   : (curATMStrike == k_m2 ? ce_h_m2   : ce_h_m3)))))
 float cur_ce_l   = curATMStrike == k_p3 ? ce_l_p3   : (curATMStrike == k_p2 ? ce_l_p2   : (curATMStrike == k_p1 ? ce_l_p1   : (curATMStrike == k_0 ? ce_l_0   : (curATMStrike == k_m1 ? ce_l_m1   : (curATMStrike == k_m2 ? ce_l_m2   : ce_l_m3)))))
-float cur_ce_c   = curATMStrike == k_p3 ? ce_c_c_p3 : (curATMStrike == k_p2 ? ce_c_p2   : (curATMStrike == k_p1 ? ce_c_p1   : (curATMStrike == k_0 ? ce_c_0   : (curATMStrike == k_m1 ? ce_c_m1   : (curATMStrike == k_m2 ? ce_c_m2   : ce_c_m3)))))
+float cur_ce_c   = curATMStrike == k_p3 ? ce_c_p3   : (curATMStrike == k_p2 ? ce_c_p2   : (curATMStrike == k_p1 ? ce_c_p1   : (curATMStrike == k_0 ? ce_c_0   : (curATMStrike == k_m1 ? ce_c_m1   : (curATMStrike == k_m2 ? ce_c_m2   : ce_c_m3)))))
 
 float cur_pe_opn = curATMStrike == k_p3 ? pe_opn_p3 : (curATMStrike == k_p2 ? pe_opn_p2 : (curATMStrike == k_p1 ? pe_opn_p1 : (curATMStrike == k_0 ? pe_opn_0 : (curATMStrike == k_m1 ? pe_opn_m1 : (curATMStrike == k_m2 ? pe_opn_m2 : pe_opn_m3)))))
 float cur_pe_h   = curATMStrike == k_p3 ? pe_h_p3   : (curATMStrike == k_p2 ? pe_h_p2   : (curATMStrike == k_p1 ? pe_h_p1   : (curATMStrike == k_0 ? pe_h_0   : (curATMStrike == k_m1 ? pe_h_m1   : (curATMStrike == k_m2 ? pe_h_m2   : pe_h_m3)))))
@@ -709,7 +709,7 @@ f_bounce_up(float l_val, float c_val, float bep_val) =>
 // 3) Put Resistance Rejection: Put high touches BEP line and closes below
 f_check_ce_bep_trig(float bep_val) =>
     bool ce_cross_prim = isCall ? (close > bep_val and nz(close[1]) <= bep_val) : (opp_c > bep_val and nz(opp_c[1]) <= bep_val)
-    bool ce_cross_sec  = ta.crossover(ce_ltp, bep_val) or (ce_ltp > bep_val and nz(ce_ltp[1]) <= bep_val) or ta.crossover(chart_ce_close, bep_val)
+    bool ce_cross_sec  = (ce_ltp > bep_val and nz(ce_ltp[1]) <= bep_val) or (chart_ce_close > bep_val and nz(chart_ce_close[1]) <= bep_val)
     bool ce_cross      = ce_cross_prim or ce_cross_sec
 
     bool ce_bounce_up_prim = isCall ? f_bounce_up(low, close, bep_val) : f_bounce_up(opp_l, opp_c, bep_val)
@@ -728,7 +728,7 @@ f_check_ce_bep_trig(float bep_val) =>
 // 3) Call Resistance Rejection: Call high touches BEP line and closes below
 f_check_pe_bep_trig(float bep_val) =>
     bool pe_cross_prim = isPut ? (close > bep_val and nz(close[1]) <= bep_val) : (opp_c > bep_val and nz(opp_c[1]) <= bep_val)
-    bool pe_cross_sec  = ta.crossover(pe_ltp, bep_val) or (pe_ltp > bep_val and nz(pe_ltp[1]) <= bep_val) or ta.crossover(chart_pe_close, bep_val)
+    bool pe_cross_sec  = (pe_ltp > bep_val and nz(pe_ltp[1]) <= bep_val) or (chart_pe_close > bep_val and nz(chart_pe_close[1]) <= bep_val)
     bool pe_cross      = pe_cross_prim or pe_cross_sec
 
     bool pe_bounce_up_prim = isPut ? f_bounce_up(low, close, bep_val) : f_bounce_up(opp_l, opp_c, bep_val)
