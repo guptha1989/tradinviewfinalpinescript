@@ -301,10 +301,57 @@ f_get_strike_full_ohlc() =>
 [ce_o_m4, ce_opn_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_m4, pe_opn_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_full_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-// Realtime Spot LTP & ATM Resolution
-float spotLTP = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
+// ==========================================
+// REALTIME CURRENT ATM RESOLUTION (|CE LTP - PE LTP| MINIMIZATION)
+// ==========================================
 
-float curATMStrike = math.round((na(spotLTP) ? baseStrike : spotLTP) / stepVal) * stepVal
+// Calculate absolute |CE LTP - PE LTP| premium difference for each monitored strike
+float diff_p4 = na(ce_c_p4) or na(pe_c_p4) ? 1e10 : math.abs(ce_c_p4 - pe_c_p4)
+float diff_p3 = na(ce_c_p3) or na(pe_c_p3) ? 1e10 : math.abs(ce_c_p3 - pe_c_p3)
+float diff_p2 = na(ce_c_p2) or na(pe_c_p2) ? 1e10 : math.abs(ce_c_p2 - pe_c_p2)
+float diff_p1 = na(ce_c_p1) or na(pe_c_p1) ? 1e10 : math.abs(ce_c_p1 - pe_c_p1)
+float diff_0  = na(ce_c_0)  or na(pe_c_0)  ? 1e10 : math.abs(ce_c_0  - pe_c_0)
+float diff_m1 = na(ce_c_m1) or na(pe_c_m1) ? 1e10 : math.abs(ce_c_m1 - pe_c_m1)
+float diff_m2 = na(ce_c_m2) or na(pe_c_m2) ? 1e10 : math.abs(ce_c_m2 - pe_c_m2)
+float diff_m3 = na(ce_c_m3) or na(pe_c_m3) ? 1e10 : math.abs(ce_c_m3 - pe_c_m3)
+float diff_m4 = na(ce_c_m4) or na(pe_c_m4) ? 1e10 : math.abs(ce_c_m4 - pe_c_m4)
+
+// Select strike with minimum difference between PE and CE LTP
+float minDiff = diff_0
+float curATMStrike = k_0
+
+if activeNumStrikes >= 1
+    if diff_p1 < minDiff
+        minDiff := diff_p1
+        curATMStrike := k_p1
+    if diff_m1 < minDiff
+        minDiff := diff_m1
+        curATMStrike := k_m1
+
+if activeNumStrikes >= 2
+    if diff_p2 < minDiff
+        minDiff := diff_p2
+        curATMStrike := k_p2
+    if diff_m2 < minDiff
+        minDiff := diff_m2
+        curATMStrike := k_m2
+
+if activeNumStrikes >= 3
+    if diff_p3 < minDiff
+        minDiff := diff_p3
+        curATMStrike := k_p3
+    if diff_m3 < minDiff
+        minDiff := diff_m3
+        curATMStrike := k_m3
+
+if activeNumStrikes >= 4
+    if diff_p4 < minDiff
+        minDiff := diff_p4
+        curATMStrike := k_p4
+    if diff_m4 < minDiff
+        minDiff := diff_m4
+        curATMStrike := k_m4
+
 float dayOpenATMStrike = baseStrike
 
 // Find which strike corresponds to Current Realtime ATM
