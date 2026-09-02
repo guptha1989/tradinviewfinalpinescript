@@ -54,6 +54,31 @@ show_prev_close   = input.bool(true, "Show Previous Day Close (CE & PE)", group=
 show_ce_prev_hl   = input.bool(true, "Show CE Previous Day High & Low", group="Reference Line Plots")
 show_pe_prev_hl   = input.bool(true, "Show PE Previous Day High & Low", group="Reference Line Plots")
 
+// --- BEP Line Colors & Formatting ---
+col_atm_rt    = input.color(color.white, "ATM Realtime BEP (L0)", group="BEP Line Formatting")
+col_atm_stat  = input.color(color.yellow, "ATM Static BEP (L0)", group="BEP Line Formatting")
+
+col_itm1_rt   = input.color(color.aqua, "ITM1 Realtime BEP (L-1)", group="BEP Line Formatting")
+col_itm1_stat = input.color(color.new(color.aqua, 40), "ITM1 Static BEP (L-1)", group="BEP Line Formatting")
+
+col_itm2_rt   = input.color(color.blue, "ITM2 Realtime BEP (L-2)", group="BEP Line Formatting")
+col_itm2_stat = input.color(color.new(color.blue, 40), "ITM2 Static BEP (L-2)", group="BEP Line Formatting")
+
+col_itm3_rt   = input.color(color.purple, "ITM3 Realtime BEP (L-3)", group="BEP Line Formatting")
+col_itm3_stat = input.color(color.new(color.purple, 40), "ITM3 Static BEP (L-3)", group="BEP Line Formatting")
+
+col_otm1_rt   = input.color(color.orange, "OTM1 Realtime BEP (L+1)", group="BEP Line Formatting")
+col_otm1_stat = input.color(color.new(color.orange, 40), "OTM1 Static BEP (L+1)", group="BEP Line Formatting")
+
+col_otm2_rt   = input.color(color.teal, "OTM2 Realtime BEP (L+2)", group="BEP Line Formatting")
+col_otm2_stat = input.color(color.new(color.teal, 40), "OTM2 Static BEP (L+2)", group="BEP Line Formatting")
+
+col_otm3_rt   = input.color(color.lime, "OTM3 Realtime BEP (L+3)", group="BEP Line Formatting")
+col_otm3_stat = input.color(color.new(color.lime, 40), "OTM3 Static BEP (L+3)", group="BEP Line Formatting")
+
+width_atm     = input.int(2, "ATM BEP Lines Width", minval=1, maxval=4, group="BEP Line Formatting")
+width_others  = input.int(1, "ITM/OTM BEP Lines Width", minval=1, maxval=4, group="BEP Line Formatting")
+
 // --- Alert Engine Controls ---
 use_basket_avg_filter       = input.bool(true, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
@@ -396,27 +421,27 @@ plot(show_ce_prev_hl ? ce_prev_low  : na, title="CE Prev Day Low",  color=color.
 plot(show_pe_prev_hl ? pe_prev_high : na, title="PE Prev Day High", color=color.new(#FF1744, 50), linewidth=1, style=plot.style_linebr)
 plot(show_pe_prev_hl ? pe_prev_low  : na, title="PE Prev Day Low",  color=color.new(#FF1744, 50), linewidth=1, style=plot.style_linebr)
 
-// --- Plot 7 Levels of BEP Lines ---
-plot(bep_rt_0,    title="ATM Realtime BEP (L0)", color=color.new(color.white, 0),  linewidth=2)
-plot(bep_stat_0,  title="ATM Static BEP (L0)",   color=color.new(color.yellow, 0), linewidth=2)
+// --- Plot 7 Levels of BEP Lines with Custom User Colors & Formatting ---
+plot(bep_rt_0,    title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
+plot(bep_stat_0,  title="ATM Static BEP (L0)",   color=col_atm_stat, linewidth=width_atm)
 
-plot(bep_rt_m1,   title="ITM1 Realtime BEP (L-1)", color=color.new(color.aqua, 0),    linewidth=1, style=plot.style_linebr)
-plot(bep_stat_m1, title="ITM1 Static BEP (L-1)",   color=color.new(color.aqua, 40),   linewidth=1, style=plot.style_linebr)
+plot(bep_rt_m1,   title="ITM1 Realtime BEP (L-1)", color=col_itm1_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(bep_stat_m1, title="ITM1 Static BEP (L-1)",   color=col_itm1_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_m2,   title="ITM2 Realtime BEP (L-2)", color=color.new(color.blue, 0),    linewidth=1, style=plot.style_linebr)
-plot(bep_stat_m2, title="ITM2 Static BEP (L-2)",   color=color.new(color.blue, 40),   linewidth=1, style=plot.style_linebr)
+plot(bep_rt_m2,   title="ITM2 Realtime BEP (L-2)", color=col_itm2_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(bep_stat_m2, title="ITM2 Static BEP (L-2)",   color=col_itm2_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_m3,   title="ITM3 Realtime BEP (L-3)", color=color.new(color.purple, 0),  linewidth=1, style=plot.style_linebr)
-plot(bep_stat_m3, title="ITM3 Static BEP (L-3)",   color=color.new(color.purple, 40), linewidth=1, style=plot.style_linebr)
+plot(bep_rt_m3,   title="ITM3 Realtime BEP (L-3)", color=col_itm3_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(bep_stat_m3, title="ITM3 Static BEP (L-3)",   color=col_itm3_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_p1,   title="OTM1 Realtime BEP (L+1)", color=color.new(color.orange, 0),  linewidth=1, style=plot.style_linebr)
-plot(bep_stat_p1, title="OTM1 Static BEP (L+1)",   color=color.new(color.orange, 40), linewidth=1, style=plot.style_linebr)
+plot(bep_rt_p1,   title="OTM1 Realtime BEP (L+1)", color=col_otm1_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(bep_stat_p1, title="OTM1 Static BEP (L+1)",   color=col_otm1_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_p2,   title="OTM2 Realtime BEP (L+2)", color=color.new(color.teal, 0),    linewidth=1, style=plot.style_linebr)
-plot(bep_stat_p2, title="OTM2 Static BEP (L+2)",   color=color.new(color.teal, 40),   linewidth=1, style=plot.style_linebr)
+plot(bep_rt_p2,   title="OTM2 Realtime BEP (L+2)", color=col_otm2_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(bep_stat_p2, title="OTM2 Static BEP (L+2)",   color=col_otm2_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_p3,   title="OTM3 Realtime BEP (L+3)", color=color.new(color.lime, 0),    linewidth=1, style=plot.style_linebr)
-plot(bep_stat_p3, title="OTM3 Static BEP (L+3)",   color=color.new(color.lime, 40),   linewidth=1, style=plot.style_linebr)
+plot(bep_rt_p3,   title="OTM3 Realtime BEP (L+3)", color=col_otm3_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(bep_stat_p3, title="OTM3 Static BEP (L+3)",   color=col_otm3_stat, linewidth=width_others, style=plot.style_linebr)
 
 // --- Multi-Strike Basket Averages ---
 int total_count = numStrikesInput == 4 ? 9 : (numStrikesInput == 3 ? 7 : (numStrikesInput == 2 ? 5 : 3))
