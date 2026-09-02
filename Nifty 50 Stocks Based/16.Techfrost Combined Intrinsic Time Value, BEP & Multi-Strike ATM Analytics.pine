@@ -455,11 +455,11 @@ bool fresh_iv_sell_signal = overall_sell_alert and pe_fresh_iv
 show_signal_shapes = input.bool(true, "Show Buy / Sell Signal Markers", group="Visual Signals")
 
 // Regular Signals
-plotshape(show_signal_shapes and overall_buy_alert and not ce_fresh_iv, title="Buy Signal Marker", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.black, size=size.small, text="BUY")
+plotshape(show_signal_shapes and overall_buy_alert and not ce_fresh_iv, title="Buy Signal Marker", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="BUY")
 plotshape(show_signal_shapes and overall_sell_alert and not pe_fresh_iv, title="Sell Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="SELL")
 
 // Special Fresh Intrinsic Value Signal Markers (Gold Star Markers)
-plotshape(show_signal_shapes and fresh_iv_buy_signal, title="Fresh IV Buy Signal Marker", style=shape.labelup, location=location.belowbar, color=#FFD700, textcolor=color.black, size=size.normal, text="FRESH IV BUY ★")
+plotshape(show_signal_shapes and fresh_iv_buy_signal, title="Fresh IV Buy Signal Marker", style=shape.labelup, location=location.belowbar, color=#FFD700, textcolor=color.white, size=size.normal, text="FRESH IV BUY ★")
 plotshape(show_signal_shapes and fresh_iv_sell_signal, title="Fresh IV Sell Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FFD700, textcolor=color.black, size=size.normal, text="FRESH IV SELL ★")
 
 // Standalone Fresh Intrinsic Value Formation Markers (even outside alerts)
