@@ -61,7 +61,7 @@ numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Baske
 // --- Realtime Day Open & Current Realtime ATM Option Candles Controls ---
 G_CANDLES            = "Realtime Day Open & Current Realtime ATM Option Candles Controls"
 enable_atm_candles   = input.bool(true, "Enable Realtime ATM Option Candles Plotting", group=G_CANDLES)
-atm_candle_source    = input.string("Both (Day Open & Current ATM)", "ATM Candle Selection Source", options=["Both (Day Open & Current ATM)", "Day Open ATM Only", "Current Realtime ATM Only"], group=G_CANDLES, tooltip="Select whether to plot candles for Both (Day Open & Current ATM), Day Open ATM Only, or Current Realtime ATM Only.")
+atm_candle_source    = input.string("Both (Day Open & Current ATM)", "ATM Candle Selection Source", options=["Both (Day Open & Current ATM)", "Day Open ATM Only", "Current Realtime ATM Only"], group=G_CANDLES, tooltip="Select whether to plot candles for Both (Day Open & Current ATM), Day Open ATM Only, or Current Realtime ATM Only. When Day Open ATM Only is selected, all 14 BEP lines and calculations automatically adopt Day Open ATM.")
 showCE_Candles       = input.bool(true, "Show Call (CE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Call (CE) options.")
 showPE_Candles       = input.bool(true, "Show Put (PE) Candles", group=G_CANDLES, tooltip="Plot real-time tick-by-tick candles of Put (PE) options.")
 
@@ -521,7 +521,7 @@ float day_pe_c   = dayOpenATMStrike == k_p3 ? pe_c_p3   : (dayOpenATMStrike == k
 float cur_ce_opn = curATMStrike == k_p3 ? ce_opn_p3 : (curATMStrike == k_p2 ? ce_opn_p2 : (curATMStrike == k_p1 ? ce_opn_p1 : (curATMStrike == k_0 ? ce_opn_0 : (curATMStrike == k_m1 ? ce_opn_m1 : (curATMStrike == k_m2 ? ce_opn_m2 : ce_opn_m3)))))
 float cur_ce_h   = curATMStrike == k_p3 ? ce_h_p3   : (curATMStrike == k_p2 ? ce_h_p2   : (curATMStrike == k_p1 ? ce_h_p1   : (curATMStrike == k_0 ? ce_h_0   : (curATMStrike == k_m1 ? ce_h_m1   : (curATMStrike == k_m2 ? ce_h_m2   : ce_h_m3)))))
 float cur_ce_l   = curATMStrike == k_p3 ? ce_l_p3   : (curATMStrike == k_p2 ? ce_l_p2   : (curATMStrike == k_p1 ? ce_l_p1   : (curATMStrike == k_0 ? ce_l_0   : (curATMStrike == k_m1 ? ce_l_m1   : (curATMStrike == k_m2 ? ce_l_m2   : ce_l_m3)))))
-float cur_ce_c   = curATMStrike == k_p3 ? ce_c_p3   : (curATMStrike == k_p2 ? ce_c_p2   : (curATMStrike == k_p1 ? ce_c_p1   : (curATMStrike == k_0 ? ce_c_0   : (curATMStrike == k_m1 ? ce_c_m1   : (curATMStrike == k_m2 ? ce_c_m2   : ce_c_m3)))))
+float cur_ce_c   = curATMStrike == k_p3 ? ce_c_c_p3 : (curATMStrike == k_p2 ? ce_c_p2   : (curATMStrike == k_p1 ? ce_c_p1   : (curATMStrike == k_0 ? ce_c_0   : (curATMStrike == k_m1 ? ce_c_m1   : (curATMStrike == k_m2 ? ce_c_m2   : ce_c_m3)))))
 
 float cur_pe_opn = curATMStrike == k_p3 ? pe_opn_p3 : (curATMStrike == k_p2 ? pe_opn_p2 : (curATMStrike == k_p1 ? pe_opn_p1 : (curATMStrike == k_0 ? pe_opn_0 : (curATMStrike == k_m1 ? pe_opn_m1 : (curATMStrike == k_m2 ? pe_opn_m2 : pe_opn_m3)))))
 float cur_pe_h   = curATMStrike == k_p3 ? pe_h_p3   : (curATMStrike == k_p2 ? pe_h_p2   : (curATMStrike == k_p1 ? pe_h_p1   : (curATMStrike == k_0 ? pe_h_0   : (curATMStrike == k_m1 ? pe_h_m1   : (curATMStrike == k_m2 ? pe_h_m2   : pe_h_m3)))))
@@ -541,6 +541,14 @@ plotcandle(showPE_Candles and plotCurRealtimeCandles ? cur_pe_opn : na, showPE_C
 // ==========================================
 // CORE CALCULATIONS, VWAP & MOMENTUM INDICATORS
 // ==========================================
+
+// Dynamic Adaptation of BEP Lines to Active ATM Source (Day Open ATM vs Current Realtime ATM)
+// When Day Open ATM Only is selected, center ATM BEP is anchored to Day Open ATM CE & PE!
+float active_ce_rt_0   = (atm_candle_source == "Day Open ATM Only") ? day_ce_c : (atm_candle_source == "Current Realtime ATM Only" ? cur_ce_c : ce_c_0)
+float active_pe_rt_0   = (atm_candle_source == "Day Open ATM Only") ? day_pe_c : (atm_candle_source == "Current Realtime ATM Only" ? cur_pe_c : pe_c_0)
+
+float active_ce_stat_0 = (atm_candle_source == "Day Open ATM Only") ? day_ce_opn : (atm_candle_source == "Current Realtime ATM Only" ? cur_ce_opn : ce_o_0)
+float active_pe_stat_0 = (atm_candle_source == "Day Open ATM Only") ? day_pe_opn : (atm_candle_source == "Current Realtime ATM Only" ? cur_pe_opn : pe_o_0)
 
 // RSI Calculation
 float rsi_val = ta.rsi(close, rsi_len)
@@ -587,9 +595,9 @@ float bep_stat_m2 = (ce_o_m2 + pe_o_p2) / 2.0
 float bep_rt_m1   = (ce_c_m1 + pe_c_p1) / 2.0
 float bep_stat_m1 = (ce_o_m1 + pe_o_p1) / 2.0
 
-// ATM BEP (CE ATM + PE ATM)
-float bep_rt_0    = (ce_c_0 + pe_c_0) / 2.0
-float bep_stat_0  = (ce_o_0 + pe_o_0) / 2.0
+// ATM BEP (CE ATM + PE ATM) - Automatically Adapts to Selected ATM Source
+float bep_rt_0    = (active_ce_rt_0 + active_pe_rt_0) / 2.0
+float bep_stat_0  = (active_ce_stat_0 + active_pe_stat_0) / 2.0
 
 // OTM 1 BEP (CE OTM 1 + PE ITM 1)
 float bep_rt_p1   = (ce_c_p1 + pe_c_m1) / 2.0
