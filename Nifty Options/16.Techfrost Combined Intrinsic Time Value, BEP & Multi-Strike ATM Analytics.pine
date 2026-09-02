@@ -49,6 +49,11 @@ customOffsetInput  = input.float(0.0, "Custom Offset Points Override (0 = Use Dr
 numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Basket", minval=1, maxval=4, group="Calculation Settings",
   tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
 
+// --- Reference Line Plot Controls ---
+show_prev_close   = input.bool(true, "Show Previous Day Close (CE & PE)", group="Reference Line Plots")
+show_ce_prev_hl   = input.bool(true, "Show CE Previous Day High & Low", group="Reference Line Plots")
+show_pe_prev_hl   = input.bool(true, "Show PE Previous Day High & Low", group="Reference Line Plots")
+
 // --- Alert Engine Controls ---
 use_basket_avg_filter       = input.bool(true, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
@@ -259,13 +264,7 @@ float otm_pe_strike = chartStrikePrice - offsetPts
 string ce_ticker = f_build_ce_ticker(ce_strike)
 string pe_ticker = f_build_pe_ticker(pe_strike)
 
-string ce_itm_ticker = f_build_ce_ticker(itm_ce_strike)
-string pe_itm_ticker = f_build_pe_ticker(itm_pe_strike)
-
-string ce_otm_ticker = f_build_ce_ticker(otm_ce_strike)
-string pe_otm_ticker = f_build_pe_ticker(otm_pe_strike)
-
-// Multi-Strike Basket Tickers
+// Multi-Strike Basket Tickers (7 Levels: -3, -2, -1, 0, +1, +2, +3)
 float k_0  = baseStrike
 float k_p1 = baseStrike + 1.0 * stepVal
 float k_p2 = baseStrike + 2.0 * stepVal
@@ -289,17 +288,15 @@ f_get_strike_ohlc() =>
     float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
     [d_op, high, low, close]
 
-// Fetch ATM Option OHLC
+f_get_strike_prev_day() =>
+    [close[1], high[1], low[1]]
+
+// Fetch ATM Option OHLC & Previous Day Data
 [ce_open_sec, ce_high_sec, ce_low_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_open_sec, pe_high_sec, pe_low_sec, pe_ltp_sec] = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-// Fetch ITM Option OHLC
-[ce_itm_open, ce_itm_high, ce_itm_low, ce_itm_ltp] = request.security(syminfo.prefix + ":" + ce_itm_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_itm_open, pe_itm_high, pe_itm_low, pe_itm_ltp] = request.security(syminfo.prefix + ":" + pe_itm_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-// Fetch OTM Option OHLC
-[ce_otm_open, ce_otm_high, ce_otm_low, ce_otm_ltp] = request.security(syminfo.prefix + ":" + ce_otm_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_otm_open, pe_otm_high, pe_otm_low, pe_otm_ltp] = request.security(syminfo.prefix + ":" + pe_otm_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_pdc_sec, ce_pdh_sec, ce_pdl_sec] = request.security(syminfo.prefix + ":" + ce_ticker, "D", f_get_strike_prev_day(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_pdc_sec, pe_pdh_sec, pe_pdl_sec] = request.security(syminfo.prefix + ":" + pe_ticker, "D", f_get_strike_prev_day(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // Use direct chart candle data if active chart is Call or Put option
 float ce_open = isCall ? ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0) : ce_open_sec
@@ -314,30 +311,40 @@ float pe_low  = isPut  ? low : pe_low_sec
 float ce_ltp  = isCall ? close : ce_ltp_sec
 float pe_ltp  = isPut  ? close : pe_ltp_sec
 
-// Fetch Basket Strikes Data
-[ce_o_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+// Previous Day Settlement Price Close, High, Low
+float ce_prev_close = isCall ? request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on) : ce_pdc_sec
+float pe_prev_close = isPut  ? request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on) : pe_pdc_sec
 
-[ce_o_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float ce_prev_high  = isCall ? request.security(syminfo.tickerid, "D", high[1],  lookahead=barmerge.lookahead_on) : ce_pdh_sec
+float ce_prev_low   = isCall ? request.security(syminfo.tickerid, "D", low[1],   lookahead=barmerge.lookahead_on) : ce_pdl_sec
 
-[ce_o_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float pe_prev_high  = isPut  ? request.security(syminfo.tickerid, "D", high[1],  lookahead=barmerge.lookahead_on) : pe_pdh_sec
+float pe_prev_low   = isPut  ? request.security(syminfo.tickerid, "D", low[1],   lookahead=barmerge.lookahead_on) : pe_pdl_sec
 
-[ce_o_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+// Fetch All 7 Strike Levels Open & LTP
+[ce_o_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 [ce_o_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 [ce_o_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_open_and_ltp(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
@@ -357,28 +364,59 @@ float pe_iv_rt = math.max(0.0, pe_strike - spot_ltp)
 bool ce_fresh_iv = (ce_iv_rt > 0) and (nz(ce_iv_rt[1]) == 0)
 bool pe_fresh_iv = (pe_iv_rt > 0) and (nz(pe_iv_rt[1]) == 0)
 
-// --- BEP Lines (ATM, ITM, OTM - Realtime & Static) ---
-// ATM BEP Lines
-float realtime_bep     = (ce_ltp + pe_ltp) / 2.0
-float day_open_bep     = (ce_open + pe_open) / 2.0
+// --- 7 Levels of Realtime & Static BEP Lines (14 Lines Total) ---
+float bep_rt_m3   = (ce_c_m3 + pe_c_m3) / 2.0
+float bep_stat_m3 = (ce_o_m3 + pe_o_m3) / 2.0
 
-// ITM BEP Lines
-float itm_realtime_bep = (ce_itm_ltp + pe_itm_ltp) / 2.0
-float itm_static_bep   = (ce_itm_open + pe_itm_open) / 2.0
+float bep_rt_m2   = (ce_c_m2 + pe_c_m2) / 2.0
+float bep_stat_m2 = (ce_o_m2 + pe_o_m2) / 2.0
 
-// OTM BEP Lines
-float otm_realtime_bep = (ce_otm_ltp + pe_otm_ltp) / 2.0
-float otm_static_bep   = (ce_otm_open + pe_otm_open) / 2.0
+float bep_rt_m1   = (ce_c_m1 + pe_c_m1) / 2.0
+float bep_stat_m1 = (ce_o_m1 + pe_o_m1) / 2.0
 
-// --- Plot All 6 BEP Lines ---
-plot(realtime_bep,     title="ATM Realtime BEP", color=color.new(color.white, 0),  linewidth=2)
-plot(day_open_bep,     title="ATM Static BEP",   color=color.new(color.yellow, 0), linewidth=2)
+float bep_rt_0    = (ce_c_0 + pe_c_0) / 2.0
+float bep_stat_0  = (ce_o_0 + pe_o_0) / 2.0
 
-plot(itm_realtime_bep, title="ITM Realtime BEP", color=color.new(color.aqua, 0),    linewidth=1, style=plot.style_linebr)
-plot(itm_static_bep,   title="ITM Static BEP",   color=color.new(color.aqua, 30),   linewidth=1, style=plot.style_linebr)
+float bep_rt_p1   = (ce_c_p1 + pe_c_p1) / 2.0
+float bep_stat_p1 = (ce_o_p1 + pe_o_p1) / 2.0
 
-plot(otm_realtime_bep, title="OTM Realtime BEP", color=color.new(color.orange, 0),  linewidth=1, style=plot.style_linebr)
-plot(otm_static_bep,   title="OTM Static BEP",   color=color.new(color.orange, 30), linewidth=1, style=plot.style_linebr)
+float bep_rt_p2   = (ce_c_p2 + pe_c_p2) / 2.0
+float bep_stat_p2 = (ce_o_p2 + pe_o_p2) / 2.0
+
+float bep_rt_p3   = (ce_c_p3 + pe_c_p3) / 2.0
+float bep_stat_p3 = (ce_o_p3 + pe_o_p3) / 2.0
+
+// --- Plot Reference Lines ---
+plot(show_prev_close ? ce_prev_close : na, title="CE Prev Day Close", color=color.new(#00E676, 30), linewidth=1, style=plot.style_linebr)
+plot(show_prev_close ? pe_prev_close : na, title="PE Prev Day Close", color=color.new(#FF1744, 30), linewidth=1, style=plot.style_linebr)
+
+plot(show_ce_prev_hl ? ce_prev_high : na, title="CE Prev Day High", color=color.new(#00E676, 50), linewidth=1, style=plot.style_linebr)
+plot(show_ce_prev_hl ? ce_prev_low  : na, title="CE Prev Day Low",  color=color.new(#00E676, 50), linewidth=1, style=plot.style_linebr)
+
+plot(show_pe_prev_hl ? pe_prev_high : na, title="PE Prev Day High", color=color.new(#FF1744, 50), linewidth=1, style=plot.style_linebr)
+plot(show_pe_prev_hl ? pe_prev_low  : na, title="PE Prev Day Low",  color=color.new(#FF1744, 50), linewidth=1, style=plot.style_linebr)
+
+// --- Plot 7 Levels of BEP Lines ---
+plot(bep_rt_0,    title="ATM Realtime BEP (L0)", color=color.new(color.white, 0),  linewidth=2)
+plot(bep_stat_0,  title="ATM Static BEP (L0)",   color=color.new(color.yellow, 0), linewidth=2)
+
+plot(bep_rt_m1,   title="ITM1 Realtime BEP (L-1)", color=color.new(color.aqua, 0),    linewidth=1, style=plot.style_linebr)
+plot(bep_stat_m1, title="ITM1 Static BEP (L-1)",   color=color.new(color.aqua, 40),   linewidth=1, style=plot.style_linebr)
+
+plot(bep_rt_m2,   title="ITM2 Realtime BEP (L-2)", color=color.new(color.blue, 0),    linewidth=1, style=plot.style_linebr)
+plot(bep_stat_m2, title="ITM2 Static BEP (L-2)",   color=color.new(color.blue, 40),   linewidth=1, style=plot.style_linebr)
+
+plot(bep_rt_m3,   title="ITM3 Realtime BEP (L-3)", color=color.new(color.purple, 0),  linewidth=1, style=plot.style_linebr)
+plot(bep_stat_m3, title="ITM3 Static BEP (L-3)",   color=color.new(color.purple, 40), linewidth=1, style=plot.style_linebr)
+
+plot(bep_rt_p1,   title="OTM1 Realtime BEP (L+1)", color=color.new(color.orange, 0),  linewidth=1, style=plot.style_linebr)
+plot(bep_stat_p1, title="OTM1 Static BEP (L+1)",   color=color.new(color.orange, 40), linewidth=1, style=plot.style_linebr)
+
+plot(bep_rt_p2,   title="OTM2 Realtime BEP (L+2)", color=color.new(color.teal, 0),    linewidth=1, style=plot.style_linebr)
+plot(bep_stat_p2, title="OTM2 Static BEP (L+2)",   color=color.new(color.teal, 40),   linewidth=1, style=plot.style_linebr)
+
+plot(bep_rt_p3,   title="OTM3 Realtime BEP (L+3)", color=color.new(color.lime, 0),    linewidth=1, style=plot.style_linebr)
+plot(bep_stat_p3, title="OTM3 Static BEP (L+3)",   color=color.new(color.lime, 40),   linewidth=1, style=plot.style_linebr)
 
 // --- Multi-Strike Basket Averages ---
 int total_count = numStrikesInput == 4 ? 9 : (numStrikesInput == 3 ? 7 : (numStrikesInput == 2 ? 5 : 3))
@@ -432,83 +470,99 @@ bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_
 bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
 
-// --- Standing Crossover Evaluations Across All 6 BEP Lines ---
-bool ce_cross_atm_rt   = ta.crossover(ce_ltp, realtime_bep)
-bool pe_cross_atm_rt   = ta.crossover(pe_ltp, realtime_bep)
+// --- Standing Crossovers Across All 14 BEP Lines ---
+bool ce_cross_rt_m3   = ta.crossover(ce_ltp, bep_rt_m3)
+bool pe_cross_rt_m3   = ta.crossover(pe_ltp, bep_rt_m3)
 
-bool ce_cross_atm_stat = ta.crossover(ce_ltp, day_open_bep)
-bool pe_cross_atm_stat = ta.crossover(pe_ltp, day_open_bep)
+bool ce_cross_stat_m3 = ta.crossover(ce_ltp, bep_stat_m3)
+bool pe_cross_stat_m3 = ta.crossover(pe_ltp, bep_stat_m3)
 
-bool ce_cross_itm_rt   = ta.crossover(ce_ltp, itm_realtime_bep)
-bool pe_cross_itm_rt   = ta.crossover(pe_ltp, itm_realtime_bep)
+bool ce_cross_rt_m2   = ta.crossover(ce_ltp, bep_rt_m2)
+bool pe_cross_rt_m2   = ta.crossover(pe_ltp, bep_rt_m2)
 
-bool ce_cross_itm_stat = ta.crossover(ce_ltp, itm_static_bep)
-bool pe_cross_itm_stat = ta.crossover(pe_ltp, itm_static_bep)
+bool ce_cross_stat_m2 = ta.crossover(ce_ltp, bep_stat_m2)
+bool pe_cross_stat_m2 = ta.crossover(pe_ltp, bep_stat_m2)
 
-bool ce_cross_otm_rt   = ta.crossover(ce_ltp, otm_realtime_bep)
-bool pe_cross_otm_rt   = ta.crossover(pe_ltp, otm_realtime_bep)
+bool ce_cross_rt_m1   = ta.crossover(ce_ltp, bep_rt_m1)
+bool pe_cross_rt_m1   = ta.crossover(pe_ltp, bep_rt_m1)
 
-bool ce_cross_otm_stat = ta.crossover(ce_ltp, otm_static_bep)
-bool pe_cross_otm_stat = ta.crossover(pe_ltp, otm_static_bep)
+bool ce_cross_stat_m1 = ta.crossover(ce_ltp, bep_stat_m1)
+bool pe_cross_stat_m1 = ta.crossover(pe_ltp, bep_stat_m1)
 
-// --- Standing Bounce Back & Closes Below Evaluations Across All 6 BEP Lines ---
-bool ce_bounce_dn_atm_rt   = (ce_high >= realtime_bep) and (ce_ltp < realtime_bep)
-bool pe_bounce_dn_atm_rt   = (pe_high >= realtime_bep) and (pe_ltp < realtime_bep)
+bool ce_cross_rt_0    = ta.crossover(ce_ltp, bep_rt_0)
+bool pe_cross_rt_0    = ta.crossover(pe_ltp, bep_rt_0)
 
-bool ce_bounce_dn_atm_stat = (ce_high >= day_open_bep) and (ce_ltp < day_open_bep)
-bool pe_bounce_dn_atm_stat = (pe_high >= day_open_bep) and (pe_ltp < day_open_bep)
+bool ce_cross_stat_0  = ta.crossover(ce_ltp, bep_stat_0)
+bool pe_cross_stat_0  = ta.crossover(pe_ltp, bep_stat_0)
 
-bool ce_bounce_dn_itm_rt   = (ce_high >= itm_realtime_bep) and (ce_ltp < itm_realtime_bep)
-bool pe_bounce_dn_itm_rt   = (pe_high >= itm_realtime_bep) and (pe_ltp < itm_realtime_bep)
+bool ce_cross_rt_p1   = ta.crossover(ce_ltp, bep_rt_p1)
+bool pe_cross_rt_p1   = ta.crossover(pe_ltp, bep_rt_p1)
 
-bool ce_bounce_dn_itm_stat = (ce_high >= itm_static_bep) and (ce_ltp < itm_static_bep)
-bool pe_bounce_dn_itm_stat = (pe_high >= itm_static_bep) and (pe_ltp < itm_static_bep)
+bool ce_cross_stat_p1 = ta.crossover(ce_ltp, bep_stat_p1)
+bool pe_cross_stat_p1 = ta.crossover(pe_ltp, bep_stat_p1)
 
-bool ce_bounce_dn_otm_rt   = (ce_high >= otm_realtime_bep) and (ce_ltp < otm_realtime_bep)
-bool pe_bounce_dn_otm_rt   = (pe_high >= otm_realtime_bep) and (pe_ltp < otm_realtime_bep)
+bool ce_cross_rt_p2   = ta.crossover(ce_ltp, bep_rt_p2)
+bool pe_cross_rt_p2   = ta.crossover(pe_ltp, bep_rt_p2)
 
-bool ce_bounce_dn_otm_stat = (ce_high >= otm_static_bep) and (ce_ltp < otm_static_bep)
-bool pe_bounce_dn_otm_stat = (pe_high >= otm_static_bep) and (pe_ltp < otm_static_bep)
+bool ce_cross_stat_p2 = ta.crossover(ce_ltp, bep_stat_p2)
+bool pe_cross_stat_p2 = ta.crossover(pe_ltp, bep_stat_p2)
 
-// ------------------------------------------
-// TRIGGER 1: REALTIME ATM BEP
-// ------------------------------------------
-bool t1_buy  = (ce_cross_atm_rt or pe_bounce_dn_atm_rt) and ce_filters_met
-bool t1_sell = (pe_cross_atm_rt or ce_bounce_dn_atm_rt) and pe_filters_met
+bool ce_cross_rt_p3   = ta.crossover(ce_ltp, bep_rt_p3)
+bool pe_cross_rt_p3   = ta.crossover(pe_ltp, bep_rt_p3)
 
-// ------------------------------------------
-// TRIGGER 2: DAY OPEN STATIC ATM BEP
-// ------------------------------------------
-bool t2_buy  = (ce_cross_atm_stat or pe_bounce_dn_atm_stat) and ce_filters_met
-bool t2_sell = (pe_cross_atm_stat or ce_bounce_dn_atm_stat) and pe_filters_met
+bool ce_cross_stat_p3 = ta.crossover(ce_ltp, bep_stat_p3)
+bool pe_cross_stat_p3 = ta.crossover(pe_ltp, bep_stat_p3)
 
-// ------------------------------------------
-// TRIGGER 3: ITM REALTIME BEP
-// ------------------------------------------
-bool t3_buy  = (ce_cross_itm_rt or pe_bounce_dn_itm_rt) and ce_filters_met
-bool t3_sell = (pe_cross_itm_rt or ce_bounce_dn_itm_rt) and pe_filters_met
+// --- Standing Downside Bounces Across All 14 BEP Lines ---
+bool ce_bounce_dn_rt_m3   = (ce_high >= bep_rt_m3) and (ce_ltp < bep_rt_m3)
+bool pe_bounce_dn_rt_m3   = (pe_high >= bep_rt_m3) and (pe_ltp < bep_rt_m3)
 
-// ------------------------------------------
-// TRIGGER 4: ITM STATIC BEP
-// ------------------------------------------
-bool t4_buy  = (ce_cross_itm_stat or pe_bounce_dn_itm_stat) and ce_filters_met
-bool t4_sell = (pe_cross_itm_stat or ce_bounce_dn_itm_stat) and pe_filters_met
+bool ce_bounce_dn_stat_m3 = (ce_high >= bep_stat_m3) and (ce_ltp < bep_stat_m3)
+bool pe_bounce_dn_stat_m3 = (pe_high >= bep_stat_m3) and (pe_ltp < bep_stat_m3)
 
-// ------------------------------------------
-// TRIGGER 5: OTM REALTIME BEP
-// ------------------------------------------
-bool t5_buy  = (ce_cross_otm_rt or pe_bounce_dn_otm_rt) and ce_filters_met
-bool t5_sell = (pe_cross_otm_rt or ce_bounce_dn_otm_rt) and pe_filters_met
+bool ce_bounce_dn_rt_m2   = (ce_high >= bep_rt_m2) and (ce_ltp < bep_rt_m2)
+bool pe_bounce_dn_rt_m2   = (pe_high >= bep_rt_m2) and (pe_ltp < bep_rt_m2)
 
-// ------------------------------------------
-// TRIGGER 6: OTM STATIC BEP
-// ------------------------------------------
-bool t6_buy  = (ce_cross_otm_stat or pe_bounce_dn_otm_stat) and ce_filters_met
-bool t6_sell = (pe_cross_otm_stat or ce_bounce_dn_otm_stat) and pe_filters_met
+bool ce_bounce_dn_stat_m2 = (ce_high >= bep_stat_m2) and (ce_ltp < bep_stat_m2)
+bool pe_bounce_dn_stat_m2 = (pe_high >= bep_stat_m2) and (pe_ltp < bep_stat_m2)
 
-// --- Combined Raw Buy & Sell Triggers Across All 6 BEP Lines ---
-bool raw_buy_alert  = (t1_buy or t2_buy or t3_buy or t4_buy or t5_buy or t6_buy) and not (t1_sell or t2_sell or t3_sell or t4_sell or t5_sell or t6_sell)
-bool raw_sell_alert = (t1_sell or t2_sell or t3_sell or t4_sell or t5_sell or t6_sell) and not (t1_buy or t2_buy or t3_buy or t4_buy or t5_buy or t6_buy)
+bool ce_bounce_dn_rt_m1   = (ce_high >= bep_rt_m1) and (ce_ltp < bep_rt_m1)
+bool pe_bounce_dn_rt_m1   = (pe_high >= bep_rt_m1) and (pe_ltp < bep_rt_m1)
+
+bool ce_bounce_dn_stat_m1 = (ce_high >= bep_stat_m1) and (ce_ltp < bep_stat_m1)
+bool pe_bounce_dn_stat_m1 = (pe_high >= bep_stat_m1) and (pe_ltp < bep_stat_m1)
+
+bool ce_bounce_dn_rt_0    = (ce_high >= bep_rt_0) and (ce_ltp < bep_rt_0)
+bool pe_bounce_dn_rt_0    = (pe_high >= bep_rt_0) and (pe_ltp < bep_rt_0)
+
+bool ce_bounce_dn_stat_0  = (ce_high >= bep_stat_0) and (ce_ltp < bep_stat_0)
+bool pe_bounce_dn_stat_0  = (pe_high >= bep_stat_0) and (pe_ltp < bep_stat_0)
+
+bool ce_bounce_dn_rt_p1   = (ce_high >= bep_rt_p1) and (ce_ltp < bep_rt_p1)
+bool pe_bounce_dn_rt_p1   = (pe_high >= bep_rt_p1) and (pe_ltp < bep_rt_p1)
+
+bool ce_bounce_dn_stat_p1 = (ce_high >= bep_stat_p1) and (ce_ltp < bep_stat_p1)
+bool pe_bounce_dn_stat_p1 = (pe_high >= bep_stat_p1) and (pe_ltp < bep_stat_p1)
+
+bool ce_bounce_dn_rt_p2   = (ce_high >= bep_rt_p2) and (ce_ltp < bep_rt_p2)
+bool pe_bounce_dn_rt_p2   = (pe_high >= bep_rt_p2) and (pe_ltp < bep_rt_p2)
+
+bool ce_bounce_dn_stat_p2 = (ce_high >= bep_stat_p2) and (ce_ltp < bep_stat_p2)
+bool pe_bounce_dn_stat_p2 = (pe_high >= bep_stat_p2) and (pe_ltp < bep_stat_p2)
+
+bool ce_bounce_dn_rt_p3   = (ce_high >= bep_rt_p3) and (ce_ltp < bep_rt_p3)
+bool pe_bounce_dn_rt_p3   = (pe_high >= bep_rt_p3) and (pe_ltp < bep_rt_p3)
+
+bool ce_bounce_dn_stat_p3 = (ce_high >= bep_stat_p3) and (ce_ltp < bep_stat_p3)
+bool pe_bounce_dn_stat_p3 = (pe_high >= bep_stat_p3) and (pe_ltp < bep_stat_p3)
+
+// Combined Crossovers & Downside Bounces Across All 14 BEP Lines
+bool ce_any_bep_trig = ce_cross_rt_0 or ce_cross_stat_0 or ce_cross_rt_m1 or ce_cross_stat_m1 or ce_cross_rt_m2 or ce_cross_stat_m2 or ce_cross_rt_m3 or ce_cross_stat_m3 or ce_cross_rt_p1 or ce_cross_stat_p1 or ce_cross_rt_p2 or ce_cross_stat_p2 or ce_cross_rt_p3 or ce_cross_stat_p3 or pe_bounce_dn_rt_0 or pe_bounce_dn_stat_0 or pe_bounce_dn_rt_m1 or pe_bounce_dn_stat_m1 or pe_bounce_dn_rt_m2 or pe_bounce_dn_stat_m2 or pe_bounce_dn_rt_m3 or pe_bounce_dn_stat_m3 or pe_bounce_dn_rt_p1 or pe_bounce_dn_stat_p1 or pe_bounce_dn_rt_p2 or pe_bounce_dn_stat_p2 or pe_bounce_dn_rt_p3 or pe_bounce_dn_stat_p3
+bool pe_any_bep_trig = pe_cross_rt_0 or pe_cross_stat_0 or pe_cross_rt_m1 or pe_cross_stat_m1 or pe_cross_rt_m2 or pe_cross_stat_m2 or pe_cross_rt_m3 or pe_cross_stat_m3 or pe_cross_rt_p1 or pe_cross_stat_p1 or pe_cross_rt_p2 or pe_cross_stat_p2 or pe_cross_rt_p3 or pe_cross_stat_p3 or ce_bounce_dn_rt_0 or ce_bounce_dn_stat_0 or ce_bounce_dn_rt_m1 or ce_bounce_dn_stat_m1 or ce_bounce_dn_rt_m2 or ce_bounce_dn_stat_m2 or ce_bounce_dn_rt_m3 or ce_bounce_dn_stat_m3 or ce_bounce_dn_rt_p1 or ce_bounce_dn_stat_p1 or ce_bounce_dn_rt_p2 or ce_bounce_dn_stat_p2 or ce_bounce_dn_rt_p3 or ce_bounce_dn_stat_p3
+
+// --- Combined Raw Buy & Sell Triggers Across All 14 BEP Lines ---
+bool raw_buy_alert  = ce_any_bep_trig and ce_filters_met and not (pe_any_bep_trig and pe_filters_met)
+bool raw_sell_alert = pe_any_bep_trig and pe_filters_met and not (ce_any_bep_trig and ce_filters_met)
 
 // --- Strict Alternating Swing Lock State Machine ---
 var int activeSwing = 0 // 0 = Neutral, 1 = In BUY Swing, -1 = In SELL Swing
@@ -559,14 +613,14 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 0, 0, "Alert Condition Rule", bgcolor=#1565C0, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 0, "Current Status", bgcolor=#1565C0, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 1, "ATM BEP Lines (Realtime & Static)", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 1, (t1_buy or t1_sell or t2_buy or t2_sell) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(t1_buy or t1_sell or t2_buy or t2_sell) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 1, "7 BEP Levels Realtime & Static", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 1, (ce_any_bep_trig or pe_any_bep_trig) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(ce_any_bep_trig or pe_any_bep_trig) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 2, "ITM BEP Lines (Realtime & Static)", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 2, (t3_buy or t3_sell or t4_buy or t4_sell) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(t3_buy or t3_sell or t4_buy or t4_sell) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 2, "CE Previous Day Close / H-L", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 2, "PLOTTED", bgcolor=#1B5E20, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 3, "OTM BEP Lines (Realtime & Static)", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 3, (t5_buy or t5_sell or t6_buy or t6_sell) ? "PASS (TRUE)" : "FAIL (FALSE)", bgcolor=(t5_buy or t5_sell or t6_buy or t6_sell) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 3, "PE Previous Day Close / H-L", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 3, "PLOTTED", bgcolor=#1B5E20, text_color=color.white, text_size=size.small)
 
     table.cell(statusTable, 0, 4, "Basket Top Position Rule", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 4, (ceAvgCur > peAvgCur) ? "CE ON TOP (CE OK)" : "PE ON TOP (PE OK)", bgcolor=(ceAvgCur > peAvgCur) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
@@ -578,26 +632,8 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 1, 6, overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
-alertcondition(t1_buy,  title="Trigger 1: CE Alert (ATM Realtime BEP)",  message="TRIGGER 1 CE ALERT: CE close above or PE bounce below ATM Realtime BEP on {{ticker}}!")
-alertcondition(t1_sell, title="Trigger 1: PE Alert (ATM Realtime BEP)", message="TRIGGER 1 PE ALERT: PE close above or CE bounce below ATM Realtime BEP on {{ticker}}!")
-
-alertcondition(t2_buy,  title="Trigger 2: CE Alert (ATM Static BEP)",   message="TRIGGER 2 CE ALERT: CE close above or PE bounce below ATM Static BEP on {{ticker}}!")
-alertcondition(t2_sell, title="Trigger 2: PE Alert (ATM Static BEP)",  message="TRIGGER 2 PE ALERT: PE close above or CE bounce below ATM Static BEP on {{ticker}}!")
-
-alertcondition(t3_buy,  title="Trigger 3: CE Alert (ITM Realtime BEP)",  message="TRIGGER 3 CE ALERT: CE close above or PE bounce below ITM Realtime BEP on {{ticker}}!")
-alertcondition(t3_sell, title="Trigger 3: PE Alert (ITM Realtime BEP)", message="TRIGGER 3 PE ALERT: PE close above or CE bounce below ITM Realtime BEP on {{ticker}}!")
-
-alertcondition(t4_buy,  title="Trigger 4: CE Alert (ITM Static BEP)",   message="TRIGGER 4 CE ALERT: CE close above or PE bounce below ITM Static BEP on {{ticker}}!")
-alertcondition(t4_sell, title="Trigger 4: PE Alert (ITM Static BEP)",  message="TRIGGER 4 PE ALERT: PE close above or CE bounce below ITM Static BEP on {{ticker}}!")
-
-alertcondition(t5_buy,  title="Trigger 5: CE Alert (OTM Realtime BEP)",  message="TRIGGER 5 CE ALERT: CE close above or PE bounce below OTM Realtime BEP on {{ticker}}!")
-alertcondition(t5_sell, title="Trigger 5: PE Alert (OTM Realtime BEP)", message="TRIGGER 5 PE ALERT: PE close above or CE bounce below OTM Realtime BEP on {{ticker}}!")
-
-alertcondition(t6_buy,  title="Trigger 6: CE Alert (OTM Static BEP)",   message="TRIGGER 6 CE ALERT: CE close above or PE bounce below OTM Static BEP on {{ticker}}!")
-alertcondition(t6_sell, title="Trigger 6: PE Alert (OTM Static BEP)",  message="TRIGGER 6 PE ALERT: PE close above or CE bounce below OTM Static BEP on {{ticker}}!")
+alertcondition(overall_buy_alert,  title="CE Signal Alert (All 7 BEP Levels)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
+alertcondition(overall_sell_alert, title="PE Signal Alert (All 7 BEP Levels)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
 
 alertcondition(fresh_iv_buy_signal,  title="Fresh IV CE Alert ★",  message="FRESH IV CE ALERT ★: CE signal with Fresh Intrinsic Value formation on {{ticker}}!")
 alertcondition(fresh_iv_sell_signal, title="Fresh IV PE Alert ★", message="FRESH IV PE ALERT ★: PE signal with Fresh Intrinsic Value formation on {{ticker}}!")
-
-alertcondition(overall_buy_alert,  title="Combined CE Alert (All BEP Lines)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
-alertcondition(overall_sell_alert, title="Combined PE Alert (All BEP Lines)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
