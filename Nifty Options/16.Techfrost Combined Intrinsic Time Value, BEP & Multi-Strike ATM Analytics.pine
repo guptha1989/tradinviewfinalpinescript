@@ -527,37 +527,45 @@ bool ce_chg_pass = not use_basket_chg_filter or (ceAvgChg > 0)
 bool pe_chg_pass = not use_basket_chg_filter or (peAvgChg > 0)
 
 // ABSOLUTE UNCONDITIONAL TOP POSITION RULE:
-// For a CE alert, CE Current Average MUST be strictly greater than PE Current Average (ceAvgCur > peAvgCur).
-// If PE Current Average (Red line) is on top of CE Current Average (Green line), CE ALERT IS ABSOLUTELY BLOCKED!
-bool ce_top_pass = (ceAvgCur > peAvgCur)
-
-// For a PE alert, PE Current Average MUST be strictly greater than CE Current Average (peAvgCur > ceAvgCur).
-// If CE Current Average (Green line) is on top of PE Current Average (Red line), PE ALERT IS ABSOLUTELY BLOCKED!
-bool pe_top_pass = (peAvgCur > ceAvgCur)
+// Enforced when both averages are above day open (special case specified by user)
+bool ce_top_pass = not both_above_day_open or (ceAvgCur > peAvgCur)
+bool pe_top_pass = not both_above_day_open or (peAvgCur > ceAvgCur)
 
 // Non-strict Intrinsic Value Evaluation: Non-blocking for basic alerts unless strict_iv_filter is manually enabled
 bool ce_iv_pass  = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0)
 bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_iv_rt > ce_iv_rt) or (pe_iv_rt > 0)
 
-// Directional Filters with Strict Unconditional Top Position Confluence
+// Directional Filters with Strict Confluence
 bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
 
-// --- Universal BEP Line Trigger Helper (Dual-Directional Crossover & Downside Bounce) ---
+// --- Universal BEP Line Trigger Helper (Dual-Directional Primary & Opposite Candle Triggers) ---
 // For a CE (Call Buy) Alert on BEP line:
-// 1) Call price (whether main chart candle or opposite overlay candle) closes above BEP line
-// 2) OR Put price (whether opposite overlay candle or main chart candle) touched/crossed above BEP line but closed below (Downside Bounce rejection on Put)
+// 1) Primary Call candle OR Opposite Call candle closes above BEP line
+// 2) OR Primary Put candle OR Opposite Put candle high >= BEP line and close < BEP line (Downside Bounce rejection on Put)
 f_check_ce_bep_trig(float bep_val) =>
-    bool ce_cross  = ta.crossover(chart_ce_close, bep_val) or (chart_ce_close > bep_val and nz(chart_ce_close[1]) <= bep_val) or ta.crossover(ce_ltp, bep_val) or (ce_ltp > bep_val and nz(ce_ltp[1]) <= bep_val)
-    bool pe_bounce = (chart_pe_high >= bep_val and chart_pe_close < bep_val) or (pe_high >= bep_val and pe_ltp < bep_val) or (pe_h_p3 >= bep_val and pe_c_p3 < bep_val) or (pe_h_p2 >= bep_val and pe_c_p2 < bep_val) or (pe_h_p1 >= bep_val and pe_c_p1 < bep_val) or (pe_h_0 >= bep_val and pe_c_0 < bep_val) or (pe_h_m1 >= bep_val and pe_c_m1 < bep_val) or (pe_h_m2 >= bep_val and pe_c_m2 < bep_val) or (pe_h_m3 >= bep_val and pe_c_m3 < bep_val)
+    bool ce_cross_prim = isCall ? (close > bep_val and nz(close[1]) <= bep_val) : (opp_c > bep_val and nz(opp_c[1]) <= bep_val)
+    bool ce_cross_sec  = ta.crossover(ce_ltp, bep_val) or (ce_ltp > bep_val and nz(ce_ltp[1]) <= bep_val) or ta.crossover(chart_ce_close, bep_val)
+    bool ce_cross      = ce_cross_prim or ce_cross_sec
+
+    bool pe_bounce_prim = isCall ? (opp_h >= bep_val and opp_c < bep_val) : (high >= bep_val and close < bep_val)
+    bool pe_bounce_sec  = (chart_pe_high >= bep_val and chart_pe_close < bep_val) or (pe_high >= bep_val and pe_ltp < bep_val) or (pe_h_p3 >= bep_val and pe_c_p3 < bep_val) or (pe_h_p2 >= bep_val and pe_c_p2 < bep_val) or (pe_h_p1 >= bep_val and pe_c_p1 < bep_val) or (pe_h_0 >= bep_val and pe_c_0 < bep_val) or (pe_h_m1 >= bep_val and pe_c_m1 < bep_val) or (pe_h_m2 >= bep_val and pe_c_m2 < bep_val) or (pe_h_m3 >= bep_val and pe_c_m3 < bep_val)
+    bool pe_bounce      = pe_bounce_prim or pe_bounce_sec
+
     ce_cross or pe_bounce
 
 // For a PE (Put Sell) Alert on BEP line:
-// 1) Put price (whether main chart candle or opposite overlay candle) closes above BEP line
-// 2) OR Call price (whether opposite overlay candle or main chart candle) touched/crossed above BEP line but closed below (Downside Bounce rejection on Call)
+// 1) Primary Put candle OR Opposite Put candle closes above BEP line
+// 2) OR Primary Call candle OR Opposite Call candle high >= BEP line and close < BEP line (Downside Bounce rejection on Call)
 f_check_pe_bep_trig(float bep_val) =>
-    bool pe_cross  = ta.crossover(chart_pe_close, bep_val) or (chart_pe_close > bep_val and nz(chart_pe_close[1]) <= bep_val) or ta.crossover(pe_ltp, bep_val) or (pe_ltp > bep_val and nz(pe_ltp[1]) <= bep_val)
-    bool ce_bounce = (chart_ce_high >= bep_val and chart_ce_close < bep_val) or (ce_high >= bep_val and ce_ltp < bep_val) or (ce_h_m3 >= bep_val and ce_c_m3 < bep_val) or (ce_h_m2 >= bep_val and ce_c_m2 < bep_val) or (ce_h_m1 >= bep_val and ce_c_m1 < bep_val) or (ce_h_0 >= bep_val and ce_c_0 < bep_val) or (ce_h_p1 >= bep_val and ce_c_p1 < bep_val) or (ce_h_p2 >= bep_val and ce_c_p2 < bep_val) or (ce_h_p3 >= bep_val and ce_c_p3 < bep_val)
+    bool pe_cross_prim = isPut ? (close > bep_val and nz(close[1]) <= bep_val) : (opp_c > bep_val and nz(opp_c[1]) <= bep_val)
+    bool pe_cross_sec  = ta.crossover(pe_ltp, bep_val) or (pe_ltp > bep_val and nz(pe_ltp[1]) <= bep_val) or ta.crossover(chart_pe_close, bep_val)
+    bool pe_cross      = pe_cross_prim or pe_cross_sec
+
+    bool ce_bounce_prim = isPut ? (opp_h >= bep_val and opp_c < bep_val) : (high >= bep_val and close < bep_val)
+    bool ce_bounce_sec  = (chart_ce_high >= bep_val and chart_ce_close < bep_val) or (ce_high >= bep_val and ce_ltp < bep_val) or (ce_h_m3 >= bep_val and ce_c_m3 < bep_val) or (ce_h_m2 >= bep_val and ce_c_m2 < bep_val) or (ce_h_m1 >= bep_val and ce_c_m1 < bep_val) or (ce_h_0 >= bep_val and ce_c_0 < bep_val) or (ce_h_p1 >= bep_val and ce_c_p1 < bep_val) or (ce_h_p2 >= bep_val and ce_c_p2 < bep_val) or (ce_h_p3 >= bep_val and ce_c_p3 < bep_val)
+    bool ce_bounce      = ce_bounce_prim or ce_bounce_sec
+
     pe_cross or ce_bounce
 
 // Evaluate Triggers Across All 14 BEP Lines (7 Realtime & 7 Static)
