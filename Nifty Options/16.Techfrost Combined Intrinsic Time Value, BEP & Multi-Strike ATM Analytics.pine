@@ -36,7 +36,7 @@ underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group=
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
 manualStrikeInput  = input.int(0, "Manual Strike Selection (0 = Auto)", minval=0, group="Instrument Settings",
   tooltip="Enter strike price manually (e.g. 24000). Leave at 0 to auto-detect from chart symbol.")
-spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
+spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. RELIANCE)", group="Instrument Settings")
 strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
 strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
   tooltip="Set to Auto for auto-detection based on underlying stock/index (Auto-detects 1, 2.5, 5, 10, 20, 50, 100).")
@@ -52,6 +52,12 @@ numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Baske
 // --- Alert Engine Controls ---
 alert_trigger_mode          = input.string("Both Breakout Crossover & Bounce Back", "Signal Trigger Mode", options=["Both Breakout Crossover & Bounce Back", "Bounce Back Only (Touch & Bounce Off BEP Line)", "Crossover Only (First Bar Close Above)", "Continuous (Any Bar Price > BEP)"], group="Alert Engine Controls",
   tooltip="Choose whether signals trigger on Breakout Crossover, Bounce Back (CE bounce UP / PE bounce DOWNSIDE for BUY, PE bounce UP / CE bounce DOWNSIDE for SELL), Both, or Continuous.")
+
+bounce_tolerance            = input.float(2.0, "Bounce Back Touch Tolerance (Points)", minval=0.0, group="Alert Engine Controls",
+  tooltip="Tolerance range in points for price touching or nearing the BEP line before bouncing.")
+allow_bounce_reentry        = input.bool(true, "Allow Bounce Back Re-entry Signals", group="Alert Engine Controls",
+  tooltip="Allows Bounce Back alerts even if previous signal was in the same direction, for re-entry on BEP bounces.")
+
 prevent_consecutive_signals = input.bool(true, "Prevent Consecutive Signals (Wait for Opposite Signal)", group="Alert Engine Controls",
   tooltip="When enabled, suppresses consecutive BUY or SELL signals until an opposite signal occurs.")
 
@@ -430,19 +436,19 @@ bool pe_cross_rt   = ta.crossover(isPut ? close : pe_ltp, realtime_bep) or (pe_p
 bool ce_cross_stat = ta.crossover(isCall ? close : ce_ltp, day_open_bep) or (ce_price_above_stat and not (isCall ? close[1] > day_open_bep[1] : ce_ltp[1] > day_open_bep[1]))
 bool pe_cross_stat = ta.crossover(isPut ? close : pe_ltp, day_open_bep) or (pe_price_above_stat and not (isPut ? close[1] > day_open_bep[1] : pe_ltp[1] > day_open_bep[1]))
 
-// Bounce Back UP (Candle low dips to / touches BEP line and closes at or above BEP line)
-bool ce_bounce_up_rt   = (ce_low <= realtime_bep) and (ce_ltp >= realtime_bep)
-bool pe_bounce_up_rt   = (pe_low <= realtime_bep) and (pe_ltp >= realtime_bep)
+// Bounce Back UP (Candle low dips to / touches BEP line within tolerance and closes at or above BEP line)
+bool ce_bounce_up_rt   = (ce_low <= realtime_bep + bounce_tolerance or ce_low[1] <= realtime_bep[1] + bounce_tolerance) and (ce_ltp >= realtime_bep)
+bool pe_bounce_up_rt   = (pe_low <= realtime_bep + bounce_tolerance or pe_low[1] <= realtime_bep[1] + bounce_tolerance) and (pe_ltp >= realtime_bep)
 
-bool ce_bounce_up_stat = (ce_low <= day_open_bep) and (ce_ltp >= day_open_bep)
-bool pe_bounce_up_stat = (pe_low <= day_open_bep) and (pe_ltp >= day_open_bep)
+bool ce_bounce_up_stat = (ce_low <= day_open_bep + bounce_tolerance or ce_low[1] <= day_open_bep[1] + bounce_tolerance) and (ce_ltp >= day_open_bep)
+bool pe_bounce_up_stat = (pe_low <= day_open_bep + bounce_tolerance or pe_low[1] <= day_open_bep[1] + bounce_tolerance) and (pe_ltp >= day_open_bep)
 
-// Bounce Back DOWNSIDE (Opposite option candle high rallies to / touches BEP line from below and bounces back DOWNSIDE below BEP)
-bool ce_bounce_dn_rt   = (ce_high >= realtime_bep) and (ce_ltp <= realtime_bep)
-bool pe_bounce_dn_rt   = (pe_high >= realtime_bep) and (pe_ltp <= realtime_bep)
+// Bounce Back DOWNSIDE (Opposite option candle high rallies to / touches BEP line within tolerance from below and bounces back DOWNSIDE below BEP)
+bool ce_bounce_dn_rt   = (ce_high >= realtime_bep - bounce_tolerance or ce_high[1] >= realtime_bep[1] - bounce_tolerance) and (ce_ltp <= realtime_bep)
+bool pe_bounce_dn_rt   = (pe_high >= realtime_bep - bounce_tolerance or pe_high[1] >= realtime_bep[1] - bounce_tolerance) and (pe_ltp <= realtime_bep)
 
-bool ce_bounce_dn_stat = (ce_high >= day_open_bep) and (ce_ltp <= day_open_bep)
-bool pe_bounce_dn_stat = (pe_high >= day_open_bep) and (pe_ltp <= day_open_bep)
+bool ce_bounce_dn_stat = (ce_high >= day_open_bep - bounce_tolerance or ce_high[1] >= day_open_bep[1] - bounce_tolerance) and (ce_ltp <= day_open_bep)
+bool pe_bounce_dn_stat = (pe_high >= day_open_bep - bounce_tolerance or pe_high[1] >= day_open_bep[1] - bounce_tolerance) and (pe_ltp <= day_open_bep)
 
 // Trigger mode resolution
 bool ce_trig_rt = switch alert_trigger_mode
@@ -479,16 +485,23 @@ bool raw_t2_sell = pe_trig_stat and pe_filters_met
 bool raw_buy_alert  = raw_t1_buy or raw_t2_buy
 bool raw_sell_alert = raw_t1_sell or raw_t2_sell
 
-// --- Alternating State Engine (Prevents Consecutive Same-Direction Signals) ---
+// --- Bounce Re-entry Flags ---
+bool ce_is_bounce_raw = ce_bounce_up_rt or pe_bounce_dn_rt or ce_bounce_up_stat or pe_bounce_dn_stat
+bool pe_is_bounce_raw = pe_bounce_up_rt or ce_bounce_dn_rt or pe_bounce_up_stat or ce_bounce_dn_stat
+
+// --- Alternating State Engine (Prevents Consecutive Signals, with Bounce Re-entry Option) ---
 var int signalState = 0 // 0 = Neutral, 1 = BUY, -1 = SELL
 
 bool filtered_buy  = false
 bool filtered_sell = false
 
-if raw_buy_alert and (not prevent_consecutive_signals or signalState != 1)
+bool buy_pass_filter  = not prevent_consecutive_signals or signalState != 1 or (allow_bounce_reentry and ce_is_bounce_raw)
+bool sell_pass_filter = not prevent_consecutive_signals or signalState != -1 or (allow_bounce_reentry and pe_is_bounce_raw)
+
+if raw_buy_alert and buy_pass_filter
     filtered_buy := true
     signalState  := 1
-else if raw_sell_alert and (not prevent_consecutive_signals or signalState != -1)
+else if raw_sell_alert and sell_pass_filter
     filtered_sell := true
     signalState   := -1
 
