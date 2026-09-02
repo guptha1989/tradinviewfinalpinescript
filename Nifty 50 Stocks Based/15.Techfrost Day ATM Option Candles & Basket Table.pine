@@ -413,11 +413,11 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
-// Table 1: Small Compact Selected Strikes Table
-var table compactTable = table.new(f_get_table_pos(tablePosInput), 2, 12, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
-
-// Table 2: Full Analytics Grid Table
-var table summaryTable = table.new(f_get_table_pos(tablePosInput), 8, 15, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+// Global Helper Functions for Table Population
+f_fill_compact_row(table tbl, int r, float st_val, string role_tag, color bg_col, color tx_col, string t_sz) =>
+    string st_str = st_val == math.floor(st_val) ? str.tostring(int(st_val)) : str.tostring(st_val, "#.##")
+    table.cell(tbl, 0, r, st_str, bgcolor=bg_col, text_color=tx_col, text_size=t_sz)
+    table.cell(tbl, 1, r, role_tag, bgcolor=bg_col, text_color=tx_col, text_size=t_sz)
 
 f_fill_grid_row(table tbl, int r, float st_val, bool is_cur_atm, bool is_day_atm, float ce_o, float ce_ltp, float pe_o, float pe_ltp, string t_sz) =>
     string st_fmt = st_val == math.floor(st_val) ? str.tostring(int(st_val)) : str.tostring(st_val, "#.##")
@@ -447,6 +447,12 @@ f_fill_grid_row(table tbl, int r, float st_val, bool is_cur_atm, bool is_day_atm
     color diff_bg = na(raw_diff) ? color.black : (raw_diff > 0 ? color.new(#1B5E20, 0) : (raw_diff < 0 ? color.new(#880E4F, 0) : color.black))
     table.cell(tbl, 7, r, diff_str, bgcolor=diff_bg, text_color=color.white, text_size=t_sz)
 
+// Table 1: Small Compact Selected Strikes Table
+var table compactTable = table.new(f_get_table_pos(tablePosInput), 2, 12, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+
+// Table 2: Full Analytics Grid Table
+var table summaryTable = table.new(f_get_table_pos(tablePosInput), 8, 15, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+
 if barstate.islast
     if not showTableInput
         table.delete(compactTable)
@@ -467,42 +473,37 @@ if barstate.islast
 
             int c_row = 1
 
-            f_add_compact_row(float st_val, string role_tag, color bg_col, color tx_col) =>
-                string st_str = st_val == math.floor(st_val) ? str.tostring(int(st_val)) : str.tostring(st_val, "#.##")
-                table.cell(compactTable, 0, c_row, st_str, bgcolor=bg_col, text_color=tx_col, text_size=curTextSize)
-                table.cell(compactTable, 1, c_row, role_tag, bgcolor=bg_col, text_color=tx_col, text_size=curTextSize)
-
             if activeNumStrikes >= 4
-                f_add_compact_row(k_p4, "OTM Call / ITM Put (Upper 4)", color.new(#262626, 0), color.white)
+                f_fill_compact_row(compactTable, c_row, k_p4, "OTM Call / ITM Put (Upper 4)", color.new(#262626, 0), color.white, curTextSize)
                 c_row += 1
             if activeNumStrikes >= 3
-                f_add_compact_row(k_p3, "OTM Call / ITM Put (Upper 3)", color.new(#262626, 0), color.white)
+                f_fill_compact_row(compactTable, c_row, k_p3, "OTM Call / ITM Put (Upper 3)", color.new(#262626, 0), color.white, curTextSize)
                 c_row += 1
             if activeNumStrikes >= 2
-                f_add_compact_row(k_p2, "OTM Call / ITM Put (Upper 2)", color.new(#262626, 0), color.white)
+                f_fill_compact_row(compactTable, c_row, k_p2, "OTM Call / ITM Put (Upper 2)", color.new(#262626, 0), color.white, curTextSize)
                 c_row += 1
             if activeNumStrikes >= 1
-                f_add_compact_row(k_p1, "OTM Call / ITM Put (Upper 1)", color.new(#262626, 0), color.white)
+                f_fill_compact_row(compactTable, c_row, k_p1, "OTM Call / ITM Put (Upper 1)", color.new(#262626, 0), color.white, curTextSize)
                 c_row += 1
 
             // ATM Center Strike
             color atm_bg = k_0 == curATMStrike ? colorCurATMHighlight : (k_0 == dayOpenATMStrike ? colorDayATMHighlight : #212121)
             color atm_tx = (k_0 == curATMStrike or k_0 == dayOpenATMStrike) ? color.black : color.white
             string atm_tag = "ATM Center Strike (" + (k_0 == dayOpenATMStrike ? "Day Open ATM" : "") + (k_0 == curATMStrike ? " / Cur ATM" : "") + ")"
-            f_add_compact_row(k_0, atm_tag, atm_bg, atm_tx)
+            f_fill_compact_row(compactTable, c_row, k_0, atm_tag, atm_bg, atm_tx, curTextSize)
             c_row += 1
 
             if activeNumStrikes >= 1
-                f_add_compact_row(k_m1, "ITM Call / OTM Put (Lower 1)", color.new(#262626, 0), color.white)
+                f_fill_compact_row(compactTable, c_row, k_m1, "ITM Call / OTM Put (Lower 1)", color.new(#262626, 0), color.white, curTextSize)
                 c_row += 1
             if activeNumStrikes >= 2
-                f_add_compact_row(k_m2, "ITM Call / OTM Put (Lower 2)", color.new(#262626, 0), color.white)
+                f_fill_compact_row(compactTable, c_row, k_m2, "ITM Call / OTM Put (Lower 2)", color.new(#262626, 0), color.white, curTextSize)
                 c_row += 1
             if activeNumStrikes >= 3
-                f_add_compact_row(k_m3, "ITM Call / OTM Put (Lower 3)", color.new(#262626, 0), color.white)
+                f_fill_compact_row(compactTable, c_row, k_m3, "ITM Call / OTM Put (Lower 3)", color.new(#262626, 0), color.white, curTextSize)
                 c_row += 1
             if activeNumStrikes >= 4
-                f_add_compact_row(k_m4, "ITM Call / OTM Put (Lower 4)", color.new(#262626, 0), color.white)
+                f_fill_compact_row(compactTable, c_row, k_m4, "ITM Call / OTM Put (Lower 4)", color.new(#262626, 0), color.white, curTextSize)
                 c_row += 1
 
         else
