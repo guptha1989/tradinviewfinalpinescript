@@ -539,52 +539,37 @@ bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_
 bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
 
-// --- Universal BEP Line Trigger Helpers ---
-// Downside Rejection: High touches/surpasses BEP line (h_val >= bep), Close finishes below (c_val < bep)
+// --- Universal BEP Line Trigger Helper (Dual-Directional Primary & Opposite Candle Triggers) ---
 f_bounce_dn(float h_val, float c_val, float bep_val) =>
     (h_val >= bep_val) and (c_val < bep_val)
 
-// Upside Bounce: Low touches/dips to BEP line (l_val <= bep), Close finishes above (c_val > bep)
-f_bounce_up(float l_val, float c_val, float bep_val) =>
-    (l_val <= bep_val) and (c_val > bep_val)
-
 // For a CE (Call Buy) Alert on BEP line:
-// 1) Call Crossover: Call closes above BEP line
-// 2) Call Support Bounce: Call low touches BEP line and closes above
-// 3) Put Resistance Rejection: Put high touches BEP line and closes below
+// 1) Primary Call candle OR Opposite Call candle closes above BEP line
+// 2) OR Primary Put candle OR Opposite Put candle high >= BEP line and close < BEP line (Downside Bounce rejection on Put)
 f_check_ce_bep_trig(float bep_val) =>
     bool ce_cross_prim = isCall ? (close > bep_val and nz(close[1]) <= bep_val) : (opp_c > bep_val and nz(opp_c[1]) <= bep_val)
     bool ce_cross_sec  = ta.crossover(ce_ltp, bep_val) or (ce_ltp > bep_val and nz(ce_ltp[1]) <= bep_val) or ta.crossover(chart_ce_close, bep_val)
     bool ce_cross      = ce_cross_prim or ce_cross_sec
 
-    bool ce_bounce_up_prim = isCall ? f_bounce_up(low, close, bep_val) : f_bounce_up(opp_l, opp_c, bep_val)
-    bool ce_bounce_up_sec  = f_bounce_up(ce_low, ce_ltp, bep_val) or f_bounce_up(ce_l_0, ce_c_0, bep_val) or f_bounce_up(ce_l_m1, ce_c_m1, bep_val) or f_bounce_up(ce_l_m2, ce_c_m2, bep_val) or f_bounce_up(ce_l_m3, ce_c_m3, bep_val) or f_bounce_up(ce_l_p1, ce_c_p1, bep_val) or f_bounce_up(ce_l_p2, ce_c_p2, bep_val) or f_bounce_up(ce_l_p3, ce_c_p3, bep_val)
-    bool ce_bounce_up      = ce_bounce_up_prim or ce_bounce_up_sec
+    bool pe_bounce_prim = isCall ? f_bounce_dn(opp_h, opp_c, bep_val) : f_bounce_dn(high, close, bep_val)
+    bool pe_bounce_sec  = f_bounce_dn(opp_h, opp_c, bep_val) or f_bounce_dn(chart_pe_high, chart_pe_close, bep_val) or f_bounce_dn(pe_high, pe_ltp, bep_val) or f_bounce_dn(pe_h_0, pe_c_0, bep_val) or f_bounce_dn(pe_h_p1, pe_c_p1, bep_val) or f_bounce_dn(pe_h_p2, pe_c_p2, bep_val) or f_bounce_dn(pe_h_p3, pe_c_p3, bep_val) or f_bounce_dn(pe_h_m1, pe_c_m1, bep_val) or f_bounce_dn(pe_h_m2, pe_c_m2, bep_val) or f_bounce_dn(pe_h_m3, pe_c_m3, bep_val)
+    bool pe_bounce      = pe_bounce_prim or pe_bounce_sec
 
-    bool pe_bounce_dn_prim = isCall ? f_bounce_dn(opp_h, opp_c, bep_val) : f_bounce_dn(high, close, bep_val)
-    bool pe_bounce_dn_sec  = f_bounce_dn(opp_h, opp_c, bep_val) or f_bounce_dn(chart_pe_high, chart_pe_close, bep_val) or f_bounce_dn(pe_high, pe_ltp, bep_val) or f_bounce_dn(pe_h_0, pe_c_0, bep_val) or f_bounce_dn(pe_h_p1, pe_c_p1, bep_val) or f_bounce_dn(pe_h_p2, pe_c_p2, bep_val) or f_bounce_dn(pe_h_p3, pe_c_p3, bep_val) or f_bounce_dn(pe_h_m1, pe_c_m1, bep_val) or f_bounce_dn(pe_h_m2, pe_c_m2, bep_val) or f_bounce_dn(pe_h_m3, pe_c_m3, bep_val)
-    bool pe_bounce_dn      = pe_bounce_dn_prim or pe_bounce_dn_sec
-
-    ce_cross or ce_bounce_up or pe_bounce_dn
+    ce_cross or pe_bounce
 
 // For a PE (Put Sell) Alert on BEP line:
-// 1) Put Crossover: Put closes above BEP line
-// 2) Put Support Bounce: Put low touches BEP line and closes above
-// 3) Call Resistance Rejection: Call high touches BEP line and closes below
+// 1) Primary Put candle OR Opposite Put candle closes above BEP line
+// 2) OR Primary Call candle OR Opposite Call candle high >= BEP line and close < BEP line (Downside Bounce rejection on Call)
 f_check_pe_bep_trig(float bep_val) =>
     bool pe_cross_prim = isPut ? (close > bep_val and nz(close[1]) <= bep_val) : (opp_c > bep_val and nz(opp_c[1]) <= bep_val)
     bool pe_cross_sec  = ta.crossover(pe_ltp, bep_val) or (pe_ltp > bep_val and nz(pe_ltp[1]) <= bep_val) or ta.crossover(chart_pe_close, bep_val)
     bool pe_cross      = pe_cross_prim or pe_cross_sec
 
-    bool pe_bounce_up_prim = isPut ? f_bounce_up(low, close, bep_val) : f_bounce_up(opp_l, opp_c, bep_val)
-    bool pe_bounce_up_sec  = f_bounce_up(pe_low, pe_ltp, bep_val) or f_bounce_up(pe_l_0, pe_c_0, bep_val) or f_bounce_up(pe_l_p1, pe_c_p1, bep_val) or f_bounce_up(pe_l_p2, pe_c_p2, bep_val) or f_bounce_up(pe_l_p3, pe_c_p3, bep_val) or f_bounce_up(pe_l_m1, pe_c_m1, bep_val) or f_bounce_up(pe_l_m2, pe_c_m2, bep_val) or f_bounce_up(pe_l_m3, pe_c_m3, bep_val)
-    bool pe_bounce_up      = pe_bounce_up_prim or pe_bounce_up_sec
+    bool ce_bounce_prim = isPut ? f_bounce_dn(opp_h, opp_c, bep_val) : f_bounce_dn(high, close, bep_val)
+    bool ce_bounce_sec  = f_bounce_dn(opp_h, opp_c, bep_val) or f_bounce_dn(chart_ce_high, chart_ce_close, bep_val) or f_bounce_dn(ce_high, ce_ltp, bep_val) or f_bounce_dn(ce_h_0, ce_c_0, bep_val) or f_bounce_dn(ce_h_p1, ce_c_p1, bep_val) or f_bounce_dn(ce_h_p2, ce_c_p2, bep_val) or f_bounce_dn(ce_h_p3, ce_c_p3, bep_val) or f_bounce_dn(ce_h_m1, ce_c_m1, bep_val) or f_bounce_dn(ce_h_m2, ce_c_m2, bep_val) or f_bounce_dn(ce_h_m3, ce_c_m3, bep_val)
+    bool ce_bounce      = ce_bounce_prim or ce_bounce_sec
 
-    bool ce_bounce_dn_prim = isPut ? f_bounce_dn(opp_h, opp_c, bep_val) : f_bounce_dn(high, close, bep_val)
-    bool ce_bounce_dn_sec  = f_bounce_dn(opp_h, opp_c, bep_val) or f_bounce_dn(chart_ce_high, chart_ce_close, bep_val) or f_bounce_dn(ce_high, ce_ltp, bep_val) or f_bounce_dn(ce_h_0, ce_c_0, bep_val) or f_bounce_dn(ce_h_p1, ce_c_p1, bep_val) or f_bounce_dn(ce_h_p2, ce_c_p2, bep_val) or f_bounce_dn(ce_h_p3, ce_c_p3, bep_val) or f_bounce_dn(ce_h_m1, ce_c_m1, bep_val) or f_bounce_dn(ce_h_m2, ce_c_m2, bep_val) or f_bounce_dn(ce_h_m3, ce_c_m3, bep_val)
-    bool ce_bounce_dn      = ce_bounce_dn_prim or ce_bounce_dn_sec
-
-    pe_cross or pe_bounce_up or ce_bounce_dn
+    pe_cross or ce_bounce
 
 // Evaluate Triggers Across All 14 BEP Lines (7 Realtime & 7 Static)
 bool ce_trig_m3_rt   = f_check_ce_bep_trig(bep_rt_m3)
