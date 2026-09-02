@@ -566,7 +566,7 @@ bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_
 bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
 
-// --- Universal BEP Line Trigger Helpers ---
+// --- Universal BEP Level Pair Trigger Evaluators ---
 // Downside Rejection: High touches/surpasses BEP line (h_val >= bep), Close finishes below (c_val < bep)
 f_bounce_dn(float h_val, float c_val, float bep_val) =>
     (h_val >= bep_val) and (c_val < bep_val)
@@ -575,70 +575,64 @@ f_bounce_dn(float h_val, float c_val, float bep_val) =>
 f_bounce_up(float l_val, float c_val, float bep_val) =>
     (l_val <= bep_val) and (c_val > bep_val)
 
-// For a CE (Call Buy) Alert on BEP line:
-// 1) Call Crossover: Call closes above BEP line
-// 2) Call Support Bounce: Call low touches BEP line and closes above
-// 3) Put Resistance Rejection: Put high touches BEP line and closes below
-f_check_ce_bep_trig(float bep_val) =>
-    bool ce_cross     = (chart_ce_close > bep_val) and (nz(chart_ce_close[1]) <= bep_val)
-    bool ce_bounce_up = f_bounce_up(chart_ce_low, chart_ce_close, bep_val)
-    bool pe_bounce_dn = f_bounce_dn(chart_pe_high, chart_pe_close, bep_val)
-
+// Call Buy Alert on a specific BEP line level:
+// Evaluates Call crossover, Call support bounce UP, or Put resistance rejection DOWN for the corresponding strike pair
+f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
+    bool ce_cross     = (c_c > bep_val) and (nz(c_c[1]) <= bep_val)
+    bool ce_bounce_up = f_bounce_up(c_l, c_c, bep_val)
+    bool pe_bounce_dn = f_bounce_dn(p_h, p_c, bep_val)
     ce_cross or ce_bounce_up or pe_bounce_dn
 
-// For a PE (Put Sell) Alert on BEP line:
-// 1) Put Crossover: Put closes above BEP line
-// 2) Put Support Bounce: Put low touches BEP line and closes above
-// 3) Call Resistance Rejection: Call high touches BEP line and closes below
-f_check_pe_bep_trig(float bep_val) =>
-    bool pe_cross     = (chart_pe_close > bep_val) and (nz(chart_pe_close[1]) <= bep_val)
-    bool pe_bounce_up = f_bounce_up(chart_pe_low, chart_pe_close, bep_val)
-    bool ce_bounce_dn = f_bounce_dn(chart_ce_high, chart_ce_close, bep_val)
-
+// Put Sell Alert on a specific BEP line level:
+// Evaluates Put crossover, Put support bounce UP, or Call resistance rejection DOWN for the corresponding strike pair
+f_eval_pe_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
+    bool pe_cross     = (p_c > bep_val) and (nz(p_c[1]) <= bep_val)
+    bool pe_bounce_up = f_bounce_up(p_l, p_c, bep_val)
+    bool ce_bounce_dn = f_bounce_dn(c_h, c_c, bep_val)
     pe_cross or pe_bounce_up or ce_bounce_dn
 
-// Evaluate Triggers Across All 14 BEP Lines (7 Realtime & 7 Static)
-bool ce_trig_m3_rt   = f_check_ce_bep_trig(bep_rt_m3)
-bool ce_trig_m3_stat = f_check_ce_bep_trig(bep_stat_m3)
+// Evaluate Triggers Across All 14 BEP Lines with Exact Matching Option Strike Pairs
+bool ce_trig_m3_rt   = f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
+bool ce_trig_m3_stat = f_eval_ce_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
 
-bool ce_trig_m2_rt   = f_check_ce_bep_trig(bep_rt_m2)
-bool ce_trig_m2_stat = f_check_ce_bep_trig(bep_stat_m2)
+bool pe_trig_m3_rt   = f_eval_pe_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
+bool pe_trig_m3_stat = f_eval_pe_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
 
-bool ce_trig_m1_rt   = f_check_ce_bep_trig(bep_rt_m1)
-bool ce_trig_m1_stat = f_check_ce_bep_trig(bep_stat_m1)
+bool ce_trig_m2_rt   = f_eval_ce_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
+bool ce_trig_m2_stat = f_eval_ce_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
 
-bool ce_trig_0_rt    = f_check_ce_bep_trig(bep_rt_0)
-bool ce_trig_0_stat  = f_check_ce_bep_trig(bep_stat_0)
+bool pe_trig_m2_rt   = f_eval_pe_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
+bool pe_trig_m2_stat = f_eval_pe_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
 
-bool ce_trig_p1_rt   = f_check_ce_bep_trig(bep_rt_p1)
-bool ce_trig_p1_stat = f_check_ce_bep_trig(bep_stat_p1)
+bool ce_trig_m1_rt   = f_eval_ce_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
+bool ce_trig_m1_stat = f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
 
-bool ce_trig_p2_rt   = f_check_ce_bep_trig(bep_rt_p2)
-bool ce_trig_p2_stat = f_check_ce_bep_trig(bep_stat_p2)
+bool pe_trig_m1_rt   = f_eval_pe_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
+bool pe_trig_m1_stat = f_eval_pe_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
 
-bool ce_trig_p3_rt   = f_check_ce_bep_trig(bep_rt_p3)
-bool ce_trig_p3_stat = f_check_ce_bep_trig(bep_stat_p3)
+bool ce_trig_0_rt    = f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool ce_trig_0_stat  = f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
 
-bool pe_trig_m3_rt   = f_check_pe_bep_trig(bep_rt_m3)
-bool pe_trig_m3_stat = f_check_pe_bep_trig(bep_stat_m3)
+bool pe_trig_0_rt    = f_eval_pe_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool pe_trig_0_stat  = f_eval_pe_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
 
-bool pe_trig_m2_rt   = f_check_pe_bep_trig(bep_rt_m2)
-bool pe_trig_m2_stat = f_check_pe_bep_trig(bep_stat_m2)
+bool ce_trig_p1_rt   = f_eval_ce_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
+bool ce_trig_p1_stat = f_eval_ce_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
 
-bool pe_trig_m1_rt   = f_check_pe_bep_trig(bep_rt_m1)
-bool pe_trig_m1_stat = f_check_pe_bep_trig(bep_stat_m1)
+bool pe_trig_p1_rt   = f_eval_pe_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
+bool pe_trig_p1_stat = f_eval_pe_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
 
-bool pe_trig_0_rt    = f_check_pe_bep_trig(bep_rt_0)
-bool pe_trig_0_stat  = f_check_pe_bep_trig(bep_stat_0)
+bool ce_trig_p2_rt   = f_eval_ce_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool ce_trig_p2_stat = f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
 
-bool pe_trig_p1_rt   = f_check_pe_bep_trig(bep_rt_p1)
-bool pe_trig_p1_stat = f_check_pe_bep_trig(bep_stat_p1)
+bool pe_trig_p2_rt   = f_eval_pe_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool pe_trig_p2_stat = f_eval_pe_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
 
-bool pe_trig_p2_rt   = f_check_pe_bep_trig(bep_rt_p2)
-bool pe_trig_p2_stat = f_check_pe_bep_trig(bep_stat_p2)
+bool ce_trig_p3_rt   = f_eval_ce_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+bool ce_trig_p3_stat = f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 
-bool pe_trig_p3_rt   = f_check_pe_bep_trig(bep_rt_p3)
-bool pe_trig_p3_stat = f_check_pe_bep_trig(bep_stat_p3)
+bool pe_trig_p3_rt   = f_eval_pe_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+bool pe_trig_p3_stat = f_eval_pe_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 
 // Combined Crossovers & Downside Bounces Across All 14 BEP Lines
 bool ce_any_bep_trig = ce_trig_m3_rt or ce_trig_m3_stat or ce_trig_m2_rt or ce_trig_m2_stat or ce_trig_m1_rt or ce_trig_m1_stat or ce_trig_0_rt or ce_trig_0_stat or ce_trig_p1_rt or ce_trig_p1_stat or ce_trig_p2_rt or ce_trig_p2_stat or ce_trig_p3_rt or ce_trig_p3_stat
