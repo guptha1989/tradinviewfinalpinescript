@@ -224,16 +224,18 @@ float baseStrike = baseCenterStrike
 // ==========================================
 
 f_build_option_symbol(float target_strike, bool target_is_ce) =>
-    string st_digits = not na(chartStrikePrice) and chartStrikePrice > 0 ? (chartStrikePrice == math.floor(chartStrikePrice) ? str.tostring(int(chartStrikePrice)) : str.tostring(chartStrikePrice)) : (target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike))
-    int st_len = str.length(st_digits)
     string target_st_str = target_strike == math.floor(target_strike) ? str.tostring(int(target_strike)) : str.tostring(target_strike)
     
     if str.endswith(cleanTicker, "CE") or str.endswith(cleanTicker, "PE")
         int end_trim = 2
         string base_no_suffix = str.substring(cleanTicker, 0, str.length(cleanTicker) - end_trim)
-        string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - st_len)
-        string sfx = target_is_ce ? "CE" : "PE"
-        pfx + target_st_str + sfx
+        string strikeDigits = str.match(base_no_suffix, "\\d+$")
+        if strikeDigits != ""
+            string pfx = str.substring(base_no_suffix, 0, str.length(base_no_suffix) - str.length(strikeDigits))
+            string sfx = target_is_ce ? "CE" : "PE"
+            pfx + target_st_str + sfx
+        else
+            cleanTicker
     else if str.match(cleanTicker, "[CP]\\d+$") != ""
         string matchCP = str.match(cleanTicker, "[CP]\\d+$")
         int matchPos = str.pos(cleanTicker, matchCP)
@@ -241,8 +243,9 @@ f_build_option_symbol(float target_strike, bool target_is_ce) =>
         string cp_letter = target_is_ce ? "C" : "P"
         pfx + cp_letter + target_st_str
     else
-        string rep_ticker = str.replace(cleanTicker, st_digits, target_st_str)
-        rep_ticker
+        string root = str.match(cleanTicker, "^[A-Z&]+")
+        string sfx = target_is_ce ? "CE" : "PE"
+        (root != "" ? root : cleanTicker) + target_st_str + sfx
 
 f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
 f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
@@ -343,7 +346,7 @@ plotcandle(showCE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_ce_opn, c
 plotcandle(showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_opn, curATMStrike) : na, showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_h, curATMStrike) : na, showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_l, curATMStrike) : na, showPE_Candles and plotCurRealtimeCandles ? f_scale_val(cur_pe_c, curATMStrike) : na,
   title="Current Realtime ATM PE Candle", color=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear, wickcolor=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear, bordercolor=cur_pe_c >= cur_pe_opn ? color_cur_pe_bull : color_cur_pe_bear)
 
-// Floating Right-Side Labels with Explicit Contract Strike Names (e.g. 25300CE, 25400PE)
+// Floating Right-Side Labels with Explicit Fail-Safe Contract Strike Names & Prices
 var label lbl_day_ce = na, var label lbl_day_pe = na
 var label lbl_cur_ce = na, var label lbl_cur_pe = na
 
@@ -359,21 +362,26 @@ if barstate.islast and show_candle_labels
     string cur_ce_name = (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "CE"
     string cur_pe_name = (curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")) + "PE"
 
+    float val_dce = na(ce_c_0) ? close : ce_c_0
+    float val_dpe = na(pe_c_0) ? close : pe_c_0
+    float val_cce = na(cur_ce_c) ? val_dce : cur_ce_c
+    float val_cpe = na(cur_pe_c) ? val_dpe : cur_pe_c
+
     if showCE_Candles and plotDayOpenCandles
-        float y_dce = f_scale_val(ce_c_0, dayOpenATMStrike)
-        lbl_day_ce := label.new(labelBar, y_dce, day_ce_name + ": " + str.tostring(ce_c_0, "#.##"), color=color_day_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        float y_dce = f_scale_val(val_dce, dayOpenATMStrike)
+        lbl_day_ce := label.new(labelBar, y_dce, day_ce_name + ": " + str.tostring(val_dce, "#.##"), color=color_day_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
         
     if showPE_Candles and plotDayOpenCandles
-        float y_dpe = f_scale_val(pe_c_0, dayOpenATMStrike)
-        lbl_day_pe := label.new(labelBar, y_dpe, day_pe_name + ": " + str.tostring(pe_c_0, "#.##"), color=color_day_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        float y_dpe = f_scale_val(val_dpe, dayOpenATMStrike)
+        lbl_day_pe := label.new(labelBar, y_dpe, day_pe_name + ": " + str.tostring(val_dpe, "#.##"), color=color_day_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
         
     if showCE_Candles and plotCurRealtimeCandles
-        float y_cce = f_scale_val(cur_ce_c, curATMStrike)
-        lbl_cur_ce := label.new(labelBar, y_cce, cur_ce_name + ": " + str.tostring(cur_ce_c, "#.##"), color=color_cur_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        float y_cce = f_scale_val(val_cce, curATMStrike)
+        lbl_cur_ce := label.new(labelBar, y_cce, cur_ce_name + ": " + str.tostring(val_cce, "#.##"), color=color_cur_ce_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
         
     if showPE_Candles and plotCurRealtimeCandles
-        float y_cpe = f_scale_val(cur_pe_c, curATMStrike)
-        lbl_cur_pe := label.new(labelBar, y_cpe, cur_pe_name + ": " + str.tostring(cur_pe_c, "#.##"), color=color_cur_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
+        float y_cpe = f_scale_val(val_cpe, curATMStrike)
+        lbl_cur_pe := label.new(labelBar, y_cpe, cur_pe_name + ": " + str.tostring(val_cpe, "#.##"), color=color_cur_pe_bull, textcolor=color.black, style=label.style_label_left, size=size.small)
 
 // ==========================================
 // BASKET AVERAGE MATH CALCULATIONS
