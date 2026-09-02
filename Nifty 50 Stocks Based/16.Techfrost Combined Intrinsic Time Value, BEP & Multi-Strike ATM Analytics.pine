@@ -826,22 +826,22 @@ bool pe_blast_active = overall_sell_alert and pe_rsi_blast_cond and pe_adx_blast
 bool fresh_iv_buy_signal  = overall_buy_alert and ce_fresh_iv
 bool fresh_iv_sell_signal = overall_sell_alert and pe_fresh_iv
 
-// --- Consolidated Signal Shape Markers (4 plotshape calls = 4 plots) ---
+// --- Signal Shape Markers ---
 show_signal_shapes = input.bool(true, "Show CE / PE Signal Markers", group="Visual Signals")
 
-bool show_ce_label   = show_signal_shapes and overall_buy_alert
-string ce_label_text = ce_blast_active ? "CE BLAST 🔥" : (ce_fresh_iv ? "FRESH IV CE ★" : "CE")
-color ce_label_col   = ce_blast_active ? #00FF66 : (ce_fresh_iv ? #FFD700 : #00E676)
-color ce_text_col    = (ce_blast_active or ce_fresh_iv) ? color.black : color.white
+// Regular Signals (non-blast, non-fresh-IV)
+plotshape(show_signal_shapes and overall_buy_alert and not ce_blast_active and not ce_fresh_iv, title="CE Regular Signal Marker", style=shape.labelup, location=location.belowbar, color=#00E676, textcolor=color.white, size=size.small, text="CE")
+plotshape(show_signal_shapes and overall_sell_alert and not pe_blast_active and not pe_fresh_iv, title="PE Regular Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF1744, textcolor=color.white, size=size.small, text="PE")
 
-bool show_pe_label   = show_signal_shapes and overall_sell_alert
-string pe_label_text = pe_blast_active ? "PE BLAST 🔥" : (pe_fresh_iv ? "FRESH IV PE ★" : "PE")
-color pe_label_col   = pe_blast_active ? #FF0055 : (pe_fresh_iv ? #FFD700 : #FF1744)
-color pe_text_col    = color.white
+// Momentum BLAST Signal Markers (Vibrant Neon Accent with Flame Emoji)
+plotshape(show_signal_shapes and ce_blast_active, title="CE BLAST Signal Marker", style=shape.labelup, location=location.belowbar, color=#00FF66, textcolor=color.black, size=size.normal, text="CE BLAST 🔥")
+plotshape(show_signal_shapes and pe_blast_active, title="PE BLAST Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FF0055, textcolor=color.white, size=size.normal, text="PE BLAST 🔥")
 
-plotshape(show_ce_label, title="CE Signal Label Marker", style=shape.labelup, location=location.belowbar, color=ce_label_col, textcolor=ce_text_col, size=size.normal, text=ce_label_text)
-plotshape(show_pe_label, title="PE Signal Label Marker", style=shape.labeldown, location=location.abovebar, color=pe_label_col, textcolor=pe_text_col, size=size.normal, text=pe_label_text)
+// Special Fresh Intrinsic Value Signal Markers (Gold Star Markers)
+plotshape(show_signal_shapes and fresh_iv_buy_signal and not ce_blast_active, title="Fresh IV CE Signal Marker", style=shape.labelup, location=location.belowbar, color=#FFD700, textcolor=color.white, size=size.normal, text="FRESH IV CE ★")
+plotshape(show_signal_shapes and fresh_iv_sell_signal and not pe_blast_active, title="Fresh IV PE Signal Marker", style=shape.labeldown, location=location.abovebar, color=#FFD700, textcolor=color.black, size=size.normal, text="FRESH IV PE ★")
 
+// Standalone Fresh Intrinsic Value Formation Markers (even outside alerts)
 plotshape(show_signal_shapes and ce_fresh_iv and not overall_buy_alert, title="Fresh CE Intrinsic Value Marker", style=shape.diamond, location=location.belowbar, color=#FFD700, size=size.tiny, text="CE IV★")
 plotshape(show_signal_shapes and pe_fresh_iv and not overall_sell_alert, title="Fresh PE Intrinsic Value Marker", style=shape.diamond, location=location.abovebar, color=#FFD700, size=size.tiny, text="PE IV★")
 
