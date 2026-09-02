@@ -633,22 +633,11 @@ bool pe_trig_p3_stat = f_check_pe_bep_trig(bep_stat_p3)
 bool ce_any_bep_trig = ce_trig_m3_rt or ce_trig_m3_stat or ce_trig_m2_rt or ce_trig_m2_stat or ce_trig_m1_rt or ce_trig_m1_stat or ce_trig_0_rt or ce_trig_0_stat or ce_trig_p1_rt or ce_trig_p1_stat or ce_trig_p2_rt or ce_trig_p2_stat or ce_trig_p3_rt or ce_trig_p3_stat
 bool pe_any_bep_trig = pe_trig_m3_rt or pe_trig_m3_stat or pe_trig_m2_rt or pe_trig_m2_stat or pe_trig_m1_rt or pe_trig_m1_stat or pe_trig_0_rt or pe_trig_0_stat or pe_trig_p1_rt or pe_trig_p1_stat or pe_trig_p2_rt or pe_trig_p2_stat or pe_trig_p3_rt or pe_trig_p3_stat
 
-// --- Combined Raw Buy & Sell Triggers Across All 14 BEP Lines ---
-bool raw_buy_alert  = ce_any_bep_trig and ce_filters_met and not (pe_any_bep_trig and pe_filters_met)
-bool raw_sell_alert = pe_any_bep_trig and pe_filters_met and not (ce_any_bep_trig and ce_filters_met)
-
-// --- Strict Alternating Swing Lock State Machine ---
-var int activeSwing = 0 // 0 = Neutral, 1 = In BUY Swing, -1 = In SELL Swing
-
-bool overall_buy_alert  = false
-bool overall_sell_alert = false
-
-if raw_buy_alert and activeSwing != 1
-    overall_buy_alert := true
-    activeSwing       := 1
-else if raw_sell_alert and activeSwing != -1
-    overall_sell_alert := true
-    activeSwing        := -1
+// --- Direct Unlocked BEP Line Buy & Sell Triggers ---
+// Whenever a BEP line trigger (Crossover, Support Bounce UP, or Resistance Rejection DOWN) occurs,
+// fire the alert directly!
+bool overall_buy_alert  = ce_any_bep_trig and ce_filters_met and not (pe_any_bep_trig and pe_filters_met)
+bool overall_sell_alert = pe_any_bep_trig and pe_filters_met and not (ce_any_bep_trig and ce_filters_met)
 
 // Special Momentum BLAST Signals (ADX > 20 slanting UP + RSI > 60 for CE / < 40 for PE)
 bool ce_blast_active = overall_buy_alert  and adx_up_slant and ce_rsi_blast_cond
