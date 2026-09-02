@@ -361,16 +361,27 @@ float peAvgCur = sum_pe_cur / total_count
 float ceAvgChg = ceAvgCur - ceAvgOpen
 float peAvgChg = peAvgCur - peAvgOpen
 
+// --- Signed Intrinsic Values (Distance from Strike) ---
+float ce_iv_signed = spot_ltp - ce_strike
+float pe_iv_signed = pe_strike - spot_ltp
+
 // ==========================================
 // USER BUY & SELL ALERT CONDITIONS ENGINE
 // ==========================================
 
-// --- Common Filters ---
-// CE Filter: CE current average > CE day open average AND CE avg change > 0 AND CE Realtime Intrinsic > PE Realtime Intrinsic
-bool ce_filters_met = (ceAvgCur > ceAvgOpen) and (ceAvgChg > 0) and (ce_iv_rt > pe_iv_rt)
+// --- Modified Intrinsic Filter Conditions ---
+// CE Condition: (CE Intrinsic > 0 AND PE Intrinsic < 0) OR (CE Intrinsic > 0 AND PE Intrinsic > CE Intrinsic)
+bool ce_iv_condition = (ce_iv_rt > 0 and pe_iv_signed < 0) or (ce_iv_rt > 0 and pe_iv_rt > ce_iv_rt)
 
-// PE Filter: PE current average > PE day open average AND PE avg change > 0 AND PE Realtime Intrinsic > CE Realtime Intrinsic
-bool pe_filters_met = (peAvgCur > peAvgOpen) and (peAvgChg > 0) and (pe_iv_rt > ce_iv_rt)
+// PE Condition: (PE Intrinsic > 0 AND CE Intrinsic < 0) OR (PE Intrinsic > 0 AND CE Intrinsic > PE Intrinsic)
+bool pe_iv_condition = (pe_iv_rt > 0 and ce_iv_signed < 0) or (pe_iv_rt > 0 and ce_iv_rt > pe_iv_rt)
+
+// --- Common Filters ---
+// CE Filter: CE current average > CE day open average AND CE avg change > 0 AND CE Intrinsic condition
+bool ce_filters_met = (ceAvgCur > ceAvgOpen) and (ceAvgChg > 0) and ce_iv_condition
+
+// PE Filter: PE current average > PE day open average AND PE avg change > 0 AND PE Intrinsic condition
+bool pe_filters_met = (peAvgCur > peAvgOpen) and (peAvgChg > 0) and pe_iv_condition
 
 // --- Trigger 1: Realtime Dynamic BEP ---
 // Price close above Realtime BEP
