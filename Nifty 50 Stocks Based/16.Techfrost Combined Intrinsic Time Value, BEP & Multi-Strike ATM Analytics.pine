@@ -284,6 +284,10 @@ float k_m4 = baseStrike - 4.0 * stepVal
 // DATA FETCHING (SECURITY CALLS)
 // ==========================================
 
+f_get_strike_open_and_ltp() =>
+    float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    [d_op, close]
+
 f_get_strike_ohlc() =>
     float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
     [d_op, low, close]
