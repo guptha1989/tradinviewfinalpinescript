@@ -378,8 +378,8 @@ float itm_realtime_bep = (ce_itm_ltp + pe_itm_ltp) / 2.0  // ITM Realtime BEP
 float otm_realtime_bep = (ce_otm_ltp + pe_otm_ltp) / 2.0  // OTM Realtime BEP
 
 // --- Plot all 3 Realtime Dynamic BEP Lines ---
-plot(realtime_bep,     title="ATM Realtime BEP", color=color.new(color.white, 0),  linewidth=2)
-plot(itm_realtime_bep, title="ITM Realtime BEP", color=color.new(color.cyan, 20),   linewidth=1, style=plot.style_linebr)
+plot(realtime_bep,     title="ATM Realtime BEP", color=color.new(color.white, 0), linewidth=2)
+plot(itm_realtime_bep, title="ITM Realtime BEP", color=color.new(color.aqua, 20),  linewidth=1, style=plot.style_linebr)
 plot(otm_realtime_bep, title="OTM Realtime BEP", color=color.new(color.orange, 20), linewidth=1, style=plot.style_linebr)
 
 // --- Multi-Strike Basket Averages ---
@@ -422,11 +422,19 @@ bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_iv_pass
 
 // --- Mutually Exclusive Breakout Crossovers Across All 3 Realtime BEP Lines ---
-bool ce_cross_rt   = ta.crossover(ce_ltp, realtime_bep) or ta.crossover(ce_ltp, itm_realtime_bep) or ta.crossover(ce_ltp, otm_realtime_bep)
-bool pe_cross_rt   = ta.crossover(pe_ltp, realtime_bep) or ta.crossover(pe_ltp, itm_realtime_bep) or ta.crossover(pe_ltp, otm_realtime_bep)
+bool ce_cross_atm_val = ta.crossover(ce_ltp, realtime_bep)
+bool ce_cross_itm_val = ta.crossover(ce_ltp, itm_realtime_bep)
+bool ce_cross_otm_val = ta.crossover(ce_ltp, otm_realtime_bep)
+bool ce_cross_stat    = ta.crossover(ce_ltp, day_open_bep)
 
-bool ce_cross_stat = ta.crossover(ce_ltp, day_open_bep)
-bool pe_cross_stat = ta.crossover(pe_ltp, day_open_bep)
+bool ce_cross_rt      = ce_cross_atm_val or ce_cross_itm_val or ce_cross_otm_val
+
+bool pe_cross_atm_val = ta.crossover(pe_ltp, realtime_bep)
+bool pe_cross_itm_val = ta.crossover(pe_ltp, itm_realtime_bep)
+bool pe_cross_otm_val = ta.crossover(pe_ltp, otm_realtime_bep)
+bool pe_cross_stat    = ta.crossover(pe_ltp, day_open_bep)
+
+bool pe_cross_rt      = pe_cross_atm_val or pe_cross_itm_val or pe_cross_otm_val
 
 // --- Mutually Exclusive Touch & Rejection Breakouts Across All 3 Realtime BEP Lines ---
 bool ce_touch_atm = (ce_low <= realtime_bep or ce_high >= realtime_bep) and (ce_ltp < realtime_bep)
