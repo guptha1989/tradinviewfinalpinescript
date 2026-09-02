@@ -347,11 +347,15 @@ plotcandle(show_opp_candles ? opp_o : na,
            title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
 
 // Explicit Call and Put Chart Candle Values
-float chart_ce_close = isCall ? close : opp_c
+float chart_ce_open  = isCall ? open  : opp_o
 float chart_ce_high  = isCall ? high  : opp_h
+float chart_ce_low   = isCall ? low   : opp_l
+float chart_ce_close = isCall ? close : opp_c
 
-float chart_pe_close = isCall ? opp_c : close
-float chart_pe_high  = isCall ? opp_h : high
+float chart_pe_open  = isPut  ? open  : opp_o
+float chart_pe_high  = isPut  ? high  : opp_h
+float chart_pe_low   = isPut  ? low   : opp_l
+float chart_pe_close = isPut  ? close : opp_c
 
 // Fetch ATM Option OHLC & Previous Day Data
 [ce_open_sec, ce_high_sec, ce_low_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
@@ -561,17 +565,6 @@ bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_
 // Directional Filters with Strict Confluence
 bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
-
-// Explicit Call and Put Chart Candle Values
-float chart_ce_open  = isCall ? open  : opp_o
-float chart_ce_high  = isCall ? high  : opp_h
-float chart_ce_low   = isCall ? low   : opp_l
-float chart_ce_close = isCall ? close : opp_c
-
-float chart_pe_open  = isPut  ? open  : opp_o
-float chart_pe_high  = isPut  ? high  : opp_h
-float chart_pe_low   = isPut  ? low   : opp_l
-float chart_pe_close = isPut  ? close : opp_c
 
 // --- Universal BEP Line Trigger Helpers ---
 // Downside Rejection: High touches/surpasses BEP line (h_val >= bep), Close finishes below (c_val < bep)
