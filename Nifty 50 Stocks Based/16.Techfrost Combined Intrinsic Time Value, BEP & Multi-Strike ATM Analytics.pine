@@ -104,9 +104,9 @@ enable_blast_alerts         = input.bool(true, "Enable CE / PE Blast Alerts & Ma
 use_blast_filter            = input.bool(false, "Require Blast Condition for Buy/Sell Alerts", group="Alert Engine Controls",
   tooltip="When enabled, requires PE current average < PE day open average for CE alerts, and CE current average < CE day open average for PE alerts.")
 
-use_basket_avg_filter       = input.bool(true, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
+use_basket_avg_filter       = input.bool(false, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
-use_basket_chg_filter       = input.bool(true, "Require Basket Average Change > 0", group="Alert Engine Controls",
+use_basket_chg_filter       = input.bool(false, "Require Basket Average Change > 0", group="Alert Engine Controls",
   tooltip="Requires CE/PE Basket Average Change from Day Open to be positive (> 0).")
 strict_iv_filter            = input.bool(false, "Require Strict Intrinsic Value Filter Condition", group="Alert Engine Controls",
   tooltip="Set to false to keep Intrinsic Value non-strict for alerts. Fresh Intrinsic Value formations will be highlighted with special gold markers.")
