@@ -441,19 +441,7 @@ float pe_prev_low   = pe_pdl_sec
 float ce_o_0 = ce_dop_sec, float ce_stat_0 = ce_stat_sec, float ce_h_0 = ce_high_sec, float ce_l_0 = ce_low_sec, float ce_c_0 = ce_ltp_sec
 float pe_o_0 = pe_dop_sec, float pe_stat_0 = pe_stat_sec, float pe_h_0 = pe_high_sec, float pe_l_0 = pe_low_sec, float pe_c_0 = pe_ltp_sec
 
-// Fetch 14 ITM & OTM Strike Levels OHLC Data (-7 to +7, excluding 0)
-[ce_o_m7, ce_stat_m7, ce_h_m7, ce_l_m7, ce_c_m7] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m7, pe_stat_m7, pe_h_m7, pe_l_m7, pe_c_m7] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_m6, ce_stat_m6, ce_h_m6, ce_l_m6, ce_c_m6] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m6), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m6, pe_stat_m6, pe_h_m6, pe_l_m6, pe_c_m6] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m6), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_m5, ce_stat_m5, ce_h_m5, ce_l_m5, ce_c_m5] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m5), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m5, pe_stat_m5, pe_h_m5, pe_l_m5, pe_c_m5] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m5), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_m4, ce_stat_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m4, pe_stat_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
+// Fetch 7 Active ITM, ATM & OTM Strike Levels OHLC Data (-3 to +3)
 [ce_o_m3, ce_stat_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_m3, pe_stat_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
@@ -472,17 +460,23 @@ float pe_o_0 = pe_dop_sec, float pe_stat_0 = pe_stat_sec, float pe_h_0 = pe_high
 [ce_o_p3, ce_stat_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_p3, pe_stat_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p4, ce_stat_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p4, pe_stat_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_p5, ce_stat_p5, ce_h_p5, ce_l_p5, ce_c_p5] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p5), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p5, pe_stat_p5, pe_h_p5, pe_l_p5, pe_c_p5] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p5), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_p6, ce_stat_p6, ce_h_p6, ce_l_p6, ce_c_p6] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p6), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p6, pe_stat_p6, pe_h_p6, pe_l_p6, pe_c_p6] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p6), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_p7, ce_stat_p7, ce_h_p7, ce_l_p7, ce_c_p7] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p7, pe_stat_p7, pe_h_p7, pe_l_p7, pe_c_p7] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+// Outer strike aliases to preserve 15-strike basket formulas without extra security calls
+float ce_o_m7 = ce_o_m3, float ce_stat_m7 = ce_stat_m3, float ce_h_m7 = ce_h_m3, float ce_l_m7 = ce_l_m3, float ce_c_m7 = ce_c_m3
+float pe_o_m7 = pe_o_m3, float pe_stat_m7 = pe_stat_m3, float pe_h_m7 = pe_h_m3, float pe_l_m7 = pe_l_m3, float pe_c_m7 = pe_c_m3
+float ce_o_m6 = ce_o_m3, float ce_stat_m6 = ce_stat_m3, float ce_h_m6 = ce_h_m3, float ce_l_m6 = ce_l_m3, float ce_c_m6 = ce_c_m3
+float pe_o_m6 = pe_o_m3, float pe_stat_m6 = pe_stat_m3, float pe_h_m6 = pe_h_m3, float pe_l_m6 = pe_l_m3, float pe_c_m6 = pe_c_m3
+float ce_o_m5 = ce_o_m3, float ce_stat_m5 = ce_stat_m3, float ce_h_m5 = ce_h_m3, float ce_l_m5 = ce_l_m3, float ce_c_m5 = ce_c_m3
+float pe_o_m5 = pe_o_m3, float pe_stat_m5 = pe_stat_m3, float pe_h_m5 = pe_h_m3, float pe_l_m5 = pe_l_m3, float pe_c_m5 = pe_c_m3
+float ce_o_m4 = ce_o_m3, float ce_stat_m4 = ce_stat_m3, float ce_h_m4 = ce_h_m3, float ce_l_m4 = ce_l_m3, float ce_c_m4 = ce_c_m3
+float pe_o_m4 = pe_o_m3, float pe_stat_m4 = pe_stat_m3, float pe_h_m4 = pe_h_m3, float pe_l_m4 = pe_l_m3, float pe_c_m4 = pe_c_m3
+float ce_o_p4 = ce_o_p3, float ce_stat_p4 = ce_stat_p3, float ce_h_p4 = ce_h_p3, float ce_l_p4 = ce_l_p3, float ce_c_p4 = ce_c_p3
+float pe_o_p4 = pe_o_p3, float pe_stat_p4 = pe_stat_p3, float pe_h_p4 = pe_h_p3, float pe_l_p4 = pe_l_p3, float pe_c_p4 = pe_c_p3
+float ce_o_p5 = ce_o_p3, float ce_stat_p5 = ce_stat_p3, float ce_h_p5 = ce_h_p3, float ce_l_p5 = ce_l_p3, float ce_c_p5 = ce_c_p3
+float pe_o_p5 = pe_o_p3, float pe_stat_p5 = pe_stat_p3, float pe_h_p5 = pe_h_p3, float pe_l_p5 = pe_l_p3, float pe_c_p5 = pe_c_p3
+float ce_o_p6 = ce_o_p3, float ce_stat_p6 = ce_stat_p3, float ce_h_p6 = ce_h_p3, float ce_l_p6 = ce_l_p3, float ce_c_p6 = ce_c_p3
+float pe_o_p6 = pe_o_p3, float pe_stat_p6 = pe_stat_p3, float pe_h_p6 = pe_h_p3, float pe_l_p6 = pe_l_p3, float pe_c_p6 = pe_c_p3
+float ce_o_p7 = ce_o_p3, float ce_stat_p7 = ce_stat_p3, float ce_h_p7 = ce_h_p3, float ce_l_p7 = ce_l_p3, float ce_c_p7 = ce_c_p3
+float pe_o_p7 = pe_o_p3, float pe_stat_p7 = pe_stat_p3, float pe_h_p7 = pe_h_p3, float pe_l_p7 = pe_l_p3, float pe_c_p7 = pe_c_p3
 
 float spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
 spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
@@ -694,10 +688,10 @@ f_crossover_up(float curr_c, float prev_c, float bep_val) =>
 // Evaluates Call crossover UP, Call support bounce UP, Put resistance rejection DOWN, or Put breakdown DOWN
 f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
     // Active Chart Option Candle Triggers
-    bool chart_ce_cross     = not na(chart_ce_close) and f_crossover_up(chart_ce_close, chart_ce_close[1], bep_val)
-    bool chart_ce_bounce_up = not na(chart_ce_low) and not na(chart_ce_close) and f_bounce_up(chart_ce_low, chart_ce_close, bep_val)
-    bool chart_pe_bounce_dn = not na(chart_pe_high) and not na(chart_pe_close) and f_bounce_dn(chart_pe_high, chart_pe_close, bep_val)
-    bool chart_pe_breakdown = not na(chart_pe_close) and f_breakdown_dn(chart_pe_close, chart_pe_close[1], bep_val)
+    bool chart_ce_cross     = isCall ? f_crossover_up(close, close[1], bep_val) : f_crossover_up(c_c, c_c[1], bep_val)
+    bool chart_ce_bounce_up = isCall ? f_bounce_up(low, close, bep_val) : f_bounce_up(c_l, c_c, bep_val)
+    bool chart_pe_bounce_dn = isPut  ? f_bounce_dn(high, close, bep_val) : f_bounce_dn(p_h, p_c, bep_val)
+    bool chart_pe_breakdown = isPut  ? f_breakdown_dn(close, close[1], bep_val) : f_breakdown_dn(p_c, p_c[1], bep_val)
 
     // Level-specific Security Option Candle Triggers (Evaluated ONLY if chart_only filter is disabled)
     bool sec_ce_cross       = not use_chart_only_trig and not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val)
@@ -711,10 +705,10 @@ f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, f
 // Evaluates Put crossover UP, Put support bounce UP, Call resistance rejection DOWN, or Call breakdown DOWN
 f_eval_pe_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
     // Active Chart Option Candle Triggers
-    bool chart_pe_cross     = not na(chart_pe_close) and f_crossover_up(chart_pe_close, chart_pe_close[1], bep_val)
-    bool chart_pe_bounce_up = not na(chart_pe_low) and not na(chart_pe_close) and f_bounce_up(chart_pe_low, chart_pe_close, bep_val)
-    bool chart_ce_bounce_dn = not na(chart_ce_high) and not na(chart_ce_close) and f_bounce_dn(chart_ce_high, chart_ce_close, bep_val)
-    bool chart_ce_breakdown = not na(chart_ce_close) and f_breakdown_dn(chart_ce_close, chart_ce_close[1], bep_val)
+    bool chart_pe_cross     = isPut  ? f_crossover_up(close, close[1], bep_val) : f_crossover_up(p_c, p_c[1], bep_val)
+    bool chart_pe_bounce_up = isPut  ? f_bounce_up(low, close, bep_val) : f_bounce_up(p_l, p_c, bep_val)
+    bool chart_ce_bounce_dn = isCall ? f_bounce_dn(high, close, bep_val) : f_bounce_dn(c_h, c_c, bep_val)
+    bool chart_ce_breakdown = isCall ? f_breakdown_dn(close, close[1], bep_val) : f_breakdown_dn(c_c, c_c[1], bep_val)
 
     // Level-specific Security Option Candle Triggers (Evaluated ONLY if chart_only filter is disabled)
     bool sec_pe_cross       = not use_chart_only_trig and not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val)
@@ -774,15 +768,11 @@ bool pe_avg_trig = use_basket_avg_alerts and (peAvgCur > peAvgOpen) and (nz(peAv
 // --- ATM BEP Candle Crossover (CCO) Evaluator ---
 // Evaluates when one option crosses ABOVE ATM BEP and the opposite option breaks DOWN below ATM BEP
 bool ce_atm_cco_raw = use_atm_bep_trig and (
-  (use_rt_bep_alerts and f_crossover_up(chart_ce_close, chart_ce_close[1], bep_rt_0) and f_breakdown_dn(chart_pe_close, chart_pe_close[1], bep_rt_0)) or
-  (use_stat_bep_alerts and f_crossover_up(chart_ce_close, chart_ce_close[1], bep_stat_0) and f_breakdown_dn(chart_pe_close, chart_pe_close[1], bep_stat_0)) or
   (use_rt_bep_alerts and f_crossover_up(ce_c_0, ce_c_0[1], bep_rt_0) and f_breakdown_dn(pe_c_0, pe_c_0[1], bep_rt_0)) or
   (use_stat_bep_alerts and f_crossover_up(ce_c_0, ce_c_0[1], bep_stat_0) and f_breakdown_dn(pe_c_0, pe_c_0[1], bep_stat_0))
   )
 
 bool pe_atm_cco_raw = use_atm_bep_trig and (
-  (use_rt_bep_alerts and f_crossover_up(chart_pe_close, chart_pe_close[1], bep_rt_0) and f_breakdown_dn(chart_ce_close, chart_ce_close[1], bep_rt_0)) or
-  (use_stat_bep_alerts and f_crossover_up(chart_pe_close, chart_pe_close[1], bep_stat_0) and f_breakdown_dn(chart_ce_close, chart_ce_close[1], bep_stat_0)) or
   (use_rt_bep_alerts and f_crossover_up(pe_c_0, pe_c_0[1], bep_rt_0) and f_breakdown_dn(ce_c_0, ce_c_0[1], bep_rt_0)) or
   (use_stat_bep_alerts and f_crossover_up(pe_c_0, pe_c_0[1], bep_stat_0) and f_breakdown_dn(ce_c_0, ce_c_0[1], bep_stat_0))
   )
