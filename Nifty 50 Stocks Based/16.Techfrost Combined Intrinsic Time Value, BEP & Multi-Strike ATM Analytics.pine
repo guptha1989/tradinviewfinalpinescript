@@ -52,6 +52,11 @@ static_bep_basis   = input.string("Day Open Price", "Static BEP Calculation Basi
   tooltip="Select price basis for calculating the 7 Static BEP lines (Day Open Price, Previous Day Close/Settlement, or First 5 Min Close).")
 
 // --- Reference Line Plot Controls ---
+show_realtime_bep = input.bool(true, "Enable / Show Realtime BEP Lines", group="Reference Line Plots",
+  tooltip="Enable or disable plotting and alert triggers for the 7 Realtime BEP lines.")
+show_static_bep   = input.bool(true, "Enable / Show Static BEP Lines", group="Reference Line Plots",
+  tooltip="Enable or disable plotting and alert triggers for the 7 Static BEP lines.")
+
 show_prev_close   = input.bool(true, "Show Previous Day Close (CE & PE)", group="Reference Line Plots")
 show_ce_prev_hl   = input.bool(true, "Show CE Previous Day High & Low", group="Reference Line Plots")
 show_pe_prev_hl   = input.bool(true, "Show PE Previous Day High & Low", group="Reference Line Plots")
@@ -496,26 +501,26 @@ plot(show_vwap ? chart_vwap : na, title="Chart Option VWAP", color=col_vwap, lin
 plot(show_vwap ? opp_vwap   : na, title="Opposite Option VWAP", color=col_opp_vwap, linewidth=2)
 
 // --- Plot 7 Levels of BEP Lines with Custom User Colors & Formatting (14 plots) ---
-plot(bep_rt_0,    title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
-plot(bep_stat_0,  title="ATM Static BEP (L0)",   color=col_atm_stat, linewidth=width_atm)
+plot(show_realtime_bep ? bep_rt_0 : na,   title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
+plot(show_static_bep   ? bep_stat_0 : na, title="ATM Static BEP (L0)",   color=col_atm_stat, linewidth=width_atm)
 
-plot(bep_rt_m1,   title="ITM1 Realtime BEP (L-1)", color=col_itm1_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_m1, title="ITM1 Static BEP (L-1)",   color=col_itm1_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_realtime_bep ? bep_rt_m1 : na,   title="ITM1 Realtime BEP (L-1)", color=col_itm1_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_static_bep   ? bep_stat_m1 : na, title="ITM1 Static BEP (L-1)",   color=col_itm1_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_m2,   title="ITM2 Realtime BEP (L-2)", color=col_itm2_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_m2, title="ITM2 Static BEP (L-2)",   color=col_itm2_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_realtime_bep ? bep_rt_m2 : na,   title="ITM2 Realtime BEP (L-2)", color=col_itm2_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_static_bep   ? bep_stat_m2 : na, title="ITM2 Static BEP (L-2)",   color=col_itm2_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_m3,   title="ITM3 Realtime BEP (L-3)", color=col_itm3_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_m3, title="ITM3 Static BEP (L-3)",   color=col_itm3_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_realtime_bep ? bep_rt_m3 : na,   title="ITM3 Realtime BEP (L-3)", color=col_itm3_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_static_bep   ? bep_stat_m3 : na, title="ITM3 Static BEP (L-3)",   color=col_itm3_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_p1,   title="OTM1 Realtime BEP (L+1)", color=col_otm1_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_p1, title="OTM1 Static BEP (L+1)",   color=col_otm1_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_realtime_bep ? bep_rt_p1 : na,   title="OTM1 Realtime BEP (L+1)", color=col_otm1_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_static_bep   ? bep_stat_p1 : na, title="OTM1 Static BEP (L+1)",   color=col_otm1_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_p2,   title="OTM2 Realtime BEP (L+2)", color=col_otm2_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_p2, title="OTM2 Static BEP (L+2)",   color=col_otm2_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_realtime_bep ? bep_rt_p2 : na,   title="OTM2 Realtime BEP (L+2)", color=col_otm2_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_static_bep   ? bep_stat_p2 : na, title="OTM2 Static BEP (L+2)",   color=col_otm2_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_p3,   title="OTM3 Realtime BEP (L+3)", color=col_otm3_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_p3, title="OTM3 Static BEP (L+3)",   color=col_otm3_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_realtime_bep ? bep_rt_p3 : na,   title="OTM3 Realtime BEP (L+3)", color=col_otm3_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_static_bep   ? bep_stat_p3 : na, title="OTM3 Static BEP (L+3)",   color=col_otm3_stat, linewidth=width_others, style=plot.style_linebr)
 
 // --- Multi-Strike Basket Averages ---
 int total_count = 1 + 2 * numStrikesInput
@@ -657,48 +662,48 @@ f_eval_pe_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, f
 
     chart_pe_cross or chart_pe_bounce_up or chart_ce_bounce_dn or chart_ce_breakdown or sec_pe_cross or sec_pe_bounce_up or sec_ce_bounce_dn or sec_ce_breakdown
 
-// Evaluate Triggers Across All 14 BEP Lines with Exact Matching Option Strike Pairs
-bool ce_trig_m3_rt   = f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
-bool ce_trig_m3_stat = f_eval_ce_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
+// Evaluate Triggers Across Active BEP Lines with Exact Matching Option Strike Pairs
+bool ce_trig_m3_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
+bool ce_trig_m3_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
 
-bool pe_trig_m3_rt   = f_eval_pe_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
-bool pe_trig_m3_stat = f_eval_pe_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
+bool pe_trig_m3_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
+bool pe_trig_m3_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
 
-bool ce_trig_m2_rt   = f_eval_ce_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
-bool ce_trig_m2_stat = f_eval_ce_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
+bool ce_trig_m2_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
+bool ce_trig_m2_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
 
-bool pe_trig_m2_rt   = f_eval_pe_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
-bool pe_trig_m2_stat = f_eval_pe_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
+bool pe_trig_m2_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
+bool pe_trig_m2_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
 
-bool ce_trig_m1_rt   = f_eval_ce_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
-bool ce_trig_m1_stat = f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
+bool ce_trig_m1_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
+bool ce_trig_m1_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
 
-bool pe_trig_m1_rt   = f_eval_pe_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
-bool pe_trig_m1_stat = f_eval_pe_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
+bool pe_trig_m1_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
+bool pe_trig_m1_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
 
-bool ce_trig_0_rt    = f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
-bool ce_trig_0_stat  = f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool ce_trig_0_rt    = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool ce_trig_0_stat  = show_static_bep   and f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
 
-bool pe_trig_0_rt    = f_eval_pe_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
-bool pe_trig_0_stat  = f_eval_pe_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool pe_trig_0_rt    = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool pe_trig_0_stat  = show_static_bep   and f_eval_pe_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
 
-bool ce_trig_p1_rt   = f_eval_ce_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
-bool ce_trig_p1_stat = f_eval_ce_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
+bool ce_trig_p1_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
+bool ce_trig_p1_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
 
-bool pe_trig_p1_rt   = f_eval_pe_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
-bool pe_trig_p1_stat = f_eval_pe_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
+bool pe_trig_p1_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
+bool pe_trig_p1_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
 
-bool ce_trig_p2_rt   = f_eval_ce_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
-bool ce_trig_p2_stat = f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool ce_trig_p2_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool ce_trig_p2_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
 
-bool pe_trig_p2_rt   = f_eval_pe_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
-bool pe_trig_p2_stat = f_eval_pe_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool pe_trig_p2_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool pe_trig_p2_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
 
-bool ce_trig_p3_rt   = f_eval_ce_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
-bool ce_trig_p3_stat = f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+bool ce_trig_p3_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+bool ce_trig_p3_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 
-bool pe_trig_p3_rt   = f_eval_pe_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
-bool pe_trig_p3_stat = f_eval_pe_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+bool pe_trig_p3_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+bool pe_trig_p3_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 
 // Combined Crossovers & Downside Bounces Across All 14 BEP Lines
 bool ce_any_bep_trig = ce_trig_m3_rt or ce_trig_m3_stat or ce_trig_m2_rt or ce_trig_m2_stat or ce_trig_m1_rt or ce_trig_m1_stat or ce_trig_0_rt or ce_trig_0_stat or ce_trig_p1_rt or ce_trig_p1_stat or ce_trig_p2_rt or ce_trig_p2_stat or ce_trig_p3_rt or ce_trig_p3_stat
