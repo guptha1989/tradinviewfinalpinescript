@@ -548,17 +548,22 @@ float pe_iv_signed = pe_strike - spot_ltp
 
 // --- Basket Average Confluence Evaluations ---
 bool both_above_day_open = (ceAvgCur > ceAvgOpen) and (peAvgCur > peAvgOpen)
+bool both_below_day_open = (ceAvgCur < ceAvgOpen) and (peAvgCur < peAvgOpen)
 
-bool ce_avg_pass = not use_basket_avg_filter or (ceAvgCur > ceAvgOpen)
-bool pe_avg_pass = not use_basket_avg_filter or (peAvgCur > peAvgOpen)
+// When both averages are below day open, bypass average and change filters so trigger fires on top average line:
+bool ce_avg_pass = not use_basket_avg_filter or (ceAvgCur > ceAvgOpen) or both_below_day_open
+bool pe_avg_pass = not use_basket_avg_filter or (peAvgCur > peAvgOpen) or both_below_day_open
 
-bool ce_chg_pass = not use_basket_chg_filter or (ceAvgChg > 0)
-bool pe_chg_pass = not use_basket_chg_filter or (peAvgChg > 0)
+bool ce_chg_pass = not use_basket_chg_filter or (ceAvgChg > 0) or both_below_day_open
+bool pe_chg_pass = not use_basket_chg_filter or (peAvgChg > 0) or both_below_day_open
 
-// ABSOLUTE UNCONDITIONAL TOP POSITION RULE:
-// Enforced when both averages are above day open (special case specified by user)
-bool ce_top_pass = not both_above_day_open or (ceAvgCur > peAvgCur)
-bool pe_top_pass = not both_above_day_open or (peAvgCur > ceAvgCur)
+// TOP POSITION RULE:
+// Require current average line on top when both are above day open OR both are below day open
+bool ce_top_required = both_above_day_open or both_below_day_open
+bool pe_top_required = both_above_day_open or both_below_day_open
+
+bool ce_top_pass = not ce_top_required or (ceAvgCur > peAvgCur)
+bool pe_top_pass = not pe_top_required or (peAvgCur > ceAvgCur)
 
 // Non-strict Intrinsic Value Evaluation: Non-blocking for basic alerts unless strict_iv_filter is manually enabled
 bool ce_iv_pass  = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0)
