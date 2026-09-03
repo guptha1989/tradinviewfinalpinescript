@@ -54,6 +54,10 @@ sr_draw_mode = input.string("Horizontal Lines (Projected to Right)", "S/R Level 
   options=["Standard Plots (Style Tab Customizable)", "Horizontal Lines (Projected to Right)"], group=G_PLOTS,
   tooltip="Choose whether S/R levels are plotted standard or drawn as projected lines extending to day end.")
 
+sr_plot_style = input.string("Circles (Dotted Pattern)", "S/R Line Pattern / Style",
+  options=["Circles (Dotted Pattern)", "Solid Line", "Stepline", "Line with Breaks", "Crosses"], group=G_PLOTS,
+  tooltip="Select the visual pattern/style for Support and Resistance lines (e.g. Circles, Solid, Stepline).")
+
 use_dynamic_colors = input.bool(false, "Dynamic Volume Delta Colors for S/R", group=G_PLOTS,
   tooltip="Color S/R lines dynamically based on net volume delta (Bullish green, Bearish red).")
 
@@ -71,17 +75,17 @@ c_opp_bear_wick = input.color(color.new(#FF6D00, 60), "Opposite Option Bearish C
 G_COLORS = "Line Color Settings"
 
 c_p_in  = input.color(color.yellow, "Pivot Line Color", group=G_COLORS)
-c_r1_in = input.color(#EF5350, "R1 Line Color", group=G_COLORS)
-c_r2_in = input.color(#EF5350, "R2 Line Color", group=G_COLORS)
-c_r3_in = input.color(#EF5350, "R3 Line Color", group=G_COLORS)
-c_r4_in = input.color(#EF5350, "R4 Line Color", group=G_COLORS)
-c_r5_in = input.color(#EF5350, "R5 Line Color", group=G_COLORS)
+c_r1_in = input.color(#FF5252, "R1 Line Color (Red)", group=G_COLORS)
+c_r2_in = input.color(#FF5252, "R2 Line Color (Red)", group=G_COLORS)
+c_r3_in = input.color(#FF5252, "R3 Line Color (Red)", group=G_COLORS)
+c_r4_in = input.color(#FF5252, "R4 Line Color (Red)", group=G_COLORS)
+c_r5_in = input.color(#FF5252, "R5 Line Color (Red)", group=G_COLORS)
 
-c_s1_in = input.color(#26A69A, "S1 Line Color", group=G_COLORS)
-c_s2_in = input.color(#26A69A, "S2 Line Color", group=G_COLORS)
-c_s3_in = input.color(#26A69A, "S3 Line Color", group=G_COLORS)
-c_s4_in = input.color(#26A69A, "S4 Line Color", group=G_COLORS)
-c_s5_in = input.color(#26A69A, "S5 Line Color", group=G_COLORS)
+c_s1_in = input.color(#00E676, "S1 Line Color (Green)", group=G_COLORS)
+c_s2_in = input.color(#00E676, "S2 Line Color (Green)", group=G_COLORS)
+c_s3_in = input.color(#00E676, "S3 Line Color (Green)", group=G_COLORS)
+c_s4_in = input.color(#00E676, "S4 Line Color (Green)", group=G_COLORS)
+c_s5_in = input.color(#00E676, "S5 Line Color (Green)", group=G_COLORS)
 
 c_orb_in = input.color(color.blue, "ORB Range Line Color", group=G_COLORS)
 c_pdh_in = input.color(color.orange, "PDH Line Color", group=G_COLORS)
@@ -859,17 +863,19 @@ col_s3 = use_dynamic_colors ? f_get_level_color(7, 3) : c_s3_in
 col_s4 = use_dynamic_colors ? f_get_level_color(8, 2) : c_s4_in
 col_s5 = use_dynamic_colors ? f_get_level_color(9, 1) : c_s5_in
 
-plot(show_sr_plots ? p_plot : na, title="Pivot (Selected Strike BEP)", color=col_p, linewidth=2)
-plot(show_sr_plots ? r1_plot : na, title="R1 (ATM CE)", color=col_r1, linewidth=2)
-plot(show_sr_plots ? r2_plot : na, title="R2 (ITM Avg 1)", color=col_r2, linewidth=2)
-plot(show_sr_plots ? r3_plot : na, title="R3 (ITM Avg 2)", color=col_r3, linewidth=2)
-plot(show_sr_plots ? r4_plot : na, title="R4 (ITM Avg 3)", color=col_r4, linewidth=2)
-plot(show_sr_plots ? r5_plot : na, title="R5 (ITM Avg 4)", color=col_r5, linewidth=2)
-plot(show_sr_plots ? s1_plot : na, title="S1 (ATM PE)", color=col_s1, linewidth=2)
-plot(show_sr_plots ? s2_plot : na, title="S2 (OTM Avg 1)", color=col_s2, linewidth=2)
-plot(show_sr_plots ? s3_plot : na, title="S3 (OTM Avg 2)", color=col_s3, linewidth=2)
-plot(show_sr_plots ? s4_plot : na, title="S4 (OTM Avg 3)", color=col_s4, linewidth=2)
-plot(show_sr_plots ? s5_plot : na, title="S5 (OTM Avg 4)", color=col_s5, linewidth=2)
+p_style = sr_plot_style == "Circles (Dotted Pattern)" ? plot.style_circles : (sr_plot_style == "Stepline" ? plot.style_stepline : (sr_plot_style == "Line with Breaks" ? plot.style_linebr : (sr_plot_style == "Crosses" ? plot.style_cross : plot.style_line)))
+
+plot(show_sr_plots ? p_plot : na, title="Pivot (Selected Strike BEP)", color=col_p, linewidth=3, style=p_style)
+plot(show_sr_plots ? r1_plot : na, title="R1 (ATM CE)", color=col_r1, linewidth=2, style=p_style)
+plot(show_sr_plots ? r2_plot : na, title="R2 (ITM Avg 1)", color=col_r2, linewidth=2, style=p_style)
+plot(show_sr_plots ? r3_plot : na, title="R3 (ITM Avg 2)", color=col_r3, linewidth=2, style=p_style)
+plot(show_sr_plots ? r4_plot : na, title="R4 (ITM Avg 3)", color=col_r4, linewidth=2, style=p_style)
+plot(show_sr_plots ? r5_plot : na, title="R5 (ITM Avg 4)", color=col_r5, linewidth=2, style=p_style)
+plot(show_sr_plots ? s1_plot : na, title="S1 (ATM PE)", color=col_s1, linewidth=2, style=p_style)
+plot(show_sr_plots ? s2_plot : na, title="S2 (OTM Avg 1)", color=col_s2, linewidth=2, style=p_style)
+plot(show_sr_plots ? s3_plot : na, title="S3 (OTM Avg 2)", color=col_s3, linewidth=2, style=p_style)
+plot(show_sr_plots ? s4_plot : na, title="S4 (OTM Avg 3)", color=col_s4, linewidth=2, style=p_style)
+plot(show_sr_plots ? s5_plot : na, title="S5 (OTM Avg 4)", color=col_s5, linewidth=2, style=p_style)
 
 plot(show_orb_lines ? orb_high_plot : na, title="ORB Range High", color=c_orb_in, linewidth=1)
 plot(show_orb_lines ? orb_low_plot : na, title="ORB Range Low", color=c_orb_in, linewidth=1)
@@ -915,18 +921,19 @@ if sr_draw_mode == "Horizontal Lines (Projected to Right)"
         line.set_x2(ln_pdl, bar_index - 1)
         
         int init_x2 = barstate.islast ? bar_index + 150 : bar_index
+        string prj_style = sr_plot_style == "Circles (Dotted Pattern)" ? line.style_dotted : (sr_plot_style == "Stepline" or sr_plot_style == "Line with Breaks" ? line.style_dashed : line.style_solid)
         if show_sr_plots and not na(p_plot)
-            ln_p  := line.new(bar_index, p_plot, init_x2, p_plot, color=col_p, width=2)
-            ln_r1 := line.new(bar_index, r1_plot, init_x2, r1_plot, color=col_r1, width=2)
-            ln_r2 := line.new(bar_index, r2_plot, init_x2, r2_plot, color=col_r2, width=2)
-            ln_r3 := line.new(bar_index, r3_plot, init_x2, r3_plot, color=col_r3, width=2)
-            ln_r4 := line.new(bar_index, r4_plot, init_x2, r4_plot, color=col_r4, width=2)
-            ln_r5 := line.new(bar_index, r5_plot, init_x2, r5_plot, color=col_r5, width=2)
-            ln_s1 := line.new(bar_index, s1_plot, init_x2, s1_plot, color=col_s1, width=2)
-            ln_s2 := line.new(bar_index, s2_plot, init_x2, s2_plot, color=col_s2, width=2)
-            ln_s3 := line.new(bar_index, s3_plot, init_x2, s3_plot, color=col_s3, width=2)
-            ln_s4 := line.new(bar_index, s4_plot, init_x2, s4_plot, color=col_s4, width=2)
-            ln_s5 := line.new(bar_index, s5_plot, init_x2, s5_plot, color=col_s5, width=2)
+            ln_p  := line.new(bar_index, p_plot, init_x2, p_plot, color=col_p, width=3, style=prj_style)
+            ln_r1 := line.new(bar_index, r1_plot, init_x2, r1_plot, color=col_r1, width=2, style=prj_style)
+            ln_r2 := line.new(bar_index, r2_plot, init_x2, r2_plot, color=col_r2, width=2, style=prj_style)
+            ln_r3 := line.new(bar_index, r3_plot, init_x2, r3_plot, color=col_r3, width=2, style=prj_style)
+            ln_r4 := line.new(bar_index, r4_plot, init_x2, r4_plot, color=col_r4, width=2, style=prj_style)
+            ln_r5 := line.new(bar_index, r5_plot, init_x2, r5_plot, color=col_r5, width=2, style=prj_style)
+            ln_s1 := line.new(bar_index, s1_plot, init_x2, s1_plot, color=col_s1, width=2, style=prj_style)
+            ln_s2 := line.new(bar_index, s2_plot, init_x2, s2_plot, color=col_s2, width=2, style=prj_style)
+            ln_s3 := line.new(bar_index, s3_plot, init_x2, s3_plot, color=col_s3, width=2, style=prj_style)
+            ln_s4 := line.new(bar_index, s4_plot, init_x2, s4_plot, color=col_s4, width=2, style=prj_style)
+            ln_s5 := line.new(bar_index, s5_plot, init_x2, s5_plot, color=col_s5, width=2, style=prj_style)
         if show_orb_lines and not na(orb_high_plot)
             ln_orb_h := line.new(bar_index, orb_high_plot, init_x2, orb_high_plot, color=c_orb_in, width=1, style=line.style_dashed)
             ln_orb_l := line.new(bar_index, orb_low_plot, init_x2, orb_low_plot, color=c_orb_in, width=1, style=line.style_dashed)
