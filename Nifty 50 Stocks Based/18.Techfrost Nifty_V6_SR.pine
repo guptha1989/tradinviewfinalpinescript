@@ -245,25 +245,13 @@ for i = 0 to 10
     int strike = base_center_strike + (i - 5) * strike_step
     array.set(strikes, i, strike)
     
-    string ce_contract  = exchange + ":" + final_root + final_expiry + "C" + str.tostring(strike)
-    string ce_contract2 = exchange + ":" + final_root + final_expiry + str.tostring(strike) + "CE"
-    string pe_contract  = exchange + ":" + final_root + final_expiry + "P" + str.tostring(strike)
-    string pe_contract2 = exchange + ":" + final_root + final_expiry + str.tostring(strike) + "PE"
+    string ce_contract = exchange + ":" + final_root + final_expiry + "C" + str.tostring(strike)
+    string pe_contract = exchange + ":" + final_root + final_expiry + "P" + str.tostring(strike)
     
     // Real-time tick-by-tick query on chart timeframe (timeframe.period)
-    [ce_o1, ce_p1, ce_c1] = request.security(ce_contract,  timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
-    [ce_o2, ce_p2, ce_c2] = request.security(ce_contract2, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
-    
-    [pe_o1, pe_p1, pe_c1] = request.security(pe_contract,  timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
-    [pe_o2, pe_p2, pe_c2] = request.security(pe_contract2, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
-    
-    float ce_o = not na(ce_o1) ? ce_o1 : ce_o2
-    float ce_p = not na(ce_p1) ? ce_p1 : ce_p2
-    float ce_c = not na(ce_c1) ? ce_c1 : ce_c2
-    
-    float pe_o = not na(pe_o1) ? pe_o1 : pe_o2
-    float pe_p = not na(pe_p1) ? pe_p1 : pe_p2
-    float pe_c = not na(pe_c1) ? pe_c1 : pe_c2
+    // Returns [Day Open, Previous Day Close, Real-time LTP] on every tick
+    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
+    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
     
     array.set(ce_opens, i, ce_o)
     array.set(ce_prevs, i, ce_p)
