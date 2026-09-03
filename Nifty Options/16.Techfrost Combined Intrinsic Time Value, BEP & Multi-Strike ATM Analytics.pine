@@ -1,5 +1,5 @@
 //@version=6
-indicator("16.Techfrost Alert Engine", shorttitle="TF Alert", overlay=true, precision=2, max_labels_count=500, max_lines_count=500)
+indicator("16.Techfrost Alert Engine", shorttitle="16.Techfrost Alert Engine", overlay=true, precision=2, max_labels_count=500, max_lines_count=500)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -102,16 +102,6 @@ use_stat_bep_alerts         = input.bool(true, "Enable Alerts on Static BEP Line
   tooltip="Enable or disable Buy/Sell alerts triggered on Static BEP lines.")
 use_basket_avg_alerts       = input.bool(true, "Enable Alerts on Basket Average Lines", group="Alert Engine Controls",
   tooltip="Enable or disable Buy/Sell alerts triggered on Basket Average Line Crossovers.")
-
-use_chart_only_trig         = input.bool(true, "Trigger Alerts ONLY on Active Chart Option Crossovers", group="Alert Engine Controls",
-  tooltip="When enabled, alerts fire strictly when the option candle on your active chart crosses/bounces on a BEP line, filtering out background security noise.")
-
-use_atm_bep_trig            = input.bool(true, "Trigger Alerts on ATM BEP Lines (Level 0)", group="Alert Engine Controls",
-  tooltip="Enable or disable alerts on ATM BEP lines.")
-use_itm_bep_trig            = input.bool(true, "Trigger Alerts on ITM BEP Lines (Level L-1 to L-3)", group="Alert Engine Controls",
-  tooltip="Enable or disable alerts on ITM BEP lines.")
-use_otm_bep_trig            = input.bool(true, "Trigger Alerts on OTM BEP Lines (Level L+1 to L+3)", group="Alert Engine Controls",
-  tooltip="Enable or disable alerts on OTM BEP lines.")
 
 use_basket_avg_filter       = input.bool(false, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
@@ -348,9 +338,23 @@ float k_m7 = baseStrike - 7.0 * offsetPts
 // DATA FETCHING & OPPOSITE CANDLES OVERLAY
 // ==========================================
 
-// Helper function to resolve static reference basis from open and previous close
-f_resolve_stat_ref(float op, float pdc) =>
-    (static_bep_basis == "Previous Day Close" or static_bep_basis == "Previous Day Settlement") ? (na(pdc) ? op : pdc) : op
+f_get_strike_ohlc() =>
+    float d_op  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    float d_pdc = ta.valuewhen(ta.change(time("D")) != 0, close[1], 0)
+    d_pdc      := na(d_pdc) ? d_op : d_pdc
+
+    var float d_f5m = na
+    if ta.change(time("D")) != 0
+        d_f5m := na
+    if (hour == 9 and minute >= 19) or hour > 9
+        if na(d_f5m)
+            d_f5m := close
+
+    float stat_ref = (static_bep_basis == "Previous Day Close" or static_bep_basis == "Previous Day Settlement") ? d_pdc : (static_bep_basis == "First 5 Min Close" ? (na(d_f5m) ? d_op : d_f5m) : d_op)
+    [d_op, stat_ref, high, low, close]
+
+f_get_strike_prev_day() =>
+    [close[1], high[1], low[1]]
 
 // Fetch Opposite Option Ticker & Candle Data for Overlay
 string opp_ticker = f_build_option_symbol(chartStrikePrice, not isCall)
@@ -381,14 +385,11 @@ float chart_pe_low   = isPut  ? low   : opp_l
 float chart_pe_close = isPut  ? close : opp_c
 
 // Fetch ATM Option OHLC & Previous Day Data
-[ce_dop_sec, ce_pdc_raw, ce_high_sec, ce_low_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_sec, pe_pdc_raw, pe_high_sec, pe_low_sec, pe_ltp_sec] = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_dop_sec, ce_stat_sec, ce_high_sec, ce_low_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_dop_sec, pe_stat_sec, pe_high_sec, pe_low_sec, pe_ltp_sec] = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-float ce_stat_sec = f_resolve_stat_ref(ce_dop_sec, ce_pdc_raw)
-float pe_stat_sec = f_resolve_stat_ref(pe_dop_sec, pe_pdc_raw)
-
-[ce_pdc_sec, ce_pdh_sec, ce_pdl_sec] = request.security(syminfo.prefix + ":" + ce_ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_pdc_sec, pe_pdh_sec, pe_pdl_sec] = request.security(syminfo.prefix + ":" + pe_ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_pdc_sec, ce_pdh_sec, ce_pdl_sec] = request.security(syminfo.prefix + ":" + ce_ticker, "D", f_get_strike_prev_day(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_pdc_sec, pe_pdh_sec, pe_pdl_sec] = request.security(syminfo.prefix + ":" + pe_ticker, "D", f_get_strike_prev_day(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // Use direct chart candle data if active chart is Call or Put option
 float chart_d_op  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
@@ -430,54 +431,48 @@ float pe_prev_low   = pe_pdl_sec
 float ce_o_0 = ce_dop_sec, float ce_stat_0 = ce_stat_sec, float ce_h_0 = ce_high_sec, float ce_l_0 = ce_low_sec, float ce_c_0 = ce_ltp_sec
 float pe_o_0 = pe_dop_sec, float pe_stat_0 = pe_stat_sec, float pe_h_0 = pe_high_sec, float pe_l_0 = pe_low_sec, float pe_c_0 = pe_ltp_sec
 
-// Fetch 7 Active ITM, ATM & OTM Strike Levels OHLC Data (-3 to +3)
-[ce_o_m3, ce_pdc_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m3, pe_pdc_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-float ce_stat_m3 = f_resolve_stat_ref(ce_o_m3, ce_pdc_m3)
-float pe_stat_m3 = f_resolve_stat_ref(pe_o_m3, pe_pdc_m3)
+// Fetch 14 ITM & OTM Strike Levels OHLC Data (-7 to +7, excluding 0)
+[ce_o_m7, ce_stat_m7, ce_h_m7, ce_l_m7, ce_c_m7] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m7, pe_stat_m7, pe_h_m7, pe_l_m7, pe_c_m7] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m2, ce_pdc_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m2, pe_pdc_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-float ce_stat_m2 = f_resolve_stat_ref(ce_o_m2, ce_pdc_m2)
-float pe_stat_m2 = f_resolve_stat_ref(pe_o_m2, pe_pdc_m2)
+[ce_o_m6, ce_stat_m6, ce_h_m6, ce_l_m6, ce_c_m6] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m6), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m6, pe_stat_m6, pe_h_m6, pe_l_m6, pe_c_m6] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m6), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_m1, ce_pdc_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m1, pe_pdc_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-float ce_stat_m1 = f_resolve_stat_ref(ce_o_m1, ce_pdc_m1)
-float pe_stat_m1 = f_resolve_stat_ref(pe_o_m1, pe_pdc_m1)
+[ce_o_m5, ce_stat_m5, ce_h_m5, ce_l_m5, ce_c_m5] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m5), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m5, pe_stat_m5, pe_h_m5, pe_l_m5, pe_c_m5] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m5), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p1, ce_pdc_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p1, pe_pdc_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-float ce_stat_p1 = f_resolve_stat_ref(ce_o_p1, ce_pdc_p1)
-float pe_stat_p1 = f_resolve_stat_ref(pe_o_p1, pe_pdc_p1)
+[ce_o_m4, ce_stat_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m4, pe_stat_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p2, ce_pdc_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p2, pe_pdc_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-float ce_stat_p2 = f_resolve_stat_ref(ce_o_p2, ce_pdc_p2)
-float pe_stat_p2 = f_resolve_stat_ref(pe_o_p2, pe_pdc_p2)
+[ce_o_m3, ce_stat_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m3, pe_stat_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p3, ce_pdc_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p3, pe_pdc_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-float ce_stat_p3 = f_resolve_stat_ref(ce_o_p3, ce_pdc_p3)
-float pe_stat_p3 = f_resolve_stat_ref(pe_o_p3, pe_pdc_p3)
+[ce_o_m2, ce_stat_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m2, pe_stat_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-// Outer strike aliases to preserve 15-strike basket formulas without extra security calls
-float ce_o_m7 = ce_o_m3, float ce_stat_m7 = ce_stat_m3, float ce_h_m7 = ce_h_m3, float ce_l_m7 = ce_l_m3, float ce_c_m7 = ce_c_m3
-float pe_o_m7 = pe_o_m3, float pe_stat_m7 = pe_stat_m3, float pe_h_m7 = pe_h_m3, float pe_l_m7 = pe_l_m3, float pe_c_m7 = pe_c_m3
-float ce_o_m6 = ce_o_m3, float ce_stat_m6 = ce_stat_m3, float ce_h_m6 = ce_h_m3, float ce_l_m6 = ce_l_m3, float ce_c_m6 = ce_c_m3
-float pe_o_m6 = pe_o_m3, float pe_stat_m6 = pe_stat_m3, float pe_h_m6 = pe_h_m3, float pe_l_m6 = pe_l_m3, float pe_c_m6 = pe_c_m3
-float ce_o_m5 = ce_o_m3, float ce_stat_m5 = ce_stat_m3, float ce_h_m5 = ce_h_m3, float ce_l_m5 = ce_l_m3, float ce_c_m5 = ce_c_m3
-float pe_o_m5 = pe_o_m3, float pe_stat_m5 = pe_stat_m3, float pe_h_m5 = pe_h_m3, float pe_l_m5 = pe_l_m3, float pe_c_m5 = pe_c_m3
-float ce_o_m4 = ce_o_m3, float ce_stat_m4 = ce_stat_m3, float ce_h_m4 = ce_h_m3, float ce_l_m4 = ce_l_m3, float ce_c_m4 = ce_c_m3
-float pe_o_m4 = pe_o_m3, float pe_stat_m4 = pe_stat_m3, float pe_h_m4 = pe_h_m3, float pe_l_m4 = pe_l_m3, float pe_c_m4 = pe_c_m3
-float ce_o_p4 = ce_o_p3, float ce_stat_p4 = ce_stat_p3, float ce_h_p4 = ce_h_p3, float ce_l_p4 = ce_l_p3, float ce_c_p4 = ce_c_p3
-float pe_o_p4 = pe_o_p3, float pe_stat_p4 = pe_stat_p3, float pe_h_p4 = pe_h_p3, float pe_l_p4 = pe_l_p3, float pe_c_p4 = pe_c_p3
-float ce_o_p5 = ce_o_p3, float ce_stat_p5 = ce_stat_p3, float ce_h_p5 = ce_h_p3, float ce_l_p5 = ce_l_p3, float ce_c_p5 = ce_c_p3
-float pe_o_p5 = pe_o_p3, float pe_stat_p5 = pe_stat_p3, float pe_h_p5 = pe_h_p3, float pe_l_p5 = pe_l_p3, float pe_c_p5 = pe_c_p3
-float ce_o_p6 = ce_o_p3, float ce_stat_p6 = ce_stat_p3, float ce_h_p6 = ce_h_p3, float ce_l_p6 = ce_l_p3, float ce_c_p6 = ce_c_p3
-float pe_o_p6 = pe_o_p3, float pe_stat_p6 = pe_stat_p3, float pe_h_p6 = pe_h_p3, float pe_l_p6 = pe_l_p3, float pe_c_p6 = pe_c_p3
-float ce_o_p7 = ce_o_p3, float ce_stat_p7 = ce_stat_p3, float ce_h_p7 = ce_h_p3, float ce_l_p7 = ce_l_p3, float ce_c_p7 = ce_c_p3
-float pe_o_p7 = pe_o_p3, float pe_stat_p7 = pe_stat_p3, float pe_h_p7 = pe_h_p3, float pe_l_p7 = pe_l_p3, float pe_c_p7 = pe_c_p3
+[ce_o_m1, ce_stat_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m1, pe_stat_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p1, ce_stat_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p1, pe_stat_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p2, ce_stat_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p2, pe_stat_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p3, ce_stat_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p3, pe_stat_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p4, ce_stat_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p4, pe_stat_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p5, ce_stat_p5, ce_h_p5, ce_l_p5, ce_c_p5] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p5), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p5, pe_stat_p5, pe_h_p5, pe_l_p5, pe_c_p5] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p5), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p6, ce_stat_p6, ce_h_p6, ce_l_p6, ce_c_p6] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p6), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p6, pe_stat_p6, pe_h_p6, pe_l_p6, pe_c_p6] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p6), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p7, ce_stat_p7, ce_h_p7, ce_l_p7, ce_c_p7] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p7, pe_stat_p7, pe_h_p7, pe_l_p7, pe_c_p7] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 float spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
 spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
@@ -685,131 +680,86 @@ f_crossover_up(float curr_c, float prev_c, float bep_val) =>
     float prev_bep = nz(bep_val[1], bep_val)
     not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
 
-////// Call Buy Alert on a specific BEP line level:
-// Evaluates Call crossover UP above the selected BEP line level
-f_eval_ce_pair_trig(float bep_val, float c_c) =>
-    bool ce_cross = isCall ? f_crossover_up(close, close[1], bep_val) : (not use_chart_only_trig and not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val))
-    (ce_cross == true)
+// Call Buy Alert on a specific BEP line level:
+// Evaluates Call crossover UP, Call support bounce UP, Put resistance rejection DOWN, or Put breakdown DOWN
+f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
+    // Active Chart Option Candle Triggers
+    bool chart_ce_cross     = not na(chart_ce_close) and f_crossover_up(chart_ce_close, chart_ce_close[1], bep_val)
+    bool chart_ce_bounce_up = not na(chart_ce_low) and not na(chart_ce_close) and f_bounce_up(chart_ce_low, chart_ce_close, bep_val)
+    bool chart_pe_bounce_dn = not na(chart_pe_high) and not na(chart_pe_close) and f_bounce_dn(chart_pe_high, chart_pe_close, bep_val)
+    bool chart_pe_breakdown = not na(chart_pe_close) and f_breakdown_dn(chart_pe_close, chart_pe_close[1], bep_val)
+
+    // Level-specific Security Option Candle Triggers
+    bool sec_ce_cross       = not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val)
+    bool sec_ce_bounce_up   = not na(c_l) and not na(c_c) and f_bounce_up(c_l, c_c, bep_val)
+    bool sec_pe_bounce_dn   = not na(p_h) and not na(p_c) and f_bounce_dn(p_h, p_c, bep_val)
+    bool sec_pe_breakdown   = not na(p_c) and f_breakdown_dn(p_c, p_c[1], bep_val)
+
+    (chart_ce_cross == true) or (chart_ce_bounce_up == true) or (chart_pe_bounce_dn == true) or (chart_pe_breakdown == true) or (sec_ce_cross == true) or (sec_ce_bounce_up == true) or (sec_pe_bounce_dn == true) or (sec_pe_breakdown == true)
 
 // Put Sell Alert on a specific BEP line level:
-// Evaluates Put crossover UP above the selected BEP line level
-f_eval_pe_pair_trig(float bep_val, float p_c) =>
-    bool pe_cross = isPut ? f_crossover_up(close, close[1], bep_val) : (not use_chart_only_trig and not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val))
-    (pe_cross == true)
+// Evaluates Put crossover UP, Put support bounce UP, Call resistance rejection DOWN, or Call breakdown DOWN
+f_eval_pe_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
+    // Active Chart Option Candle Triggers
+    bool chart_pe_cross     = not na(chart_pe_close) and f_crossover_up(chart_pe_close, chart_pe_close[1], bep_val)
+    bool chart_pe_bounce_up = not na(chart_pe_low) and not na(chart_pe_close) and f_bounce_up(chart_pe_low, chart_pe_close, bep_val)
+    bool chart_ce_bounce_dn = not na(chart_ce_high) and not na(chart_ce_close) and f_bounce_dn(chart_ce_high, chart_ce_close, bep_val)
+    bool chart_ce_breakdown = not na(chart_ce_close) and f_breakdown_dn(chart_ce_close, chart_ce_close[1], bep_val)
 
-//// Evaluate Triggers Across Active BEP Lines with Exact Matching Option Strike Pairs (Unconditional Evaluation)
-bool raw_ce_m3_rt   = f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3)
-bool raw_ce_m3_stat = f_eval_ce_pair_trig(bep_stat_m3, ce_c_m3)
-bool raw_pe_m3_rt   = f_eval_pe_pair_trig(bep_rt_m3,   pe_c_p3)
-bool raw_pe_m3_stat = f_eval_pe_pair_trig(bep_stat_m3, pe_c_p3)
+    // Level-specific Security Option Candle Triggers
+    bool sec_pe_cross       = not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val)
+    bool sec_pe_bounce_up   = not na(p_l) and not na(p_c) and f_bounce_up(p_l, p_c, bep_val)
+    bool sec_ce_bounce_dn   = not na(c_h) and not na(c_c) and f_bounce_dn(c_h, c_c, bep_val)
+    bool sec_ce_breakdown   = not na(c_c) and f_breakdown_dn(c_c, c_c[1], bep_val)
 
-bool ce_trig_m3_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_ce_m3_rt
-bool ce_trig_m3_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_ce_m3_stat
-bool pe_trig_m3_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_pe_m3_rt
-bool pe_trig_m3_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_pe_m3_stat
+    (chart_pe_cross == true) or (chart_pe_bounce_up == true) or (chart_ce_bounce_dn == true) or (chart_ce_breakdown == true) or (sec_pe_cross == true) or (sec_pe_bounce_up == true) or (sec_ce_bounce_dn == true) or (sec_ce_breakdown == true)
 
-bool raw_ce_m2_rt   = f_eval_ce_pair_trig(bep_rt_m2,   ce_c_m2)
-bool raw_ce_m2_stat = f_eval_ce_pair_trig(bep_stat_m2, ce_c_m2)
-bool raw_pe_m2_rt   = f_eval_pe_pair_trig(bep_rt_m2,   pe_c_p2)
-bool raw_pe_m2_stat = f_eval_pe_pair_trig(bep_stat_m2, pe_c_p2)
+//// Evaluate Triggers Across Active BEP Lines with Exact Matching Option Strike Pairs
+bool ce_trig_m3_rt   = use_rt_bep_alerts   and f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
+bool ce_trig_m3_stat = use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
 
-bool ce_trig_m2_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_ce_m2_rt
-bool ce_trig_m2_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_ce_m2_stat
-bool pe_trig_m2_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_pe_m2_rt
-bool pe_trig_m2_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_pe_m2_stat
+bool pe_trig_m3_rt   = use_rt_bep_alerts   and f_eval_pe_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
+bool pe_trig_m3_stat = use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
 
-bool raw_ce_m1_rt   = f_eval_ce_pair_trig(bep_rt_m1,   ce_c_m1)
-bool raw_ce_m1_stat = f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1)
-bool raw_pe_m1_rt   = f_eval_pe_pair_trig(bep_rt_m1,   pe_c_p1)
-bool raw_pe_m1_stat = f_eval_pe_pair_trig(bep_stat_m1, pe_c_p1)
+bool ce_trig_m2_rt   = use_rt_bep_alerts   and f_eval_ce_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
+bool ce_trig_m2_stat = use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
 
-bool ce_trig_m1_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_ce_m1_rt
-bool ce_trig_m1_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_ce_m1_stat
-bool pe_trig_m1_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_pe_m1_rt
-bool pe_trig_m1_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_pe_m1_stat
+bool pe_trig_m2_rt   = use_rt_bep_alerts   and f_eval_pe_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
+bool pe_trig_m2_stat = use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
 
-bool raw_ce_0_rt    = f_eval_ce_pair_trig(bep_rt_0,   ce_c_0)
-bool raw_ce_0_stat  = f_eval_ce_pair_trig(bep_stat_0, ce_c_0)
-bool raw_pe_0_rt    = f_eval_pe_pair_trig(bep_rt_0,   pe_c_0)
-bool raw_pe_0_stat  = f_eval_pe_pair_trig(bep_stat_0, pe_c_0)
+bool ce_trig_m1_rt   = use_rt_bep_alerts   and f_eval_ce_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
+bool ce_trig_m1_stat = use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
 
-bool ce_trig_0_rt    = use_rt_bep_alerts   and use_atm_bep_trig and raw_ce_0_rt
-bool ce_trig_0_stat  = use_stat_bep_alerts and use_atm_bep_trig and raw_ce_0_stat
-bool pe_trig_0_rt    = use_rt_bep_alerts   and use_atm_bep_trig and raw_pe_0_rt
-bool pe_trig_0_stat  = use_stat_bep_alerts and use_atm_bep_trig and raw_pe_0_stat
+bool pe_trig_m1_rt   = use_rt_bep_alerts   and f_eval_pe_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_m1)
+bool pe_trig_m1_stat = use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_m1)
 
-bool raw_ce_p1_rt   = f_eval_ce_pair_trig(bep_rt_p1,   ce_c_p1)
-bool raw_ce_p1_stat = f_eval_ce_pair_trig(bep_stat_p1, ce_c_p1)
-bool raw_pe_p1_rt   = f_eval_pe_pair_trig(bep_rt_p1,   pe_c_p1)
-bool raw_pe_p1_stat = f_eval_pe_pair_trig(bep_stat_p1, pe_c_p1)
+bool ce_trig_0_rt    = use_rt_bep_alerts   and f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool ce_trig_0_stat  = use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
 
-bool ce_trig_p1_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_ce_p1_rt
-bool ce_trig_p1_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_ce_p1_stat
-bool pe_trig_p1_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_pe_p1_rt
-bool pe_trig_p1_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_pe_p1_stat
+bool pe_trig_0_rt    = use_rt_bep_alerts   and f_eval_pe_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool pe_trig_0_stat  = use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
 
-bool raw_ce_p2_rt   = f_eval_ce_pair_trig(bep_rt_p2,   ce_c_p2)
-bool raw_ce_p2_stat = f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2)
-bool raw_pe_p2_rt   = f_eval_pe_pair_trig(bep_rt_p2,   pe_c_p2)
-bool raw_pe_p2_stat = f_eval_pe_pair_trig(bep_stat_p2, pe_c_p2)
+bool ce_trig_p1_rt   = use_rt_bep_alerts   and f_eval_ce_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
+bool ce_trig_p1_stat = use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
 
-bool ce_trig_p2_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_ce_p2_rt
-bool ce_trig_p2_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_ce_p2_stat
-bool pe_trig_p2_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_pe_p2_rt
-bool pe_trig_p2_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_pe_p2_stat
+bool pe_trig_p1_rt   = use_rt_bep_alerts   and f_eval_pe_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
+bool pe_trig_p1_stat = use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
 
-bool raw_ce_p3_rt   = f_eval_ce_pair_trig(bep_rt_p3,   ce_c_p3)
-bool raw_ce_p3_stat = f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3)
-bool raw_pe_p3_rt   = f_eval_pe_pair_trig(bep_rt_p3,   pe_c_p3)
-bool raw_pe_p3_stat = f_eval_pe_pair_trig(bep_stat_p3, pe_c_p3)
+bool ce_trig_p2_rt   = use_rt_bep_alerts   and f_eval_ce_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool ce_trig_p2_stat = use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
 
-bool ce_trig_p3_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_ce_p3_rt
-bool ce_trig_p3_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_ce_p3_stat
-bool pe_trig_p3_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_pe_p3_rt
-bool pe_trig_p3_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_pe_p3_stat
+bool pe_trig_p2_rt   = use_rt_bep_alerts   and f_eval_pe_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool pe_trig_p2_stat = use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_m2, pe_c_m2, pe_h_m2, pe_l_m2)
+
+bool ce_trig_p3_rt   = use_rt_bep_alerts   and f_eval_ce_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+bool ce_trig_p3_stat = use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+
+bool pe_trig_p3_rt   = use_rt_bep_alerts   and f_eval_pe_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+bool pe_trig_p3_stat = use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 
 // Basket Average Line Crossover Triggers
 bool ce_avg_trig = use_basket_avg_alerts and (ceAvgCur > ceAvgOpen) and (nz(ceAvgCur[1]) <= nz(ceAvgOpen[1]))
 bool pe_avg_trig = use_basket_avg_alerts and (peAvgCur > peAvgOpen) and (nz(peAvgCur[1]) <= nz(peAvgOpen[1]))
-
-// --- ATM BEP Candle Crossover (CCO) Evaluator ---
-// Evaluates when one option crosses ABOVE ATM BEP and the opposite option breaks DOWN below ATM BEP
-bool ce_cross_atm_rt   = f_crossover_up(ce_c_0, ce_c_0[1], bep_rt_0)
-bool pe_break_atm_rt   = f_breakdown_dn(pe_c_0, pe_c_0[1], bep_rt_0)
-bool ce_cross_atm_stat = f_crossover_up(ce_c_0, ce_c_0[1], bep_stat_0)
-bool pe_break_atm_stat = f_breakdown_dn(pe_c_0, pe_c_0[1], bep_stat_0)
-
-bool pe_cross_atm_rt   = f_crossover_up(pe_c_0, pe_c_0[1], bep_rt_0)
-bool ce_break_atm_rt   = f_breakdown_dn(ce_c_0, ce_c_0[1], bep_rt_0)
-bool pe_cross_atm_stat = f_crossover_up(pe_c_0, pe_c_0[1], bep_stat_0)
-bool ce_break_atm_stat = f_breakdown_dn(ce_c_0, ce_c_0[1], bep_stat_0)
-
-bool ce_atm_cco_raw = use_atm_bep_trig and (
-  (use_rt_bep_alerts and ce_cross_atm_rt and pe_break_atm_rt) or
-  (use_stat_bep_alerts and ce_cross_atm_stat and pe_break_atm_stat)
-  )
-
-bool pe_atm_cco_raw = use_atm_bep_trig and (
-  (use_rt_bep_alerts and pe_cross_atm_rt and ce_break_atm_rt) or
-  (use_stat_bep_alerts and pe_cross_atm_stat and ce_break_atm_stat)
-  )
-
-var float ce_cco_high  = na
-var float ce_cco_close = na
-var float pe_cco_low   = na
-var float pe_cco_close = na
-
-if ce_atm_cco_raw
-    ce_cco_high  := high
-    ce_cco_close := close
-
-if pe_atm_cco_raw
-    pe_cco_low   := low
-    pe_cco_close := close
-
-// --- Confirmed CCO Signals (Triggers ONLY when a NEW candle forms crossing over the crossover candle) ---
-bool ce_atm_cco = (ce_atm_cco_raw[1] == true) and ((high > ce_cco_high[1]) or (close > ce_cco_high[1]) or (open >= ce_cco_close[1]))
-bool pe_atm_cco = (pe_atm_cco_raw[1] == true) and ((low < pe_cco_low[1]) or (close < pe_cco_low[1]) or (open <= pe_cco_close[1]))
 
 // Combined Crossovers & Downside Bounces Across Active Modules
 bool ce_any_bep_trig = (ce_trig_m3_rt == true) or (ce_trig_m3_stat == true) or (ce_trig_m2_rt == true) or (ce_trig_m2_stat == true) or (ce_trig_m1_rt == true) or (ce_trig_m1_stat == true) or (ce_trig_0_rt == true) or (ce_trig_0_stat == true) or (ce_trig_p1_rt == true) or (ce_trig_p1_stat == true) or (ce_trig_p2_rt == true) or (ce_trig_p2_stat == true) or (ce_trig_p3_rt == true) or (ce_trig_p3_stat == true) or (ce_avg_trig == true)
@@ -863,12 +813,12 @@ string m_size = f_get_marker_size(signal_marker_size)
 
 if show_signal_shapes
     if overall_buy_alert
-        string ce_lbl = ce_blast_active ? "CE 🔥🔥" : (ce_fresh_iv ? "CE IV★" : "CE 🔥")
+        string ce_lbl = ce_blast_active ? "CE BLAST🔥" : (ce_fresh_iv ? "CE IV★" : "CE")
         color  ce_col = ce_blast_active ? #00FF66 : #00E676
         color  ce_txt = ce_blast_active ? color.black : color.white
         label.new(bar_index, low, text=ce_lbl, style=label.style_label_up, color=ce_col, textcolor=ce_txt, size=m_size)
     else if overall_sell_alert
-        string pe_lbl = pe_blast_active ? "PE 🔥🔥" : (pe_fresh_iv ? "PE IV★" : "PE 🔥")
+        string pe_lbl = pe_blast_active ? "PE BLAST🔥" : (pe_fresh_iv ? "PE IV★" : "PE")
         color  pe_col = pe_blast_active ? #FF0055 : #FF1744
         color  pe_txt = color.white
         label.new(bar_index, high, text=pe_lbl, style=label.style_label_down, color=pe_col, textcolor=pe_txt, size=m_size)
@@ -877,11 +827,6 @@ if show_signal_shapes
         label.new(bar_index, low, text="CE IV★", style=label.style_diamond, color=#00E676, textcolor=color.black, size=size.tiny)
     if pe_fresh_iv and not overall_sell_alert
         label.new(bar_index, high, text="PE IV★", style=label.style_diamond, color=#FF1744, textcolor=color.white, size=size.tiny)
-
-    if ce_atm_cco
-        label.new(bar_index, low, text="CE CCO🔥", style=label.style_label_up, color=#00E676, textcolor=color.black, size=m_size)
-    if pe_atm_cco
-        label.new(bar_index, high, text="PE CCO🔥", style=label.style_label_down, color=#FF1744, textcolor=color.white, size=m_size)
 
 // ==========================================
 // LIVE ALERT CONDITIONS STATUS TABLE
@@ -920,5 +865,3 @@ alertcondition(overall_buy_alert,  title="CE Signal Alert (Call Buy)", message="
 alertcondition(overall_sell_alert, title="PE Signal Alert (Put Sell)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
 alertcondition(ce_blast_active,    title="CE BLAST Alert 🔥",          message="CE BLAST ALERT 🔥: Call Blast signal triggered on BEP line on {{ticker}}!")
 alertcondition(pe_blast_active,    title="PE BLAST Alert 🔥",          message="PE BLAST ALERT 🔥: Put Blast signal triggered on BEP line on {{ticker}}!")
-alertcondition(ce_atm_cco,         title="CE CCO Alert 🔀 (ATM Candle Crossover)", message="CE CCO ALERT 🔀: Call Candle Crossover (CCO) on ATM BEP line on {{ticker}}!")
-alertcondition(pe_atm_cco,         title="PE CCO Alert 🔀 (ATM Candle Crossover)", message="PE CCO ALERT 🔀: Put Candle Crossover (CCO) on ATM BEP line on {{ticker}}!")
