@@ -101,6 +101,9 @@ use_basket_avg_alerts       = input.bool(true, "Enable Alerts on Basket Average 
 enable_blast_alerts         = input.bool(true, "Enable CE / PE Blast Alerts & Markers", group="Alert Engine Controls",
   tooltip="Enable or disable CE/PE Blast alerts and BLAST markers on chart when opponent basket average is below its day open average.")
 
+use_blast_filter            = input.bool(false, "Require Blast Condition for Buy/Sell Alerts", group="Alert Engine Controls",
+  tooltip="When enabled, requires PE current average < PE day open average for CE alerts, and CE current average < CE day open average for PE alerts.")
+
 use_basket_avg_filter       = input.bool(true, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
 use_basket_chg_filter       = input.bool(true, "Require Basket Average Change > 0", group="Alert Engine Controls",
@@ -630,9 +633,13 @@ bool pe_top_pass = not both_above_day_open or (peAvgCur > ceAvgCur)
 bool ce_iv_pass  = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0)
 bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_iv_rt > ce_iv_rt) or (pe_iv_rt > 0)
 
+// Blast Condition Pass Evaluator: Enforced ONLY when use_blast_filter is enabled
+bool ce_blast_pass = not use_blast_filter or (peAvgCur < peAvgOpen)
+bool pe_blast_pass = not use_blast_filter or (ceAvgCur < ceAvgOpen)
+
 // Directional Filters with Strict Confluence
-bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
-bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
+bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass and ce_blast_pass
+bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass and pe_blast_pass
 
 // --- Universal BEP Level Pair Trigger Evaluators ---
 // Downside Rejection: High touches/surpasses BEP line (h_val >= bep), Close finishes below (c_val < bep)
