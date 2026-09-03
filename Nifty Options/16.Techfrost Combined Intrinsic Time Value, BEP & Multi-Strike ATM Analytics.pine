@@ -765,9 +765,9 @@ bool pe_avg_trig = use_basket_avg_alerts and (peAvgCur > peAvgOpen) and (nz(peAv
 bool ce_any_bep_trig = (ce_trig_m3_rt == true) or (ce_trig_m3_stat == true) or (ce_trig_m2_rt == true) or (ce_trig_m2_stat == true) or (ce_trig_m1_rt == true) or (ce_trig_m1_stat == true) or (ce_trig_0_rt == true) or (ce_trig_0_stat == true) or (ce_trig_p1_rt == true) or (ce_trig_p1_stat == true) or (ce_trig_p2_rt == true) or (ce_trig_p2_stat == true) or (ce_trig_p3_rt == true) or (ce_trig_p3_stat == true) or (ce_avg_trig == true)
 bool pe_any_bep_trig = (pe_trig_m3_rt == true) or (pe_trig_m3_stat == true) or (pe_trig_m2_rt == true) or (pe_trig_m2_stat == true) or (pe_trig_m1_rt == true) or (pe_trig_m1_stat == true) or (pe_trig_0_rt == true) or (pe_trig_0_stat == true) or (pe_trig_p1_rt == true) or (pe_trig_p1_stat == true) or (pe_trig_p2_rt == true) or (pe_trig_p2_stat == true) or (pe_trig_p3_rt == true) or (pe_trig_p3_stat == true) or (pe_avg_trig == true)
 
-// Mode Pass Evaluation
-bool ce_pass_mode = (ce_blast_cond_met and allow_blast_alerts) or (not ce_blast_cond_met and allow_normal_alerts)
-bool pe_pass_mode = (pe_blast_cond_met and allow_blast_alerts) or (not pe_blast_cond_met and allow_normal_alerts)
+// Mode Pass Evaluation: If Blast is unselected but Normal alerts are allowed, fallback to Normal CE/PE alert
+bool ce_pass_mode = (ce_blast_cond_met and allow_blast_alerts) or allow_normal_alerts
+bool pe_pass_mode = (pe_blast_cond_met and allow_blast_alerts) or allow_normal_alerts
 
 // --- Combined Raw Buy & Sell Triggers Across Active Modules ---
 bool raw_buy_alert  = ce_any_bep_trig and (ce_filters_met == true) and ce_pass_mode and not (pe_any_bep_trig and (pe_filters_met == true) and pe_pass_mode)
