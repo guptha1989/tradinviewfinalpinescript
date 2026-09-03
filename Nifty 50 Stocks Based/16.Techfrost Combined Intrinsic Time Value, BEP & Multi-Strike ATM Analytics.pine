@@ -34,8 +34,6 @@ enum StepOverrideChoice
 // --- Instrument Settings ---
 underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
-atm_select_mode    = input.string("Auto (Spot Day Open ATM)", "ATM Strike Selection Mode", options=["Auto (Spot Day Open ATM)", "Chart Symbol Strike", "Manual Strike"], group="Instrument Settings",
-  tooltip="Auto (Spot Day Open ATM): Auto-selects ATM strike based on Spot Day Open price from the spot chart. Chart Symbol Strike: Uses strike detected from active chart symbol. Manual Strike: Uses Manual Strike Selection.")
 manualStrikeInput  = input.int(0, "Manual Strike Selection (0 = Auto)", minval=0, group="Instrument Settings",
   tooltip="Enter strike price manually (e.g. 24000). Leave at 0 to auto-detect from chart symbol.")
 spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. RELIANCE)", group="Instrument Settings")
@@ -247,17 +245,7 @@ switch strikeStepInput
 
 var float baseCenterStrike = na
 if barstate.isfirst or na(baseCenterStrike)
-    float refPrice = spotDayOpen
-    if atm_select_mode == "Manual Strike" and manualStrikeInput > 0
-        refPrice := float(manualStrikeInput)
-    else if atm_select_mode == "Chart Symbol Strike" and not na(detectedStrike) and detectedStrike > 0
-        refPrice := detectedStrike
-    else // "Auto (Spot Day Open ATM)" or fallback
-        refPrice := not na(spotDayOpen) and spotDayOpen > 0 ? spotDayOpen : (not na(detectedStrike) and detectedStrike > 0 ? detectedStrike : 24150.0)
-    
-    if strikeOverride > 0.0
-        refPrice := strikeOverride
-        
+    float refPrice = strikeOverride > 0.0 ? strikeOverride : (not na(chartStrikePrice) and chartStrikePrice > 0 ? chartStrikePrice : spotDayOpen)
     baseCenterStrike := math.round(refPrice / stepVal) * stepVal
 
 float baseStrike = baseCenterStrike
