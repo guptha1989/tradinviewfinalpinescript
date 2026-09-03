@@ -46,8 +46,8 @@ offsetChoiceInput  = input.string("100 Points", "Strike Offset Points Dropdown",
   tooltip="Offset points used to determine ITM / OTM strike levels.")
 customOffsetInput  = input.float(0.0, "Custom Offset Points Override (0 = Use Dropdown)", minval=0.0, group="Calculation Settings",
   tooltip="Set custom offset points (e.g. 50, 100, 150). If > 0, overrides dropdown selection.")
-numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Basket", minval=1, maxval=8, group="Calculation Settings",
-  tooltip="Set number of ITM & OTM strikes each side to include in basket calculation (1 = 3 Strikes, 2 = 5 Strikes, 3 = 7 Strikes, 4 = 9 Strikes, up to 8 = 17 Strikes).")
+numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side for Basket", minval=1, maxval=7, group="Calculation Settings",
+  tooltip="Set number of ITM & OTM strikes each side to include in basket calculation (1 = 3 Strikes, 2 = 5 Strikes, 3 = 7 Strikes, 4 = 9 Strikes, up to 7 = 15 Strikes).")
 static_bep_basis   = input.string("Day Open Price", "Static BEP Calculation Basis", options=["Day Open Price", "Previous Day Close", "Previous Day Settlement", "First 5 Min Close"], group="Calculation Settings",
   tooltip="Select price basis for calculating the 7 Static BEP lines (Day Open Price, Previous Day Close/Settlement, or First 5 Min Close).")
 
@@ -308,7 +308,7 @@ float pe_strike = chartStrikePrice
 string ce_ticker = f_build_ce_ticker(ce_strike)
 string pe_ticker = f_build_pe_ticker(pe_strike)
 
-// Multi-Strike Basket Tickers (17 Levels: -8 to +8)
+// Multi-Strike Basket Tickers (15 Levels: -7 to +7)
 float k_0  = baseStrike
 float k_p1 = baseStrike + 1.0 * offsetPts
 float k_p2 = baseStrike + 2.0 * offsetPts
@@ -317,7 +317,6 @@ float k_p4 = baseStrike + 4.0 * offsetPts
 float k_p5 = baseStrike + 5.0 * offsetPts
 float k_p6 = baseStrike + 6.0 * offsetPts
 float k_p7 = baseStrike + 7.0 * offsetPts
-float k_p8 = baseStrike + 8.0 * offsetPts
 
 float k_m1 = baseStrike - 1.0 * offsetPts
 float k_m2 = baseStrike - 2.0 * offsetPts
@@ -326,7 +325,6 @@ float k_m4 = baseStrike - 4.0 * offsetPts
 float k_m5 = baseStrike - 5.0 * offsetPts
 float k_m6 = baseStrike - 6.0 * offsetPts
 float k_m7 = baseStrike - 7.0 * offsetPts
-float k_m8 = baseStrike - 8.0 * offsetPts
 
 // ==========================================
 // DATA FETCHING & OPPOSITE CANDLES OVERLAY
@@ -398,22 +396,21 @@ float pe_low  = isPut  ? low : pe_low_sec
 float ce_ltp  = isCall ? close : ce_ltp_sec
 float pe_ltp  = isPut  ? close : pe_ltp_sec
 
-// Previous Day Settlement Price Close, High, Low (Single consolidated security call)
-[chart_pdc, chart_pdh, chart_pdl] = request.security(syminfo.tickerid, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+// Previous Day Settlement Price Close, High, Low
+float ce_prev_close = ce_pdc_sec
+float pe_prev_close = pe_pdc_sec
 
-float ce_prev_close = isCall ? chart_pdc : ce_pdc_sec
-float pe_prev_close = isPut  ? chart_pdc : pe_pdc_sec
+float ce_prev_high  = ce_pdh_sec
+float ce_prev_low   = ce_pdl_sec
 
-float ce_prev_high  = isCall ? chart_pdh : ce_pdh_sec
-float ce_prev_low   = isCall ? chart_pdl : ce_pdl_sec
+float pe_prev_high  = pe_pdh_sec
+float pe_prev_low   = pe_pdl_sec
 
-float pe_prev_high  = isPut  ? chart_pdh : pe_pdh_sec
-float pe_prev_low   = isPut  ? chart_pdl : pe_pdl_sec
+// Reuse ATM security data for Level 0 strike pair to eliminate redundant security calls
+float ce_o_0 = ce_open_sec, float ce_h_0 = ce_high_sec, float ce_l_0 = ce_low_sec, float ce_c_0 = ce_ltp_sec
+float pe_o_0 = pe_open_sec, float pe_h_0 = pe_high_sec, float pe_l_0 = pe_low_sec, float pe_c_0 = pe_ltp_sec
 
-// Fetch All 17 Strike Levels OHLC Data (-8 to +8)
-[ce_o_m8, ce_h_m8, ce_l_m8, ce_c_m8] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m8), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m8, pe_h_m8, pe_l_m8, pe_c_m8] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m8), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
+// Fetch 14 ITM & OTM Strike Levels OHLC Data (-7 to +7, excluding 0)
 [ce_o_m7, ce_h_m7, ce_l_m7, ce_c_m7] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_m7, pe_h_m7, pe_l_m7, pe_c_m7] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
@@ -434,9 +431,6 @@ float pe_prev_low   = isPut  ? chart_pdl : pe_pdl_sec
 
 [ce_o_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_0,  ce_h_0,  ce_l_0,  ce_c_0]  = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_0),  timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_0,  pe_h_0,  pe_l_0,  pe_c_0]  = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_0),  timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 [ce_o_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
@@ -459,11 +453,7 @@ float pe_prev_low   = isPut  ? chart_pdl : pe_pdl_sec
 [ce_o_p7, ce_h_p7, ce_l_p7, ce_c_p7] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_p7, pe_h_p7, pe_l_p7, pe_c_p7] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p7), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_o_p8, ce_h_p8, ce_l_p8, ce_c_p8] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p8), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p8, pe_h_p8, pe_l_p8, pe_c_p8] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p8), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-float spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
-spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
+float spot_ltp = spot_close_today
 
 // ==========================================
 // CORE CALCULATIONS, VWAP & MOMENTUM INDICATORS
@@ -614,12 +604,6 @@ if numStrikesInput >= 7
     sum_pe_open += nz(pe_o_p7) + nz(pe_o_m7)
     sum_ce_cur  += nz(ce_c_p7) + nz(ce_c_m7)
     sum_pe_cur  += nz(pe_c_p7) + nz(pe_c_m7)
-
-if numStrikesInput >= 8
-    sum_ce_open += nz(ce_o_p8) + nz(ce_o_m8)
-    sum_pe_open += nz(pe_o_p8) + nz(pe_o_m8)
-    sum_ce_cur  += nz(ce_c_p8) + nz(ce_c_m8)
-    sum_pe_cur  += nz(pe_c_p8) + nz(pe_c_m8)
 
 float ceAvgOpen = sum_ce_open / total_count
 float peAvgOpen = sum_pe_open / total_count
