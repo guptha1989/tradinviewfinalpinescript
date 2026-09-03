@@ -393,18 +393,18 @@ float s4_pe_base = calc_basis == "Day Open Price" ? array.get(pe_opens, math.max
 
 // Compute locked spot level projections (stationary across trading day)
 // R1: ATM Strike + ATM CE 9:15 open value; R2 to R5: ATM+1 to ATM+4 CE levels
-float Spot_R1 = atm_strike_base + ce_atm_base
-float Spot_R2 = (atm_strike_base + 1 * strike_step) + r1_ce_base
-float Spot_R3 = (atm_strike_base + 2 * strike_step) + r2_ce_base
-float Spot_R4 = (atm_strike_base + 3 * strike_step) + r3_ce_base
-float Spot_R5 = (atm_strike_base + 4 * strike_step) + r4_ce_base
+float Spot_R1 = not na(ce_atm_base) ? (atm_strike_base + ce_atm_base) : (Spot_Pivot + 1.0 * strike_step)
+float Spot_R2 = not na(r1_ce_base)  ? ((atm_strike_base + 1 * strike_step) + r1_ce_base) : (Spot_Pivot + 2.0 * strike_step)
+float Spot_R3 = not na(r2_ce_base)  ? ((atm_strike_base + 2 * strike_step) + r2_ce_base) : (Spot_Pivot + 3.0 * strike_step)
+float Spot_R4 = not na(r3_ce_base)  ? ((atm_strike_base + 3 * strike_step) + r3_ce_base) : (Spot_Pivot + 4.0 * strike_step)
+float Spot_R5 = not na(r4_ce_base)  ? ((atm_strike_base + 4 * strike_step) + r4_ce_base) : (Spot_Pivot + 5.0 * strike_step)
 
 // S1: ATM Strike - ATM PE 9:15 open value; S2 to S5: ATM-1 to ATM-4 PE levels
-float Spot_S1 = atm_strike_base - pe_atm_base
-float Spot_S2 = (atm_strike_base - 1 * strike_step) - s1_pe_base
-float Spot_S3 = (atm_strike_base - 2 * strike_step) - s2_pe_base
-float Spot_S4 = (atm_strike_base - 3 * strike_step) - s3_pe_base
-float Spot_S5 = (atm_strike_base - 4 * strike_step) - s4_pe_base
+float Spot_S1 = not na(pe_atm_base) ? (atm_strike_base - pe_atm_base) : (Spot_Pivot - 1.0 * strike_step)
+float Spot_S2 = not na(s1_pe_base)  ? ((atm_strike_base - 1 * strike_step) - s1_pe_base) : (Spot_Pivot - 2.0 * strike_step)
+float Spot_S3 = not na(s2_pe_base)  ? ((atm_strike_base - 2 * strike_step) - s2_pe_base) : (Spot_Pivot - 3.0 * strike_step)
+float Spot_S4 = not na(s3_pe_base)  ? ((atm_strike_base - 3 * strike_step) - s3_pe_base) : (Spot_Pivot - 4.0 * strike_step)
+float Spot_S5 = not na(s4_pe_base)  ? ((atm_strike_base - 4 * strike_step) - s4_pe_base) : (Spot_Pivot - 5.0 * strike_step)
 
 // 2. Real-Time ATM Strike Calculation (LTP Premium Difference based)
 float min_diff_rt = 1e9
