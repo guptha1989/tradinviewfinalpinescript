@@ -771,6 +771,22 @@ bool pe_trig_p3_stat = use_stat_bep_alerts and use_otm_bep_trig and f_eval_pe_pa
 bool ce_avg_trig = use_basket_avg_alerts and (ceAvgCur > ceAvgOpen) and (nz(ceAvgCur[1]) <= nz(ceAvgOpen[1]))
 bool pe_avg_trig = use_basket_avg_alerts and (peAvgCur > peAvgOpen) and (nz(peAvgCur[1]) <= nz(peAvgOpen[1]))
 
+// --- ATM BEP Candle Crossover (CCO) Evaluator ---
+// Evaluates when one option crosses ABOVE ATM BEP and the opposite option breaks DOWN below ATM BEP
+bool ce_atm_cco = use_atm_bep_trig and (
+  (use_rt_bep_alerts and f_crossover_up(chart_ce_close, chart_ce_close[1], bep_rt_0) and f_breakdown_dn(chart_pe_close, chart_pe_close[1], bep_rt_0)) or
+  (use_stat_bep_alerts and f_crossover_up(chart_ce_close, chart_ce_close[1], bep_stat_0) and f_breakdown_dn(chart_pe_close, chart_pe_close[1], bep_stat_0)) or
+  (use_rt_bep_alerts and f_crossover_up(ce_c_0, ce_c_0[1], bep_rt_0) and f_breakdown_dn(pe_c_0, pe_c_0[1], bep_rt_0)) or
+  (use_stat_bep_alerts and f_crossover_up(ce_c_0, ce_c_0[1], bep_stat_0) and f_breakdown_dn(pe_c_0, pe_c_0[1], bep_stat_0))
+  )
+
+bool pe_atm_cco = use_atm_bep_trig and (
+  (use_rt_bep_alerts and f_crossover_up(chart_pe_close, chart_pe_close[1], bep_rt_0) and f_breakdown_dn(chart_ce_close, chart_ce_close[1], bep_rt_0)) or
+  (use_stat_bep_alerts and f_crossover_up(chart_pe_close, chart_pe_close[1], bep_stat_0) and f_breakdown_dn(chart_ce_close, chart_ce_close[1], bep_stat_0)) or
+  (use_rt_bep_alerts and f_crossover_up(pe_c_0, pe_c_0[1], bep_rt_0) and f_breakdown_dn(ce_c_0, ce_c_0[1], bep_rt_0)) or
+  (use_stat_bep_alerts and f_crossover_up(pe_c_0, pe_c_0[1], bep_stat_0) and f_breakdown_dn(ce_c_0, ce_c_0[1], bep_stat_0))
+  )
+
 // Combined Crossovers & Downside Bounces Across Active Modules
 bool ce_any_bep_trig = (ce_trig_m3_rt == true) or (ce_trig_m3_stat == true) or (ce_trig_m2_rt == true) or (ce_trig_m2_stat == true) or (ce_trig_m1_rt == true) or (ce_trig_m1_stat == true) or (ce_trig_0_rt == true) or (ce_trig_0_stat == true) or (ce_trig_p1_rt == true) or (ce_trig_p1_stat == true) or (ce_trig_p2_rt == true) or (ce_trig_p2_stat == true) or (ce_trig_p3_rt == true) or (ce_trig_p3_stat == true) or (ce_avg_trig == true)
 bool pe_any_bep_trig = (pe_trig_m3_rt == true) or (pe_trig_m3_stat == true) or (pe_trig_m2_rt == true) or (pe_trig_m2_stat == true) or (pe_trig_m1_rt == true) or (pe_trig_m1_stat == true) or (pe_trig_0_rt == true) or (pe_trig_0_stat == true) or (pe_trig_p1_rt == true) or (pe_trig_p1_stat == true) or (pe_trig_p2_rt == true) or (pe_trig_p2_stat == true) or (pe_trig_p3_rt == true) or (pe_trig_p3_stat == true) or (pe_avg_trig == true)
@@ -823,13 +839,13 @@ string m_size = f_get_marker_size(signal_marker_size)
 
 if show_signal_shapes
     if overall_buy_alert
-        string ce_lbl = ce_blast_active ? "CE BLAST🔥" : (ce_fresh_iv ? "CE IV★" : "CE")
-        color  ce_col = ce_blast_active ? #00FF66 : #00E676
-        color  ce_txt = ce_blast_active ? color.black : color.white
+        string ce_lbl = ce_blast_active ? "CE BLAST🔥" : (ce_atm_cco ? "CE CCO🔥" : (ce_fresh_iv ? "CE IV★" : "CE"))
+        color  ce_col = ce_blast_active ? #00FF66 : (ce_atm_cco ? #00E676 : #00E676)
+        color  ce_txt = (ce_blast_active or ce_atm_cco) ? color.black : color.white
         label.new(bar_index, low, text=ce_lbl, style=label.style_label_up, color=ce_col, textcolor=ce_txt, size=m_size)
     else if overall_sell_alert
-        string pe_lbl = pe_blast_active ? "PE BLAST🔥" : (pe_fresh_iv ? "PE IV★" : "PE")
-        color  pe_col = pe_blast_active ? #FF0055 : #FF1744
+        string pe_lbl = pe_blast_active ? "PE BLAST🔥" : (pe_atm_cco ? "PE CCO🔥" : (pe_fresh_iv ? "PE IV★" : "PE"))
+        color  pe_col = pe_blast_active ? #FF0055 : (pe_atm_cco ? #FF1744 : #FF1744)
         color  pe_txt = color.white
         label.new(bar_index, high, text=pe_lbl, style=label.style_label_down, color=pe_col, textcolor=pe_txt, size=m_size)
     
@@ -875,3 +891,5 @@ alertcondition(overall_buy_alert,  title="CE Signal Alert (Call Buy)", message="
 alertcondition(overall_sell_alert, title="PE Signal Alert (Put Sell)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
 alertcondition(ce_blast_active,    title="CE BLAST Alert 🔥",          message="CE BLAST ALERT 🔥: Call Blast signal triggered on BEP line on {{ticker}}!")
 alertcondition(pe_blast_active,    title="PE BLAST Alert 🔥",          message="PE BLAST ALERT 🔥: Put Blast signal triggered on BEP line on {{ticker}}!")
+alertcondition(ce_atm_cco,         title="CE CCO Alert 🔀 (ATM Candle Crossover)", message="CE CCO ALERT 🔀: Call Candle Crossover (CCO) on ATM BEP line on {{ticker}}!")
+alertcondition(pe_atm_cco,         title="PE CCO Alert 🔀 (ATM Candle Crossover)", message="PE CCO ALERT 🔀: Put Candle Crossover (CCO) on ATM BEP line on {{ticker}}!")
