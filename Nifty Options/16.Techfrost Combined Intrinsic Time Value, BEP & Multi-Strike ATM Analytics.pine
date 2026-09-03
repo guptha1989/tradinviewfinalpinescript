@@ -106,6 +106,9 @@ use_basket_avg_alerts       = input.bool(true, "Enable Alerts on Basket Average 
 use_chart_only_trig         = input.bool(true, "Trigger Alerts ONLY on Active Chart Option Crossovers", group="Alert Engine Controls",
   tooltip="When enabled, alerts fire strictly when the option candle on your active chart crosses/bounces on a BEP line, filtering out background security noise.")
 
+use_next_bar_conf           = input.bool(true, "Require Next Candle Confirmation (Open or Cross First Candle)", group="Alert Engine Controls",
+  tooltip="When enabled, signals are NOT triggered immediately on crossover candle close. The alert triggers on the NEXT candle only if it opens or crosses beyond the crossover candle's High (CE) or Low (PE).")
+
 use_atm_bep_trig            = input.bool(true, "Trigger Alerts on ATM BEP Lines (Level 0)", group="Alert Engine Controls",
   tooltip="Enable or disable alerts on ATM BEP lines.")
 use_itm_bep_trig            = input.bool(true, "Trigger Alerts on ITM BEP Lines (Level L-1 to L-3)", group="Alert Engine Controls",
@@ -796,8 +799,31 @@ bool ce_pass_mode = (ce_blast_cond_met and allow_blast_alerts) or allow_normal_a
 bool pe_pass_mode = (pe_blast_cond_met and allow_blast_alerts) or allow_normal_alerts
 
 // --- Combined Raw Buy & Sell Triggers Across Active Modules ---
-bool raw_buy_alert  = ce_any_bep_trig and (ce_filters_met == true) and ce_pass_mode and not (pe_any_bep_trig and (pe_filters_met == true) and pe_pass_mode)
-bool raw_sell_alert = pe_any_bep_trig and (pe_filters_met == true) and pe_pass_mode and not (ce_any_bep_trig and (ce_filters_met == true) and ce_pass_mode)
+bool raw_buy_trig  = ce_any_bep_trig and (ce_filters_met == true) and ce_pass_mode and not (pe_any_bep_trig and (pe_filters_met == true) and pe_pass_mode)
+bool raw_sell_trig = pe_any_bep_trig and (pe_filters_met == true) and pe_pass_mode and not (ce_any_bep_trig and (ce_filters_met == true) and ce_pass_mode)
+
+// --- Next Candle Confirmation Logic ---
+var float ce_sig_high  = na
+var float ce_sig_close = na
+var float pe_sig_low   = na
+var float pe_sig_close = na
+
+if raw_buy_trig
+    ce_sig_high  := high
+    ce_sig_close := close
+
+if raw_sell_trig
+    pe_sig_low   := low
+    pe_sig_close := close
+
+// Confirmation for CE: Next candle (bar 0) high or close crosses above previous crossover candle's high, OR opens >= previous close
+bool ce_confirmed = nz(raw_buy_trig[1]) and ((high > ce_sig_high[1]) or (close > ce_sig_high[1]) or (open >= ce_sig_close[1]))
+
+// Confirmation for PE: Next candle (bar 0) low or close crosses below previous crossover candle's low, OR opens <= previous close
+bool pe_confirmed = nz(raw_sell_trig[1]) and ((low < pe_sig_low[1]) or (close < pe_sig_low[1]) or (open <= pe_sig_close[1]))
+
+bool raw_buy_alert  = use_next_bar_conf ? ce_confirmed : raw_buy_trig
+bool raw_sell_alert = use_next_bar_conf ? pe_confirmed : raw_sell_trig
 
 // --- Strict Alternating Swing Lock State Machine ---
 var int activeSwing = 0 // 0 = Neutral, 1 = In BUY Swing, -1 = In SELL Swing
