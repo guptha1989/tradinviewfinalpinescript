@@ -762,15 +762,17 @@ if activeSwing == -1 and not na(active_entry_price)
         activeSwing        := 0 // Invalidate and Re-Arm engine!
         active_entry_price := na
 
-bool overall_buy_alert  = false
-bool overall_sell_alert = false
+// Direct ATM BEP line triggers bypass stale swing locks to ensure 100% reliable execution on ATM BEP line
+bool is_direct_atm_ce = ce_trig_0_rt or ce_trig_0_stat
+bool is_direct_atm_pe = pe_trig_0_rt or pe_trig_0_stat
 
-if raw_buy_alert and activeSwing != 1
-    overall_buy_alert  := true
+bool overall_buy_alert  = raw_buy_alert and (is_direct_atm_ce or activeSwing != 1)
+bool overall_sell_alert = raw_sell_alert and (is_direct_atm_pe or activeSwing != -1)
+
+if overall_buy_alert
     activeSwing        := 1
     active_entry_price := close
-else if raw_sell_alert and activeSwing != -1
-    overall_sell_alert := true
+else if overall_sell_alert
     activeSwing        := -1
     active_entry_price := close
 
