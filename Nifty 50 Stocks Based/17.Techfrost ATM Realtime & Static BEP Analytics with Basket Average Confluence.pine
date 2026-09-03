@@ -38,7 +38,7 @@ spotTicker              = input.symbol("NSE:NIFTY", "Spot Index Ticker", group="
 numStrikesInput         = input.int(5, "Basket Average Strike Count (Per Side)", minval=1, maxval=7, group="Basket Average Settings",
   tooltip="Number of ITM/OTM strike pairs included in basket average calculations (1 = ATM pair only, 5 = ATM +/- 4 strikes).")
 static_bep_basis        = input.string("Day Open Price", "Static BEP Calculation Basis", options=["Day Open Price", "Previous Day Close", "First 5 Min Close", "Previous Day Settlement"], group="Basket Average Settings",
-  tooltip="Select baseline reference price used to compute Static BEP lines.")
+  tooltip="Select baseline reference price used to compute Static BEP lines (Matches Indicator 4 & 5A).")
 
 // --- Alert Engine Controls ---
 bep_trigger_mode        = input.string("Both", "ATM BEP Trigger Mode", options=["Realtime ATM BEP", "Static ATM BEP", "Both"], group="Alert Engine Controls",
@@ -193,31 +193,21 @@ float k_m3 = chartStrikePrice - (3 * strikeStep)
 float k_p3 = chartStrikePrice + (3 * strikeStep)
 float k_m4 = chartStrikePrice - (4 * strikeStep)
 float k_p4 = chartStrikePrice + (4 * strikeStep)
-float k_m5 = chartStrikePrice - (5 * strikeStep)
-float k_p5 = chartStrikePrice + (5 * strikeStep)
-float k_m6 = chartStrikePrice - (6 * strikeStep)
-float k_p6 = chartStrikePrice + (6 * strikeStep)
-float k_m7 = chartStrikePrice - (7 * strikeStep)
-float k_p7 = chartStrikePrice + (7 * strikeStep)
 
 // ==========================================
-// DATA FETCHING & OPPOSITE CANDLES OVERLAY
+// DATA FETCHING & OPPOSITE CANDLES OVERLAY (Matches Indicator 4 & 5A)
 // ==========================================
 
-f_get_strike_ohlc() =>
-    float d_op  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
-    float d_pdc = ta.valuewhen(ta.change(time("D")) != 0, close[1], 0)
-    d_pdc      := na(d_pdc) ? d_op : d_pdc
-
+f_get_contract_data() =>
+    float d_open  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+    [d_pdc, d_pdh, d_pdl] = request.security(syminfo.tickerid, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
     var float d_f5m = na
     if ta.change(time("D")) != 0
         d_f5m := na
     if (hour == 9 and minute >= 19) or hour > 9
         if na(d_f5m)
             d_f5m := close
-
-    float stat_ref = (static_bep_basis == "Previous Day Close" or static_bep_basis == "Previous Day Settlement") ? d_pdc : (static_bep_basis == "First 5 Min Close" ? (na(d_f5m) ? d_op : d_f5m) : d_op)
-    [d_op, stat_ref, high, low, close]
+    [d_open, d_pdc, d_pdh, d_pdl, na(d_f5m) ? d_open : d_f5m, close]
 
 // Fetch Opposite Option Ticker & Candle Data for Overlay
 string opp_ticker = f_build_option_symbol(chartStrikePrice, not isCall)
@@ -234,79 +224,102 @@ plotcandle(show_opp_candles ? opp_o : na,
            show_opp_candles ? opp_c : na,
            title="Opposite Option Candle", color=opp_body_col, wickcolor=opp_wick_col, bordercolor=opp_wick_col)
 
-// Fetch ATM Option Security OHLC Data
-[ce_dop_sec, ce_stat_sec, ce_high_sec, ce_low_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_sec, pe_stat_sec, pe_high_sec, pe_low_sec, pe_ltp_sec] = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+// Fetch Contract Data for Multi-Strikes
+[ce_0_o, ce_0_pdc, ce_0_pdh, ce_0_pdl, ce_0_f5m, ce_0_ltp] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_0_o, pe_0_pdc, pe_0_pdh, pe_0_pdl, pe_0_f5m, pe_0_ltp] = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-float ce_o_0 = ce_dop_sec, float ce_stat_0 = ce_stat_sec, float ce_h_0 = ce_high_sec, float ce_l_0 = ce_low_sec, float ce_c_0 = ce_ltp_sec
-float pe_o_0 = pe_dop_sec, float pe_stat_0 = pe_stat_sec, float pe_h_0 = pe_high_sec, float pe_l_0 = pe_low_sec, float pe_c_0 = pe_ltp_sec
+[ce_m1_o, ce_m1_pdc, ce_m1_pdh, ce_m1_pdl, ce_m1_f5m, ce_m1_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_m1_o, pe_m1_pdc, pe_m1_pdh, pe_m1_pdl, pe_m1_f5m, pe_m1_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-// Fetch Multi-Strike Data for Basket Average Module
-[ce_o_m1, ce_stat_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m1, pe_stat_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_p1_o, ce_p1_pdc, ce_p1_pdh, ce_p1_pdl, ce_p1_f5m, ce_p1_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_p1_o, pe_p1_pdc, pe_p1_pdh, pe_p1_pdl, pe_p1_f5m, pe_p1_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-[ce_o_p1, ce_stat_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p1, pe_stat_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_m2_o, ce_m2_pdc, ce_m2_pdh, ce_m2_pdl, ce_m2_f5m, ce_m2_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_m2_o, pe_m2_pdc, pe_m2_pdh, pe_m2_pdl, pe_m2_f5m, pe_m2_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-[ce_o_m2, ce_stat_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m2, pe_stat_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_p2_o, ce_p2_pdc, ce_p2_pdh, ce_p2_pdl, ce_p2_f5m, ce_p2_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_p2_o, pe_p2_pdc, pe_p2_pdh, pe_p2_pdl, pe_p2_f5m, pe_p2_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-[ce_o_p2, ce_stat_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p2, pe_stat_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_m3_o, ce_m3_pdc, ce_m3_pdh, ce_m3_pdl, ce_m3_f5m, ce_m3_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_m3_o, pe_m3_pdc, pe_m3_pdh, pe_m3_pdl, pe_m3_f5m, pe_m3_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-[ce_o_m3, ce_stat_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m3, pe_stat_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_p3_o, ce_p3_pdc, ce_p3_pdh, ce_p3_pdl, ce_p3_f5m, ce_p3_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_p3_o, pe_p3_pdc, pe_p3_pdh, pe_p3_pdl, pe_p3_f5m, pe_p3_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-[ce_o_p3, ce_stat_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p3, pe_stat_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_m4_o, ce_m4_pdc, ce_m4_pdh, ce_m4_pdl, ce_m4_f5m, ce_m4_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_m4_o, pe_m4_pdc, pe_m4_pdh, pe_m4_pdl, pe_m4_f5m, pe_m4_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
-[ce_o_m4, ce_stat_m4, ce_h_m4, ce_l_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m4, pe_stat_m4, pe_h_m4, pe_l_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_o_p4, ce_stat_p4, ce_h_p4, ce_l_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p4, pe_stat_p4, pe_h_p4, pe_l_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_p4_o, ce_p4_pdc, ce_p4_pdh, ce_p4_pdl, ce_p4_f5m, ce_p4_ltp] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
+[pe_p4_o, pe_p4_pdc, pe_p4_pdh, pe_p4_pdl, pe_p4_f5m, pe_p4_ltp] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_contract_data(), ignore_invalid_symbol=true)
 
 float spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_invalid_symbol=true)
 spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
+
+// Resolve Basis Reference Values (Matches Indicator 4 f_resolve_basis)
+f_resolve_basis(float dop, float pdc, float f5m) =>
+    (static_bep_basis == "Previous Day Close" or static_bep_basis == "Previous Day Settlement") ? pdc : (static_bep_basis == "First 5 Min Close" ? f5m : dop)
+
+float ce_0_ref  = f_resolve_basis(ce_0_o, ce_0_pdc, ce_0_f5m)
+float pe_0_ref  = f_resolve_basis(pe_0_o, pe_0_pdc, pe_0_f5m)
+
+float ce_m1_ref = f_resolve_basis(ce_m1_o, ce_m1_pdc, ce_m1_f5m)
+float pe_m1_ref = f_resolve_basis(pe_m1_o, pe_m1_pdc, pe_m1_f5m)
+float ce_p1_ref = f_resolve_basis(ce_p1_o, ce_p1_pdc, ce_p1_f5m)
+float pe_p1_ref = f_resolve_basis(pe_p1_o, pe_p1_pdc, pe_p1_f5m)
+
+float ce_m2_ref = f_resolve_basis(ce_m2_o, ce_m2_pdc, ce_m2_f5m)
+float pe_m2_ref = f_resolve_basis(pe_m2_o, pe_m2_pdc, pe_m2_f5m)
+float ce_p2_ref = f_resolve_basis(ce_p2_o, ce_p2_pdc, ce_p2_f5m)
+float pe_p2_ref = f_resolve_basis(pe_p2_o, pe_p2_pdc, pe_p2_f5m)
+
+float ce_m3_ref = f_resolve_basis(ce_m3_o, ce_m3_pdc, ce_m3_f5m)
+float pe_m3_ref = f_resolve_basis(pe_m3_o, pe_m3_pdc, pe_m3_f5m)
+float ce_p3_ref = f_resolve_basis(ce_p3_o, ce_p3_pdc, ce_p3_f5m)
+float pe_p3_ref = f_resolve_basis(pe_p3_o, pe_p3_pdc, pe_p3_f5m)
+
+float ce_m4_ref = f_resolve_basis(ce_m4_o, ce_m4_pdc, ce_m4_f5m)
+float pe_m4_ref = f_resolve_basis(pe_m4_o, pe_m4_pdc, pe_m4_f5m)
+float ce_p4_ref = f_resolve_basis(ce_p4_o, ce_p4_pdc, ce_p4_f5m)
+float pe_p4_ref = f_resolve_basis(pe_p4_o, pe_p4_pdc, pe_p4_f5m)
 
 // ==========================================
 // BASKET AVERAGE MODULE CALCULATIONS
 // ==========================================
 
-float sum_ce_open = nz(ce_stat_0)
-float sum_pe_open = nz(pe_stat_0)
+float sum_ce_open = nz(ce_0_ref)
+float sum_pe_open = nz(pe_0_ref)
 
-float sum_ce_cur  = nz(ce_c_0)
-float sum_pe_cur  = nz(pe_c_0)
+float sum_ce_cur  = nz(ce_0_ltp)
+float sum_pe_cur  = nz(pe_0_ltp)
 
 int total_count = 1
 
 if numStrikesInput >= 2
-    sum_ce_open += nz(ce_stat_p1) + nz(ce_stat_m1)
-    sum_pe_open += nz(pe_stat_p1) + nz(pe_stat_m1)
-    sum_ce_cur  += nz(ce_c_p1) + nz(ce_c_m1)
-    sum_pe_cur  += nz(pe_c_p1) + nz(pe_c_m1)
+    sum_ce_open += nz(ce_p1_ref) + nz(ce_m1_ref)
+    sum_pe_open += nz(pe_p1_ref) + nz(pe_m1_ref)
+    sum_ce_cur  += nz(ce_p1_ltp) + nz(ce_m1_ltp)
+    sum_pe_cur  += nz(pe_p1_ltp) + nz(pe_m1_ltp)
     total_count += 2
 
 if numStrikesInput >= 3
-    sum_ce_open += nz(ce_stat_p2) + nz(ce_stat_m2)
-    sum_pe_open += nz(pe_stat_p2) + nz(pe_stat_m2)
-    sum_ce_cur  += nz(ce_c_p2) + nz(ce_c_m2)
-    sum_pe_cur  += nz(pe_c_p2) + nz(pe_c_m2)
+    sum_ce_open += nz(ce_p2_ref) + nz(ce_m2_ref)
+    sum_pe_open += nz(pe_p2_ref) + nz(pe_m2_ref)
+    sum_ce_cur  += nz(ce_p2_ltp) + nz(ce_m2_ltp)
+    sum_pe_cur  += nz(pe_p2_ltp) + nz(pe_m2_ltp)
     total_count += 2
 
 if numStrikesInput >= 4
-    sum_ce_open += nz(ce_stat_p3) + nz(ce_stat_m3)
-    sum_pe_open += nz(pe_stat_p3) + nz(pe_stat_m3)
-    sum_ce_cur  += nz(ce_c_p3) + nz(ce_c_m3)
-    sum_pe_cur  += nz(pe_c_p3) + nz(pe_c_m3)
+    sum_ce_open += nz(ce_p3_ref) + nz(ce_m3_ref)
+    sum_pe_open += nz(pe_p3_ref) + nz(pe_m3_ref)
+    sum_ce_cur  += nz(ce_p3_ltp) + nz(ce_m3_ltp)
+    sum_pe_cur  += nz(pe_p3_ltp) + nz(pe_m3_ltp)
     total_count += 2
 
 if numStrikesInput >= 5
-    sum_ce_open += nz(ce_stat_p4) + nz(ce_stat_m4)
-    sum_pe_open += nz(pe_stat_p4) + nz(pe_stat_m4)
-    sum_ce_cur  += nz(ce_c_p4) + nz(ce_c_m4)
-    sum_pe_cur  += nz(pe_c_p4) + nz(pe_c_m4)
+    sum_ce_open += nz(ce_p4_ref) + nz(ce_m4_ref)
+    sum_pe_open += nz(pe_p4_ref) + nz(pe_m4_ref)
+    sum_ce_cur  += nz(ce_p4_ltp) + nz(ce_m4_ltp)
+    sum_pe_cur  += nz(pe_p4_ltp) + nz(pe_m4_ltp)
     total_count += 2
 
 float ceAvgOpen = sum_ce_open / total_count
@@ -318,20 +331,25 @@ float peAvgCur  = sum_pe_cur / total_count
 float ceAvgChg  = ceAvgCur - ceAvgOpen
 float peAvgChg  = peAvgCur - peAvgOpen
 
-// Realtime Intrinsic Values
-float ce_iv_rt = math.max(0.0, spot_ltp - ce_strike)
-float pe_iv_rt = math.max(0.0, pe_strike - spot_ltp)
+// Realtime Intrinsic Values (Matches Indicator 5A Formula)
+float ce_iv_rt  = math.max(0.0, spot_ltp - ce_strike)
+float pe_iv_rt  = math.max(0.0, pe_strike - spot_ltp)
+float avg_iv_rt = (ce_iv_rt + pe_iv_rt) / 2.0
 
-// Fallback safety for ATM option prices
-float ce_c_0_clean    = nz(ce_c_0, isCall ? close : nz(opp_c, close))
-float pe_c_0_clean    = nz(pe_c_0, isPut ? close : nz(opp_c, close))
+// Realtime Time Values (Matches Indicator 5A Formula)
+float ce_0_ltp_clean = nz(ce_0_ltp, isCall ? close : nz(opp_c, close))
+float pe_0_ltp_clean = nz(pe_0_ltp, isPut ? close : nz(opp_c, close))
 
-float ce_stat_0_clean = nz(ce_stat_0, isCall ? open : nz(opp_o, open))
-float pe_stat_0_clean = nz(pe_stat_0, isPut ? open : nz(opp_o, open))
+float ce_tv_rt  = math.max(0.0, ce_0_ltp_clean - ce_iv_rt)
+float pe_tv_rt  = math.max(0.0, pe_0_ltp_clean - pe_iv_rt)
+float avg_tv_rt = (ce_tv_rt + pe_tv_rt) / 2.0
 
-// ATM Realtime & Static BEP Lines
-float bep_rt_0   = (ce_c_0_clean + pe_c_0_clean) / 2.0
-float bep_stat_0 = (ce_stat_0_clean + pe_stat_0_clean) / 2.0
+// ATM Realtime & Static BEP Lines (Matches Indicator 4 Formula)
+float ce_0_ref_clean = nz(ce_0_ref, isCall ? open : nz(opp_o, open))
+float pe_0_ref_clean = nz(pe_0_ref, isPut ? open : nz(opp_o, open))
+
+float bep_rt_0   = (ce_0_ltp_clean + pe_0_ltp_clean) / 2.0
+float bep_stat_0 = (ce_0_ref_clean + pe_0_ref_clean) / 2.0
 
 // Plot ATM Realtime & Static BEP Lines ONLY
 plot(bep_rt_0,   title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
@@ -380,11 +398,11 @@ bool cross_chart_close_stat = f_crossover_up(close, close[1], bep_stat_0)
 bool cross_opp_close_rt     = f_crossover_up(opp_c, opp_c[1], bep_rt_0)
 bool cross_opp_close_stat   = f_crossover_up(opp_c, opp_c[1], bep_stat_0)
 
-bool cross_ce_sec_rt        = f_crossover_up(ce_c_0, ce_c_0[1], bep_rt_0)
-bool cross_ce_sec_stat      = f_crossover_up(ce_c_0, ce_c_0[1], bep_stat_0)
+bool cross_ce_sec_rt        = f_crossover_up(ce_0_ltp, ce_0_ltp[1], bep_rt_0)
+bool cross_ce_sec_stat      = f_crossover_up(ce_0_ltp, ce_0_ltp[1], bep_stat_0)
 
-bool cross_pe_sec_rt        = f_crossover_up(pe_c_0, pe_c_0[1], bep_rt_0)
-bool cross_pe_sec_stat      = f_crossover_up(pe_c_0, pe_c_0[1], bep_stat_0)
+bool cross_pe_sec_rt        = f_crossover_up(pe_0_ltp, pe_0_ltp[1], bep_rt_0)
+bool cross_pe_sec_stat      = f_crossover_up(pe_0_ltp, pe_0_ltp[1], bep_stat_0)
 
 // Mode Selection (Realtime ATM BEP, Static ATM BEP, or Both)
 bool use_rt_bep   = (bep_trigger_mode == "Realtime ATM BEP") or (bep_trigger_mode == "Both")
