@@ -17,10 +17,8 @@ exchange = input.string("NSE", "Exchange Prefix", group=G_PARSER,
 
 underlying_ticker = input.string("NIFTY", "Underlying Ticker", group=G_PARSER,
   tooltip="Underlying ticker symbol (e.g. NIFTY, BANKNIFTY).")
-expiry_mode = input.string("Automatic (Current Week Expiry)", "Expiry Selection Mode", options=["Automatic (Current Week Expiry)", "Manual Input"], group=G_PARSER,
-  tooltip="Automatically calculates the current week's expiry date for Nifty, BankNifty, FinNifty, etc., or set manually.")
-expiry_input = input.string("26903", "Expiry String (Manual Input)", group=G_PARSER,
-  tooltip="Manual expiry date string format (used when Expiry Selection Mode is set to Manual Input).")
+expiry_input = input.string("260804", "Expiry String (YYMMDD/Code)", group=G_PARSER,
+  tooltip="Expiry date string format like 260804 (YYMMDD) or 24JUN.")
 
 atm_select_mode = input.string("Automatic", "ATM Strike Selection Mode", options=["Automatic", "Manual"], group=G_PARSER,
   tooltip="Choose whether ATM Strike is calculated automatically from Day Open price or set manually.")
@@ -186,34 +184,9 @@ if ticker_len > 7
                 root := str.substring(ticker_str, 0, idx - exp_len)
                 is_option := true
 
-// Helper function to dynamically compute current week's expiry date string (YYMMDD format)
-f_calc_auto_weekly_expiry(string r_tkr, int t_val) =>
-    int exp_dow = 5 // Default Thursday (Nifty, BankNifty)
-    string u_tkr = str.upper(r_tkr)
-    if str.contains(u_tkr, "BANK")
-        exp_dow := 4 // Wednesday
-    else if str.contains(u_tkr, "FIN")
-        exp_dow := 3 // Tuesday
-    else if str.contains(u_tkr, "MID")
-        exp_dow := 2 // Monday
-
-    int cur_dow = dayofweek(t_val)
-    int days_to_add = (exp_dow - cur_dow + 7) % 7
-    int exp_time = t_val + days_to_add * 86400000
-    
-    int exp_yr = year(exp_time) % 100
-    int exp_mo = month(exp_time)
-    int exp_day = dayofmonth(exp_time)
-    
-    string yr_str = str.tostring(exp_yr, "00")
-    string mo_str = str.tostring(exp_mo)
-    string dy_str = str.tostring(exp_day, "00")
-    yr_str + mo_str + dy_str
-
 // Resolve final contract variables
 final_root = is_option ? root : underlying_ticker
-string auto_expiry_val = f_calc_auto_weekly_expiry(final_root, last_bar_time)
-final_expiry = is_option ? expiry : (expiry_mode == "Automatic (Current Week Expiry)" ? auto_expiry_val : expiry_input)
+final_expiry = is_option ? expiry : expiry_input
 final_type = is_option ? opt_type : (selected_opt_type == "CE" or selected_opt_type == "C" ? "C" : "P")
 
 // Data Retrieval for Underlying Spot
@@ -569,7 +542,7 @@ else if orb_strike_mode == "OTM"
 string orb_sym = exchange + ":" + final_root + final_expiry + (orb_opt_type == "CE" ? "C" : "P") + str.tostring(orb_strike)
 
 // Fetch ORB High and Low
-[orb_h_raw, orb_l_raw] = request.security(orb_sym, orb_timeframe, f_orb_range(), ignore_invalid_symbol=true)
+[orb_h_raw, orb_l_raw] = request.security(orb_sym, orb_timeframe, f_orb_range())
 
 float orb_high_plot = show_orb_lines ? orb_h_raw : na
 float orb_low_plot = show_orb_lines ? orb_l_raw : na
@@ -826,7 +799,7 @@ if is_new_day
     pe_vwap_plot_final := na
 
 // Fetch real-time opposite option contract candles to plot
-[opp_o, opp_h, opp_l, opp_c] = request.security(opp_sym, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+[opp_o, opp_h, opp_l, opp_c] = request.security(opp_sym, timeframe.period, [open, high, low, close])
 
 candle_o = is_option and show_opp_candles ? opp_o : na
 candle_h = is_option and show_opp_candles ? opp_h : na
