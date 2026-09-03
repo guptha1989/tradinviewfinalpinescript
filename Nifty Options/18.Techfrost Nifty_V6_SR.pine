@@ -19,6 +19,9 @@ underlying_ticker = input.string("NIFTY", "Underlying Ticker", group=G_PARSER,
   tooltip="Underlying ticker symbol (e.g. NIFTY, BANKNIFTY).")
 expiry_input = input.string("26903", "Expiry String (YYMMDD/Code)", group=G_PARSER,
   tooltip="Expiry date string format like 26903 (YYMMDD) or 26SEP.")
+opt_format_input = input.string("ROOT + EXPIRY + STRIKE + CE/PE (e.g. NIFTY2690323950CE)", "Option Ticker Format",
+  options=["ROOT + EXPIRY + STRIKE + CE/PE (e.g. NIFTY2690323950CE)", "ROOT + EXPIRY + CE/PE + STRIKE (e.g. NIFTY26903CE23950)", "ROOT + EXPIRY + C/P + STRIKE (e.g. NIFTY26903C23950)"], group=G_PARSER,
+  tooltip="Select the option symbol format used by your broker/exchange on TradingView.")
 
 atm_select_mode = input.string("Automatic", "ATM Strike Selection Mode", options=["Automatic", "Manual"], group=G_PARSER,
   tooltip="Choose whether ATM Strike is calculated automatically from Day Open price or set manually.")
@@ -202,9 +205,21 @@ if barstate.isfirst or na(base_center_strike)
 
 final_strike = base_center_strike
 
+// Helper function to build option contract tickers matching TradingView exchange format
+f_build_option_contract(string exch_str, string r_str, string exp_str, string cp_type, int st_val) =>
+    string st_str = str.tostring(st_val)
+    string cp_full = (cp_type == "CE" or cp_type == "C") ? "CE" : "PE"
+    string cp_short = (cp_type == "CE" or cp_type == "C") ? "C" : "P"
+    if opt_format_input == "ROOT + EXPIRY + STRIKE + CE/PE (e.g. NIFTY2690323950CE)"
+        exch_str + ":" + r_str + exp_str + st_str + cp_full
+    else if opt_format_input == "ROOT + EXPIRY + CE/PE + STRIKE (e.g. NIFTY26903CE23950)"
+        exch_str + ":" + r_str + exp_str + cp_full + st_str
+    else
+        exch_str + ":" + r_str + exp_str + cp_short + st_str
+
 // Build opposite option contract symbol
 opp_type = final_type == "C" ? "P" : "C"
-opp_sym = exchange + ":" + final_root + final_expiry + opp_type + str.tostring(final_strike)
+opp_sym = f_build_option_contract(exchange, final_root, final_expiry, opp_type, final_strike)
 
 // Define Calculation Basis Price for Spot
 spot_base = calc_basis == "Day Open Price" ? spot_open : spot_prev_close
@@ -245,8 +260,8 @@ for i = 0 to 10
     int strike = base_center_strike + (i - 5) * strike_step
     array.set(strikes, i, strike)
     
-    string ce_contract = exchange + ":" + final_root + final_expiry + "C" + str.tostring(strike)
-    string pe_contract = exchange + ":" + final_root + final_expiry + "P" + str.tostring(strike)
+    string ce_contract = f_build_option_contract(exchange, final_root, final_expiry, "CE", strike)
+    string pe_contract = f_build_option_contract(exchange, final_root, final_expiry, "PE", strike)
     
     // Real-time tick-by-tick query on chart timeframe (timeframe.period)
     // Returns [Day Open, Previous Day Close, Real-time LTP] on every tick
@@ -266,12 +281,12 @@ for i = 0 to 10
 // Kept outside loop to prevent Pine from counting loop-body calls × 11 iterations.
 // This costs only 6 unique request.security calls (3 strikes × CE+PE).
 // =========================================================================
-string cvd_ce4 = exchange + ":" + final_root + final_expiry + "C" + str.tostring(final_strike - 1 * strike_step)
-string cvd_pe4 = exchange + ":" + final_root + final_expiry + "P" + str.tostring(final_strike - 1 * strike_step)
-string cvd_ce5 = exchange + ":" + final_root + final_expiry + "C" + str.tostring(final_strike)
-string cvd_pe5 = exchange + ":" + final_root + final_expiry + "P" + str.tostring(final_strike)
-string cvd_ce6 = exchange + ":" + final_root + final_expiry + "C" + str.tostring(final_strike + 1 * strike_step)
-string cvd_pe6 = exchange + ":" + final_root + final_expiry + "P" + str.tostring(final_strike + 1 * strike_step)
+string cvd_ce4 = f_build_option_contract(exchange, final_root, final_expiry, "CE", final_strike - 1 * strike_step)
+string cvd_pe4 = f_build_option_contract(exchange, final_root, final_expiry, "PE", final_strike - 1 * strike_step)
+string cvd_ce5 = f_build_option_contract(exchange, final_root, final_expiry, "CE", final_strike)
+string cvd_pe5 = f_build_option_contract(exchange, final_root, final_expiry, "PE", final_strike)
+string cvd_ce6 = f_build_option_contract(exchange, final_root, final_expiry, "CE", final_strike + 1 * strike_step)
+string cvd_pe6 = f_build_option_contract(exchange, final_root, final_expiry, "PE", final_strike + 1 * strike_step)
 
 [cvd4_ce_h, cvd4_ce_l, cvd4_ce_v, cvd4_ce_vw] = request.security(cvd_ce4, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
 [cvd4_pe_h, cvd4_pe_l, cvd4_pe_v, cvd4_pe_vw] = request.security(cvd_pe4, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
@@ -534,7 +549,7 @@ else if orb_strike_mode == "OTM"
         orb_strike := final_strike - orb_strike_offset
 
 // Construct ORB contract symbol
-string orb_sym = exchange + ":" + final_root + final_expiry + (orb_opt_type == "CE" ? "C" : "P") + str.tostring(orb_strike)
+string orb_sym = f_build_option_contract(exchange, final_root, final_expiry, orb_opt_type, orb_strike)
 
 // Fetch ORB High and Low
 [orb_h_raw, orb_l_raw] = request.security(orb_sym, orb_timeframe, f_orb_range(), ignore_invalid_symbol=true)
