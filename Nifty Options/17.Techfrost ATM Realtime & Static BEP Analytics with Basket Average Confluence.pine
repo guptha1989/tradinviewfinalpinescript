@@ -45,7 +45,7 @@ bep_trigger_mode        = input.string("Both", "ATM BEP Trigger Mode", options=[
   tooltip="Choose whether Buy/Sell triggers fire on Realtime ATM BEP line, Static ATM BEP line, or Both.")
 strict_iv_filter        = input.bool(false, "Require Strict Intrinsic Value (> 0)", group="Alert Engine Controls",
   tooltip="Set to false to keep Intrinsic Value non-blocking for ATM crossover alerts.")
-use_delta_vol_filter    = input.bool(false, "Require 3-Candle Delta Volume Confluence", group="Alert Engine Controls",
+use_delta_vol_filter    = input.bool(true, "Require 3-Candle Delta Volume Confluence", group="Alert Engine Controls",
   tooltip="Requires 3-candle cumulative Delta Volume to be positive (> 0) for CE Buy alert and negative (< 0) for PE Sell alert.")
 invalidation_pts        = input.float(6.0, "Alert Invalidation Drawdown Threshold (Pts)", minval=0.5, group="Alert Engine Controls",
   tooltip="If price moves against an active signal by more than this point threshold, the current alert is invalidated and the engine re-arms immediately.")

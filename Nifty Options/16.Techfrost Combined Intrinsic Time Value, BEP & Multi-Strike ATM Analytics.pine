@@ -111,7 +111,7 @@ use_basket_chg_filter       = input.bool(true, "Require Basket Average Change > 
   tooltip="Requires CE/PE Basket Average Change from Day Open to be positive (> 0).")
 strict_iv_filter            = input.bool(false, "Require Strict Intrinsic Value Filter Condition", group="Alert Engine Controls",
   tooltip="Set to false to keep Intrinsic Value non-strict for alerts. Fresh Intrinsic Value formations will be highlighted with special gold markers.")
-use_delta_vol_filter        = input.bool(false, "Require 3-Candle Delta Volume Confluence", group="Alert Engine Controls",
+use_delta_vol_filter        = input.bool(true, "Require 3-Candle Delta Volume Confluence", group="Alert Engine Controls",
   tooltip="Requires 3-candle cumulative Delta Volume to be positive (> 0) for CE Buy alert and negative (< 0) for PE Sell alert.")
 
 show_status_table           = input.bool(true, "Show Alert Conditions Status Table", group="Alert Engine Controls",
