@@ -347,32 +347,25 @@ f_orb_range() =>
     [orb_high, orb_low]
 
 // =========================================================================
-// ATM STRIKE CALCULATION (LOCKED 9:15 DAY OPEN vs REAL-TIME LTP)
+// ATM STRIKE CALCULATION (AUTO DAY OPEN ATM PER DAY)
 // =========================================================================
-// 1. Base ATM Strike (Locked at 9:15 AM / Day Open Price)
-int atm_strike_base = base_center_strike
+// 1. Base ATM Strike (Auto-selected from Day Open Price for each trading day)
+int day_atm_strike = (atm_select_mode == "Manual") ? manual_strike_val : int(math.round(nz(spot_open, open) / strike_step) * strike_step)
+if day_atm_strike <= 0
+    day_atm_strike := 24150
+
+int atm_strike_base = day_atm_strike
 int atm_idx_base = 5
 
-if atm_select_mode == "Automatic"
-    float min_diff_base = 1e9
-    for i = 0 to 10
-        float ce_o_val = calc_basis == "Day Open Price" ? array.get(ce_opens, i) : array.get(ce_prevs, i)
-        float pe_o_val = calc_basis == "Day Open Price" ? array.get(pe_opens, i) : array.get(pe_prevs, i)
-        int strike = array.get(strikes, i)
-        
-        if not na(ce_o_val) and not na(pe_o_val)
-            float diff = math.abs(ce_o_val - pe_o_val)
-            if diff < min_diff_base
-                min_diff_base := diff
-                atm_strike_base := strike
-                atm_idx_base := i
-else
-    // Manual mode: lock to manual_strike_val directly
-    atm_strike_base := manual_strike_val
-    for i = 0 to 10
-        if array.get(strikes, i) == manual_strike_val
+// Match day_atm_strike to nearest strike in array
+int min_st_diff = 999999
+for i = 0 to 10
+    int st_val = array.get(strikes, i)
+    if not na(st_val)
+        int diff = math.abs(st_val - day_atm_strike)
+        if diff < min_st_diff
+            min_st_diff := diff
             atm_idx_base := i
-            break
 
 // Base ATM premiums (9:15 Day Open locked)
 float ce_atm_base = calc_basis == "Day Open Price" ? array.get(ce_opens, atm_idx_base) : array.get(ce_prevs, atm_idx_base)
