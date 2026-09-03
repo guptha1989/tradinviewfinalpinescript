@@ -640,117 +640,74 @@ float pe_iv_signed = pe_strike - spot_ltp
 // USER BUY & SELL ALERT CONDITIONS ENGINE
 // ==========================================
 
-// --- Basket Average Confluence Evaluations ---
+//// ==========================================
+// TRIGGER 1: REALTIME / STATIC ATM BEP CROSSOVER ENGINE
+// ==========================================
+
+// Top Position Rules:
+// 1) Both Averages Above Day Open -> require current average on top
+// 2) Both Averages Below Day Open -> require current average on top
 bool both_above_day_open = (ceAvgCur > ceAvgOpen) and (peAvgCur > peAvgOpen)
 bool both_below_day_open = (ceAvgCur < ceAvgOpen) and (peAvgCur < peAvgOpen)
 
-// If both averages are below day open, bypass change/avg filter so crossover triggers on top average line:
-bool ce_avg_pass = not use_basket_avg_filter or (ceAvgCur > ceAvgOpen) or both_below_day_open
-bool pe_avg_pass = not use_basket_avg_filter or (peAvgCur > peAvgOpen) or both_below_day_open
+bool ce_top_required = both_above_day_open or both_below_day_open
+bool pe_top_required = both_above_day_open or both_below_day_open
 
-bool ce_chg_pass = not use_basket_chg_filter or (ceAvgChg > 0) or both_below_day_open
-bool pe_chg_pass = not use_basket_chg_filter or (peAvgChg > 0) or both_below_day_open
+bool ce_top_pass = not ce_top_required or (ceAvgCur > peAvgCur)
+bool pe_top_pass = not pe_top_required or (peAvgCur > ceAvgCur)
 
-// TOP POSITION RULE:
-// When both averages are below day open, require the current average line that is on top
-bool ce_top_pass = not use_basket_top_filter or (ceAvgCur > peAvgCur)
-bool pe_top_pass = not use_basket_top_filter or (peAvgCur > ceAvgCur)
+// Trigger 1 Confluence Conditions for CE (Buy Alert):
+// 1. CE current average > CE day open average
+// 2. Change of CE average from Day open > 0
+// 3. CE Realtime Intrinsic Value > 0
+// 4. Top Position Rule (if both above or both below Day Open)
+bool ce_trig1_conds = (ceAvgCur > ceAvgOpen) and (ceAvgChg > 0) and (ce_iv_rt > 0) and ce_top_pass
 
-// Non-strict Intrinsic Value Evaluation: Non-blocking for basic alerts unless strict_iv_filter is manually enabled
-bool ce_iv_pass  = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0)
-bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_iv_rt > ce_iv_rt) or (pe_iv_rt > 0)
+// Trigger 1 Confluence Conditions for PE (Sell Alert):
+// 1. PE current average > PE day open average
+// 2. Change of PE average from Day open > 0
+// 3. PE Realtime Intrinsic Value > 0
+// 4. Top Position Rule (if both above or both below Day Open)
+bool pe_trig1_conds = (peAvgCur > peAvgOpen) and (peAvgChg > 0) and (pe_iv_rt > 0) and pe_top_pass
 
-//// --- Blast Sub-Condition Evaluators ---
-bool ce_b1 = not blast_cond_opp_below_open or (peAvgCur < peAvgOpen)
-bool ce_b2 = not blast_cond_opp_chg_neg    or (peAvgChg < 0)
-bool ce_b3 = not blast_cond_own_above_open or (ceAvgCur > ceAvgOpen)
-bool ce_b4 = not blast_cond_own_on_top     or (ceAvgCur > peAvgCur)
-
-bool ce_blast_cond_met = ce_b1 and ce_b2 and ce_b3 and ce_b4
-
-bool pe_b1 = not blast_cond_opp_below_open or (ceAvgCur < ceAvgOpen)
-bool pe_b2 = not blast_cond_opp_chg_neg    or (ceAvgChg < 0)
-bool pe_b3 = not blast_cond_own_above_open or (peAvgCur > peAvgOpen)
-bool pe_b4 = not blast_cond_own_on_top     or (peAvgCur > ceAvgCur)
-
-bool pe_blast_cond_met = pe_b1 and pe_b2 and pe_b3 and pe_b4
-
-//// --- Opposite Option S/R Distance & 2-3 Bar Confluence Filter ---
-float opp_pe_price = isCall ? opp_c : close
-float dist_pe_bep  = not na(opp_pe_price) and not na(bep_rt_0) ? math.abs(opp_pe_price - bep_rt_0) : 999.0
-bool opp_pe_bep_event = not na(opp_pe_price) and not na(bep_rt_0) and ((opp_pe_price > bep_rt_0 and opp_pe_price[1] <= bep_rt_0[1]) or (opp_pe_price < bep_rt_0 and opp_pe_price[1] >= bep_rt_0[1]))
-int opp_pe_event_bars = ta.barssince(opp_pe_bep_event)
-bool ce_opp_sr_pass   = not enable_opp_sr_filter or (dist_pe_bep >= min_opp_sr_dist) or (not na(opp_pe_event_bars) and opp_pe_event_bars <= sr_confluence_bars)
-
-float opp_ce_price = isPut ? opp_c : close
-float dist_ce_bep  = not na(opp_ce_price) and not na(bep_rt_0) ? math.abs(opp_ce_price - bep_rt_0) : 999.0
-bool opp_ce_bep_event = not na(opp_ce_price) and not na(bep_rt_0) and ((opp_ce_price > bep_rt_0 and opp_ce_price[1] <= bep_rt_0[1]) or (opp_ce_price < bep_rt_0 and opp_ce_price[1] >= bep_rt_0[1]))
-int opp_ce_event_bars = ta.barssince(opp_ce_bep_event)
-bool pe_opp_sr_pass   = not enable_opp_sr_filter or (dist_ce_bep >= min_opp_sr_dist) or (not na(opp_ce_event_bars) and opp_ce_event_bars <= sr_confluence_bars)
-
-// Directional Filters with Strict Confluence
-bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass and ce_opp_sr_pass
-bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass and pe_opp_sr_pass
-
-//// --- Universal BEP Level Pair Trigger Evaluators ---
-// Upside Bounce: Low touches/dips to BEP line (l_val <= bep), Close finishes above (c_val > bep)
-f_bounce_up(float l_val, float c_val, float bep_val) =>
-    not na(l_val) and not na(c_val) and not na(bep_val) and (l_val <= bep_val) and (c_val > bep_val)
-
-// Crossover: Previous close was below or equal to previous bar's BEP line (prev_c <= bep[1]), Current close finishes above current BEP line (curr_c > bep)
+//// --- Crossover Trigger Evaluators ---
 f_crossover_up(float curr_c, float prev_c, float bep_val) =>
     float prev_bep = nz(bep_val[1], bep_val)
     not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
 
-//// Call Buy Alert on a specific BEP line level:
-// Evaluates Call crossover UP or Call support bounce UP on the BEP line
-f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l) =>
-    bool ce_cross  = isCall ? f_crossover_up(close, close[1], bep_val) : (isPut ? false : (not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val)))
-    bool ce_bounce = isCall ? f_bounce_up(low, close, bep_val) : (isPut ? false : (not na(c_l) and not na(c_c) and f_bounce_up(c_l, c_c, bep_val)))
-    (ce_cross == true) or (ce_bounce == true)
+// Call Crossover (includes opposite Put candle on Put chart)
+f_eval_ce_crossover(float bep_val) =>
+    if isCall
+        f_crossover_up(close, close[1], bep_val)
+    else if isPut
+        f_crossover_up(opp_c, opp_c[1], bep_val)
+    else
+        not na(ce_c_0) and f_crossover_up(ce_c_0, ce_c_0[1], bep_val)
 
-// Put Sell Alert on a specific BEP line level:
-// Evaluates Put crossover UP or Put support bounce UP on the BEP line
-f_eval_pe_pair_trig(float bep_val, float p_c, float p_h, float p_l) =>
-    bool pe_cross  = isPut ? f_crossover_up(close, close[1], bep_val) : (isCall ? false : (not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val)))
-    bool pe_bounce = isPut ? f_bounce_up(low, close, bep_val) : (isCall ? false : (not na(p_l) and not na(p_c) and f_bounce_up(p_l, p_c, bep_val)))
-    (pe_cross == true) or (pe_bounce == true)
+// Put Crossover (includes opposite Call candle on Call chart)
+f_eval_pe_crossover(float bep_val) =>
+    if isPut
+        f_crossover_up(close, close[1], bep_val)
+    else if isCall
+        f_crossover_up(opp_c, opp_c[1], bep_val)
+    else
+        not na(pe_c_0) and f_crossover_up(pe_c_0, pe_c_0[1], bep_val)
 
-//// Evaluate Triggers Across White (ATM), Blue (ITM), and Orange (OTM) Realtime and Static BEP Lines
-bool ce_trig_0_rt     = use_atm_bep_trig   and f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0)
-bool ce_trig_0_stat   = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0)
+//// Evaluate Triggers on Realtime ATM and Static ATM BEP Lines
+bool ce_cross_rt   = use_atm_bep_trig and f_eval_ce_crossover(bep_rt_0)
+bool ce_cross_stat = use_atm_bep_trig and use_stat_bep_alerts and f_eval_ce_crossover(bep_stat_0)
+bool ce_crossover  = ce_cross_rt or ce_cross_stat
 
-bool pe_trig_0_rt     = use_atm_bep_trig   and f_eval_pe_pair_trig(bep_rt_0,   pe_c_0, pe_h_0, pe_l_0)
-bool pe_trig_0_stat   = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_0, pe_c_0, pe_h_0, pe_l_0)
+bool pe_cross_rt   = use_atm_bep_trig and f_eval_pe_crossover(bep_rt_0)
+bool pe_cross_stat = use_atm_bep_trig and use_stat_bep_alerts and f_eval_pe_crossover(bep_stat_0)
+bool pe_crossover  = pe_cross_rt or pe_cross_stat
 
-// ITM BEP Line Triggers (Blue Lines)
-bool ce_trig_itm_rt   = use_itm_bep_trig   and (f_eval_ce_pair_trig(bep_rt_m1, ce_c_m1, ce_h_m1, ce_l_m1) or f_eval_ce_pair_trig(bep_rt_m2, ce_c_m2, ce_h_m2, ce_l_m2) or f_eval_ce_pair_trig(bep_rt_m3, ce_c_m3, ce_h_m3, ce_l_m3))
-bool ce_trig_itm_stat = use_itm_bep_trig   and use_stat_bep_alerts and (f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1) or f_eval_ce_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2) or f_eval_ce_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3))
+// Strict VWAP Exemption Filter
+bool is_near_vwap  = not na(chart_vwap) and (math.abs(close - chart_vwap) <= vwap_exemption_pts)
 
-bool pe_trig_itm_rt   = use_itm_bep_trig   and (f_eval_pe_pair_trig(bep_rt_m1, pe_c_p1, pe_h_p1, pe_l_p1) or f_eval_pe_pair_trig(bep_rt_m2, pe_c_p2, pe_h_p2, pe_l_p2) or f_eval_pe_pair_trig(bep_rt_m3, pe_c_p3, pe_h_p3, pe_l_p3))
-bool pe_trig_itm_stat = use_itm_bep_trig   and use_stat_bep_alerts and (f_eval_pe_pair_trig(bep_stat_m1, pe_c_p1, pe_h_p1, pe_l_p1) or f_eval_pe_pair_trig(bep_stat_m2, pe_c_p2, pe_h_p2, pe_l_p2) or f_eval_pe_pair_trig(bep_stat_m3, pe_c_p3, pe_h_p3, pe_l_p3))
-
-// OTM BEP Line Triggers (Orange Lines)
-bool ce_trig_otm_rt   = use_otm_bep_trig   and (f_eval_ce_pair_trig(bep_rt_p1, ce_c_p1, ce_h_p1, ce_l_p1) or f_eval_ce_pair_trig(bep_rt_p2, ce_c_p2, ce_h_p2, ce_l_p2) or f_eval_ce_pair_trig(bep_rt_p3, ce_c_p3, ce_h_p3, ce_l_p3))
-bool ce_trig_otm_stat = use_otm_bep_trig   and use_stat_bep_alerts and (f_eval_ce_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1) or f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2) or f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3))
-
-bool pe_trig_otm_rt   = use_otm_bep_trig   and (f_eval_pe_pair_trig(bep_rt_p1, pe_c_m1, pe_h_m1, pe_l_m1) or f_eval_pe_pair_trig(bep_rt_p2, pe_c_m2, pe_h_m2, pe_l_m2) or f_eval_pe_pair_trig(bep_rt_p3, pe_c_m3, pe_h_m3, pe_l_m3))
-bool pe_trig_otm_stat = use_otm_bep_trig   and use_stat_bep_alerts and (f_eval_pe_pair_trig(bep_stat_p1, pe_c_m1, pe_h_m1, pe_l_m1) or f_eval_pe_pair_trig(bep_stat_p2, pe_c_m2, pe_h_m2, pe_l_m2) or f_eval_pe_pair_trig(bep_stat_p3, pe_c_m3, pe_h_m3, pe_l_m3))
-
-// Strict VWAP Exemption Filter (Exempts/Blocks triggers when price is near VWAP line)
-bool is_near_vwap     = not na(chart_vwap) and (math.abs(close - chart_vwap) <= vwap_exemption_pts)
-
-// Combined Triggers across White (ATM), Blue (ITM), and Orange (OTM) BEP Lines with VWAP Exemption
-bool ce_any_bep_trig  = not is_near_vwap and ((ce_trig_0_rt == true) or (ce_trig_0_stat == true) or (ce_trig_itm_rt == true) or (ce_trig_itm_stat == true) or (ce_trig_otm_rt == true) or (ce_trig_otm_stat == true))
-bool pe_any_bep_trig  = not is_near_vwap and ((pe_trig_0_rt == true) or (pe_trig_0_stat == true) or (pe_trig_itm_rt == true) or (pe_trig_itm_stat == true) or (pe_trig_otm_rt == true) or (pe_trig_otm_stat == true))
-
-// Mode Pass Evaluation: If Blast is unselected but Normal alerts are allowed, fallback to Normal CE/PE alert
-bool ce_pass_mode = (ce_blast_cond_met and allow_blast_alerts) or allow_normal_alerts
-bool pe_pass_mode = (pe_blast_cond_met and allow_blast_alerts) or allow_normal_alerts
-
-// --- Combined Raw Buy & Sell Triggers Across Active Modules ---
-bool raw_buy_alert  = ce_any_bep_trig and (ce_filters_met == true) and ce_pass_mode and not (pe_any_bep_trig and (pe_filters_met == true) and pe_pass_mode)
-bool raw_sell_alert = pe_any_bep_trig and (pe_filters_met == true) and pe_pass_mode and not (ce_any_bep_trig and (ce_filters_met == true) and ce_pass_mode)
+// Combined Raw Trigger 1 Signals
+bool raw_buy_alert  = not is_near_vwap and ce_crossover and ce_trig1_conds
+bool raw_sell_alert = not is_near_vwap and pe_crossover and pe_trig1_conds
 
 // --- Dynamic 6-Point Invalidation & Re-Arming Engine ---
 var int activeSwing          = 0 // 0 = Neutral, 1 = In BUY Swing, -1 = In SELL Swing
@@ -776,12 +733,8 @@ if activeSwing == -1 and not na(active_entry_price)
         activeSwing        := 0 // Invalidate and Re-Arm engine!
         active_entry_price := na
 
-// Direct ATM BEP line triggers bypass stale swing locks to ensure 100% reliable execution on ATM BEP line
-bool is_direct_atm_ce = ce_trig_0_rt or ce_trig_0_stat
-bool is_direct_atm_pe = pe_trig_0_rt or pe_trig_0_stat
-
-bool overall_buy_alert  = raw_buy_alert and (is_direct_atm_ce or activeSwing != 1)
-bool overall_sell_alert = raw_sell_alert and (is_direct_atm_pe or activeSwing != -1)
+bool overall_buy_alert  = raw_buy_alert  and (ce_crossover or activeSwing != 1)
+bool overall_sell_alert = raw_sell_alert and (pe_crossover or activeSwing != -1)
 
 if overall_buy_alert
     activeSwing        := 1
