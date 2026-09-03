@@ -319,6 +319,9 @@ float ceAvgChg  = ceAvgCur - ceAvgOpen
 float peAvgChg  = peAvgCur - peAvgOpen
 
 // Realtime Intrinsic Values
+float ce_iv_rt = math.max(0.0, spot_ltp - ce_strike)
+float pe_iv_rt = math.max(0.0, pe_strike - spot_ltp)
+
 // Fallback safety for ATM option prices
 float ce_c_0_clean    = nz(ce_c_0, isCall ? close : nz(opp_c, close))
 float pe_c_0_clean    = nz(pe_c_0, isPut ? close : nz(opp_c, close))
@@ -377,11 +380,11 @@ bool cross_chart_close_stat = f_crossover_up(close, close[1], bep_stat_0)
 bool cross_opp_close_rt     = f_crossover_up(opp_c, opp_c[1], bep_rt_0)
 bool cross_opp_close_stat   = f_crossover_up(opp_c, opp_c[1], bep_stat_0)
 
-bool cross_ce_sec_rt        = not na(ce_c_0) and f_crossover_up(ce_c_0, ce_c_0[1], bep_rt_0)
-bool cross_ce_sec_stat      = not na(ce_c_0) and f_crossover_up(ce_c_0, ce_c_0[1], bep_stat_0)
+bool cross_ce_sec_rt        = f_crossover_up(ce_c_0, ce_c_0[1], bep_rt_0)
+bool cross_ce_sec_stat      = f_crossover_up(ce_c_0, ce_c_0[1], bep_stat_0)
 
-bool cross_pe_sec_rt        = not na(pe_c_0) and f_crossover_up(pe_c_0, pe_c_0[1], bep_rt_0)
-bool cross_pe_sec_stat      = not na(pe_c_0) and f_crossover_up(pe_c_0, pe_c_0[1], bep_stat_0)
+bool cross_pe_sec_rt        = f_crossover_up(pe_c_0, pe_c_0[1], bep_rt_0)
+bool cross_pe_sec_stat      = f_crossover_up(pe_c_0, pe_c_0[1], bep_stat_0)
 
 // Mode Selection (Realtime ATM BEP, Static ATM BEP, or Both)
 bool use_rt_bep   = (bep_trigger_mode == "Realtime ATM BEP") or (bep_trigger_mode == "Both")
