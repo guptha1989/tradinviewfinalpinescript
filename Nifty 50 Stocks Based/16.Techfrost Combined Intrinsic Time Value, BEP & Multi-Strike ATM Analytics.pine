@@ -752,6 +752,10 @@ bool raw_sell_alert = pe_any_bep_trig and (pe_filters_met == true) and not (ce_a
 // --- Strict Alternating Swing Lock State Machine ---
 var int activeSwing = 0 // 0 = Neutral, 1 = In BUY Swing, -1 = In SELL Swing
 
+// Reset swing lock on new day open so yesterday's swing state releases automatically
+if ta.change(time("D")) != 0
+    activeSwing := 0
+
 bool overall_buy_alert  = false
 bool overall_sell_alert = false
 
