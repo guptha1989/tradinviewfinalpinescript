@@ -1,5 +1,5 @@
 //@version=6
-indicator("18.Techfrost Nifty_V6_SR", shorttitle="18.Techfrost Nifty_V6_SR", overlay=true, max_labels_count=500, max_boxes_count=500, max_lines_count=500)
+indicator("Techfrost Nifty_V6_SR", overlay=true, max_labels_count=500, max_boxes_count=500, max_lines_count=500)
 
 // =========================================================================
 // INPUTS & USER SETTINGS
@@ -195,7 +195,7 @@ spot_rt = request.security(spot_sym, timeframe.period, close)
 // base_center_strike is fixed across historical execution so loop symbols remain constant.
 var int base_center_strike = na
 if barstate.isfirst or na(base_center_strike)
-    int calc_strike = (atm_select_mode == "Manual") ? manual_strike_val : int(math.round(nz(spot_open, spot_close_today) / strike_step) * strike_step)
+    int calc_strike = (atm_select_mode == "Manual") ? manual_strike_val : (is_option ? strike_val : int(math.round(nz(spot_close_today, spot_open) / strike_step) * strike_step))
     if calc_strike <= 0
         calc_strike := 24150
     base_center_strike := calc_strike
@@ -250,8 +250,8 @@ for i = 0 to 10
     
     // Real-time tick-by-tick query on chart timeframe (timeframe.period)
     // Returns [Day Open, Previous Day Close, Real-time LTP] on every tick
-    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
-    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
+    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, f_get_contract_tuple())
+    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, f_get_contract_tuple())
     
     array.set(ce_opens, i, ce_o)
     array.set(ce_prevs, i, ce_p)
@@ -273,12 +273,12 @@ string cvd_pe5 = exchange + ":" + final_root + final_expiry + "P" + str.tostring
 string cvd_ce6 = exchange + ":" + final_root + final_expiry + "C" + str.tostring(final_strike + 1 * strike_step)
 string cvd_pe6 = exchange + ":" + final_root + final_expiry + "P" + str.tostring(final_strike + 1 * strike_step)
 
-[cvd4_ce_h, cvd4_ce_l, cvd4_ce_v, cvd4_ce_vw] = request.security(cvd_ce4, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd4_pe_h, cvd4_pe_l, cvd4_pe_v, cvd4_pe_vw] = request.security(cvd_pe4, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd5_ce_h, cvd5_ce_l, cvd5_ce_v, cvd5_ce_vw] = request.security(cvd_ce5, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd5_pe_h, cvd5_pe_l, cvd5_pe_v, cvd5_pe_vw] = request.security(cvd_pe5, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd6_ce_h, cvd6_ce_l, cvd6_ce_v, cvd6_ce_vw] = request.security(cvd_ce6, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd6_pe_h, cvd6_pe_l, cvd6_pe_v, cvd6_pe_vw] = request.security(cvd_pe6, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
+[cvd4_ce_h, cvd4_ce_l, cvd4_ce_v, cvd4_ce_vw] = request.security(cvd_ce4, tf_to_use, [high, low, volume, ta.vwap])
+[cvd4_pe_h, cvd4_pe_l, cvd4_pe_v, cvd4_pe_vw] = request.security(cvd_pe4, tf_to_use, [high, low, volume, ta.vwap])
+[cvd5_ce_h, cvd5_ce_l, cvd5_ce_v, cvd5_ce_vw] = request.security(cvd_ce5, tf_to_use, [high, low, volume, ta.vwap])
+[cvd5_pe_h, cvd5_pe_l, cvd5_pe_v, cvd5_pe_vw] = request.security(cvd_pe5, tf_to_use, [high, low, volume, ta.vwap])
+[cvd6_ce_h, cvd6_ce_l, cvd6_ce_v, cvd6_ce_vw] = request.security(cvd_ce6, tf_to_use, [high, low, volume, ta.vwap])
+[cvd6_pe_h, cvd6_pe_l, cvd6_pe_v, cvd6_pe_vw] = request.security(cvd_pe6, tf_to_use, [high, low, volume, ta.vwap])
 
 // Populate the arrays at indices 4, 5, 6
 array.set(ce_highs, 4, cvd4_ce_h), array.set(ce_lows, 4, cvd4_ce_l), array.set(ce_vols, 4, cvd4_ce_v), array.set(ce_vwaps, 4, cvd4_ce_vw)
@@ -347,25 +347,32 @@ f_orb_range() =>
     [orb_high, orb_low]
 
 // =========================================================================
-// ATM STRIKE CALCULATION (AUTO DAY OPEN ATM PER DAY)
+// ATM STRIKE CALCULATION (LOCKED 9:15 DAY OPEN vs REAL-TIME LTP)
 // =========================================================================
-// 1. Base ATM Strike (Auto-selected from Day Open Price for each trading day)
-int day_atm_strike = (atm_select_mode == "Manual") ? manual_strike_val : int(math.round(nz(spot_open, open) / strike_step) * strike_step)
-if day_atm_strike <= 0
-    day_atm_strike := 24150
-
-int atm_strike_base = day_atm_strike
+// 1. Base ATM Strike (Locked at 9:15 AM / Day Open Price)
+int atm_strike_base = base_center_strike
 int atm_idx_base = 5
 
-// Match day_atm_strike to nearest strike in array
-int min_st_diff = 999999
-for i = 0 to 10
-    int st_val = array.get(strikes, i)
-    if not na(st_val)
-        int diff = math.abs(st_val - day_atm_strike)
-        if diff < min_st_diff
-            min_st_diff := diff
+if atm_select_mode == "Automatic"
+    float min_diff_base = 1e9
+    for i = 0 to 10
+        float ce_o_val = calc_basis == "Day Open Price" ? array.get(ce_opens, i) : array.get(ce_prevs, i)
+        float pe_o_val = calc_basis == "Day Open Price" ? array.get(pe_opens, i) : array.get(pe_prevs, i)
+        int strike = array.get(strikes, i)
+        
+        if not na(ce_o_val) and not na(pe_o_val)
+            float diff = math.abs(ce_o_val - pe_o_val)
+            if diff < min_diff_base
+                min_diff_base := diff
+                atm_strike_base := strike
+                atm_idx_base := i
+else
+    // Manual mode: lock to manual_strike_val directly
+    atm_strike_base := manual_strike_val
+    for i = 0 to 10
+        if array.get(strikes, i) == manual_strike_val
             atm_idx_base := i
+            break
 
 // Base ATM premiums (9:15 Day Open locked)
 float ce_atm_base = calc_basis == "Day Open Price" ? array.get(ce_opens, atm_idx_base) : array.get(ce_prevs, atm_idx_base)
@@ -531,7 +538,7 @@ else if orb_strike_mode == "OTM"
 string orb_sym = exchange + ":" + final_root + final_expiry + (orb_opt_type == "CE" ? "C" : "P") + str.tostring(orb_strike)
 
 // Fetch ORB High and Low
-[orb_h_raw, orb_l_raw] = request.security(orb_sym, orb_timeframe, f_orb_range(), ignore_invalid_symbol=true)
+[orb_h_raw, orb_l_raw] = request.security(orb_sym, orb_timeframe, f_orb_range())
 
 float orb_high_plot = show_orb_lines ? orb_h_raw : na
 float orb_low_plot = show_orb_lines ? orb_l_raw : na
