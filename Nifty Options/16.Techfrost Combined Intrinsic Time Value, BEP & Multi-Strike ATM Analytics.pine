@@ -103,6 +103,8 @@ width_atm     = input.int(2, "ATM BEP Lines Width", minval=1, maxval=4, group="B
 width_others  = input.int(1, "ITM/OTM BEP Lines Width", minval=1, maxval=4, group="BEP Line Formatting")
 
 // --- Alert Engine Controls ---
+bep_display_mode            = input.string("Both", "BEP Line Visibility & Trigger Mode", options=["Realtime BEP Lines", "Static BEP Lines", "Both"], group="Alert Engine Controls",
+  tooltip="Select whether to display and evaluate Realtime BEP lines, Static BEP lines, or Both.")
 enable_blast_alerts         = input.bool(true, "Enable BLAST Alert Badges (CE BLAST / PE BLAST)", group="Alert Engine Controls",
   tooltip="When enabled, signals meeting Momentum Blast conditions display as CE BLAST / PE BLAST. When disabled, normal CE / PE alerts will still trigger.")
 use_basket_avg_filter       = input.bool(true, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
@@ -500,27 +502,30 @@ plot(show_pe_prev_hl ? pe_prev_low  : na, title="PE Prev Day Low",  color=color.
 plot(show_vwap ? chart_vwap : na, title="Chart Option VWAP", color=col_vwap, linewidth=2)
 plot(show_vwap ? opp_vwap   : na, title="Opposite Option VWAP", color=col_opp_vwap, linewidth=2)
 
+bool show_rt_bep   = (bep_display_mode == "Realtime BEP Lines") or (bep_display_mode == "Both")
+bool show_stat_bep = (bep_display_mode == "Static BEP Lines")   or (bep_display_mode == "Both")
+
 // --- Plot 7 Levels of BEP Lines with Custom User Colors & Formatting (14 plots) ---
-plot(bep_rt_0,    title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
-plot(bep_stat_0,  title="ATM Static BEP (L0)",   color=col_atm_stat, linewidth=width_atm)
+plot(show_rt_bep ? bep_rt_0 : na,    title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
+plot(show_stat_bep ? bep_stat_0 : na,  title="ATM Static BEP (L0)",   color=col_atm_stat, linewidth=width_atm)
 
-plot(bep_rt_m1,   title="ITM1 Realtime BEP (L-1)", color=col_itm1_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_m1, title="ITM1 Static BEP (L-1)",   color=col_itm1_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_m1 : na,   title="ITM1 Realtime BEP (L-1)", color=col_itm1_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_m1 : na, title="ITM1 Static BEP (L-1)",   color=col_itm1_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_m2,   title="ITM2 Realtime BEP (L-2)", color=col_itm2_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_m2, title="ITM2 Static BEP (L-2)",   color=col_itm2_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_m2 : na,   title="ITM2 Realtime BEP (L-2)", color=col_itm2_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_m2 : na, title="ITM2 Static BEP (L-2)",   color=col_itm2_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_m3,   title="ITM3 Realtime BEP (L-3)", color=col_itm3_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_m3, title="ITM3 Static BEP (L-3)",   color=col_itm3_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_m3 : na,   title="ITM3 Realtime BEP (L-3)", color=col_itm3_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_m3 : na, title="ITM3 Static BEP (L-3)",   color=col_itm3_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_p1,   title="OTM1 Realtime BEP (L+1)", color=col_otm1_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_p1, title="OTM1 Static BEP (L+1)",   color=col_otm1_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_p1 : na,   title="OTM1 Realtime BEP (L+1)", color=col_otm1_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_p1 : na, title="OTM1 Static BEP (L+1)",   color=col_otm1_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_p2,   title="OTM2 Realtime BEP (L+2)", color=col_otm2_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_p2, title="OTM2 Static BEP (L+2)",   color=col_otm2_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_p2 : na,   title="OTM2 Realtime BEP (L+2)", color=col_otm2_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_p2 : na, title="OTM2 Static BEP (L+2)",   color=col_otm2_stat, linewidth=width_others, style=plot.style_linebr)
 
-plot(bep_rt_p3,   title="OTM3 Realtime BEP (L+3)", color=col_otm3_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(bep_stat_p3, title="OTM3 Static BEP (L+3)",   color=col_otm3_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_p3 : na,   title="OTM3 Realtime BEP (L+3)", color=col_otm3_rt,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_p3 : na, title="OTM3 Static BEP (L+3)",   color=col_otm3_stat, linewidth=width_others, style=plot.style_linebr)
 
 // --- Multi-Strike Basket Averages ---
 int total_count = numStrikesInput == 4 ? 9 : (numStrikesInput == 3 ? 7 : (numStrikesInput == 2 ? 5 : 3))
@@ -682,9 +687,15 @@ bool ce_trig_p3_stat = f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p
 bool pe_trig_p3_rt   = f_eval_pe_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 bool pe_trig_p3_stat = f_eval_pe_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 
-// Combined Crossovers & Downside Bounces Across All 14 BEP Lines
-bool ce_any_bep_trig = ce_trig_m3_rt or ce_trig_m3_stat or ce_trig_m2_rt or ce_trig_m2_stat or ce_trig_m1_rt or ce_trig_m1_stat or ce_trig_0_rt or ce_trig_0_stat or ce_trig_p1_rt or ce_trig_p1_stat or ce_trig_p2_rt or ce_trig_p2_stat or ce_trig_p3_rt or ce_trig_p3_stat
-bool pe_any_bep_trig = pe_trig_m3_rt or pe_trig_m3_stat or pe_trig_m2_rt or pe_trig_m2_stat or pe_trig_m1_rt or pe_trig_m1_stat or pe_trig_0_rt or pe_trig_0_stat or pe_trig_p1_rt or pe_trig_p1_stat or pe_trig_p2_rt or pe_trig_p2_stat or pe_trig_p3_rt or pe_trig_p3_stat
+// Combined Crossovers & Downside Bounces Across Active BEP Lines (Respecting bep_display_mode)
+bool ce_rt_any   = ce_trig_m3_rt or ce_trig_m2_rt or ce_trig_m1_rt or ce_trig_0_rt or ce_trig_p1_rt or ce_trig_p2_rt or ce_trig_p3_rt
+bool ce_stat_any = ce_trig_m3_stat or ce_trig_m2_stat or ce_trig_m1_stat or ce_trig_0_stat or ce_trig_p1_stat or ce_trig_p2_stat or ce_trig_p3_stat
+
+bool pe_rt_any   = pe_trig_m3_rt or pe_trig_m2_rt or pe_trig_m1_rt or pe_trig_0_rt or pe_trig_p1_rt or pe_trig_p2_rt or pe_trig_p3_rt
+bool pe_stat_any = pe_trig_m3_stat or pe_trig_m2_stat or pe_trig_m1_stat or pe_trig_0_stat or pe_trig_p1_stat or pe_trig_p2_stat or pe_trig_p3_stat
+
+bool ce_any_bep_trig = (show_rt_bep and ce_rt_any) or (show_stat_bep and ce_stat_any)
+bool pe_any_bep_trig = (show_rt_bep and pe_rt_any) or (show_stat_bep and pe_stat_any)
 
 // --- Combined Raw Buy & Sell Triggers Across All 14 BEP Lines ---
 bool raw_buy_alert  = ce_any_bep_trig and ce_filters_met and not (pe_any_bep_trig and pe_filters_met)

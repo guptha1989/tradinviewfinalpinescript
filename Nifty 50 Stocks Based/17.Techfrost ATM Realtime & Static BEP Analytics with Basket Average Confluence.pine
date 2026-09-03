@@ -353,9 +353,12 @@ float pe_0_ref_clean = nz(pe_0_ref, isPut ? open : nz(opp_o, open))
 float bep_rt_0   = (ce_0_ltp_clean + pe_0_ltp_clean) / 2.0
 float bep_stat_0 = (ce_0_ref_clean + pe_0_ref_clean) / 2.0
 
-// Plot ATM Realtime & Static BEP Lines ONLY
-plot(bep_rt_0,   title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
-plot(bep_stat_0, title="ATM Static BEP (L0)",   color=col_atm_stat, linewidth=width_atm)
+bool show_rt_bep   = (bep_trigger_mode == "Realtime ATM BEP") or (bep_trigger_mode == "Both")
+bool show_stat_bep = (bep_trigger_mode == "Static ATM BEP")   or (bep_trigger_mode == "Both")
+
+// Plot ATM Realtime & Static BEP Lines (Respecting Selected BEP Trigger Mode)
+plot(show_rt_bep ? bep_rt_0 : na,   title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
+plot(show_stat_bep ? bep_stat_0 : na, title="ATM Static BEP (L0)",   color=col_atm_stat, linewidth=width_atm)
 
 // ==========================================
 // TRIGGER 1 ENGINE: REALTIME / STATIC ATM BEP CROSSOVER
