@@ -105,7 +105,7 @@ use_otm_bep_trig            = input.bool(false, "Enable OTM BEP Line Triggers", 
 use_stat_bep_alerts         = input.bool(true, "Enable Static ATM BEP Line Triggers", group="Alert Engine Controls",
   tooltip="Enable Buy/Sell alerts on Static ATM BEP line in addition to Realtime ATM BEP line.")
 
-use_basket_top_filter       = input.bool(true, "Require Own Basket Average On Top", group="Alert Engine Controls",
+use_basket_top_filter       = input.bool(false, "Require Own Basket Average On Top", group="Alert Engine Controls",
   tooltip="Requires CE Basket Average > PE Basket Average for CE alert, and PE Basket Average > CE Basket Average for PE alert.")
 use_basket_avg_filter       = input.bool(false, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
@@ -116,7 +116,7 @@ strict_iv_filter            = input.bool(false, "Require Strict Intrinsic Value 
 
 invalidation_pts            = input.float(6.0, "Alert Invalidation Drawdown Threshold (Pts)", minval=0.5, group="Alert Engine Controls",
   tooltip="If price moves against an active signal by more than this point threshold, the current alert is invalidated and the engine re-arms immediately.")
-enable_opp_sr_filter        = input.bool(true, "Enable Opposite Option S/R Confluence Filter", group="Alert Engine Controls",
+enable_opp_sr_filter        = input.bool(false, "Enable Opposite Option S/R Confluence Filter", group="Alert Engine Controls",
   tooltip="Requires opposite option to have minimum clearance distance or recent BEP S/R crossover/bounce before triggering an alert.")
 min_opp_sr_dist             = input.float(5.0, "Min Opposite Option S/R Distance Clearance", minval=0.0, group="Alert Engine Controls",
   tooltip="Minimum clearance points required between opposite option price and its nearest BEP S/R line.")
@@ -648,8 +648,8 @@ bool pe_chg_pass = not use_basket_chg_filter or (peAvgChg > 0)
 
 //// ABSOLUTE UNCONDITIONAL TOP POSITION RULE:
 // Current option basket average MUST be strictly on top of opponent's basket average
-bool ce_top_pass = (ceAvgCur > peAvgCur)
-bool pe_top_pass = (peAvgCur > ceAvgCur)
+bool ce_top_pass = not use_basket_top_filter or (ceAvgCur > peAvgCur)
+bool pe_top_pass = not use_basket_top_filter or (peAvgCur > ceAvgCur)
 
 // Non-strict Intrinsic Value Evaluation: Non-blocking for basic alerts unless strict_iv_filter is manually enabled
 bool ce_iv_pass  = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0)
