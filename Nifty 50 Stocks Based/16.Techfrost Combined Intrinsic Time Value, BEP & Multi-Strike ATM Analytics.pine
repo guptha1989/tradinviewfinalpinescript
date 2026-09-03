@@ -614,28 +614,28 @@ bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
 // --- Universal BEP Level Pair Trigger Evaluators ---
 // Downside Rejection: High touches/surpasses BEP line (h_val >= bep), Close finishes below (c_val < bep)
 f_bounce_dn(float h_val, float c_val, float bep_val) =>
-    (h_val >= bep_val) and (c_val < bep_val)
+    not na(h_val) and not na(c_val) and not na(bep_val) and (h_val >= bep_val) and (c_val < bep_val)
 
 // Upside Bounce: Low touches/dips to BEP line (l_val <= bep), Close finishes above (c_val > bep)
 f_bounce_up(float l_val, float c_val, float bep_val) =>
-    (l_val <= bep_val) and (c_val > bep_val)
+    not na(l_val) and not na(c_val) and not na(bep_val) and (l_val <= bep_val) and (c_val > bep_val)
 
 // Breakdown: Previous close was above or equal to BEP line (prev_c >= bep), Current close finishes below (curr_c < bep)
 f_breakdown_dn(float curr_c, float prev_c, float bep_val) =>
-    (curr_c < bep_val) and (nz(prev_c) >= bep_val)
+    not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c < bep_val) and (prev_c >= bep_val)
 
 // Crossover: Previous close was below or equal to BEP line (prev_c <= bep), Current close finishes above (curr_c > bep)
 f_crossover_up(float curr_c, float prev_c, float bep_val) =>
-    (curr_c > bep_val) and (nz(prev_c) <= bep_val)
+    not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= bep_val)
 
 // Call Buy Alert on a specific BEP line level:
 // Evaluates Call crossover UP, Call support bounce UP, Put resistance rejection DOWN, or Put breakdown DOWN
 f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
     // Active Chart Option Candle Triggers
-    bool chart_ce_cross     = f_crossover_up(chart_ce_close, chart_ce_close[1], bep_val)
-    bool chart_ce_bounce_up = f_bounce_up(chart_ce_low, chart_ce_close, bep_val)
-    bool chart_pe_bounce_dn = f_bounce_dn(chart_pe_high, chart_pe_close, bep_val)
-    bool chart_pe_breakdown = f_breakdown_dn(chart_pe_close, chart_pe_close[1], bep_val)
+    bool chart_ce_cross     = not na(chart_ce_close) and f_crossover_up(chart_ce_close, chart_ce_close[1], bep_val)
+    bool chart_ce_bounce_up = not na(chart_ce_low) and not na(chart_ce_close) and f_bounce_up(chart_ce_low, chart_ce_close, bep_val)
+    bool chart_pe_bounce_dn = not na(chart_pe_high) and not na(chart_pe_close) and f_bounce_dn(chart_pe_high, chart_pe_close, bep_val)
+    bool chart_pe_breakdown = not na(chart_pe_close) and f_breakdown_dn(chart_pe_close, chart_pe_close[1], bep_val)
 
     // Level-specific Security Option Candle Triggers
     bool sec_ce_cross       = not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val)
@@ -643,16 +643,16 @@ f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, f
     bool sec_pe_bounce_dn   = not na(p_h) and not na(p_c) and f_bounce_dn(p_h, p_c, bep_val)
     bool sec_pe_breakdown   = not na(p_c) and f_breakdown_dn(p_c, p_c[1], bep_val)
 
-    chart_ce_cross or chart_ce_bounce_up or chart_pe_bounce_dn or chart_pe_breakdown or sec_ce_cross or sec_ce_bounce_up or sec_pe_bounce_dn or sec_pe_breakdown
+    (chart_ce_cross == true) or (chart_ce_bounce_up == true) or (chart_pe_bounce_dn == true) or (chart_pe_breakdown == true) or (sec_ce_cross == true) or (sec_ce_bounce_up == true) or (sec_pe_bounce_dn == true) or (sec_pe_breakdown == true)
 
 // Put Sell Alert on a specific BEP line level:
 // Evaluates Put crossover UP, Put support bounce UP, Call resistance rejection DOWN, or Call breakdown DOWN
 f_eval_pe_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
     // Active Chart Option Candle Triggers
-    bool chart_pe_cross     = f_crossover_up(chart_pe_close, chart_pe_close[1], bep_val)
-    bool chart_pe_bounce_up = f_bounce_up(chart_pe_low, chart_pe_close, bep_val)
-    bool chart_ce_bounce_dn = f_bounce_dn(chart_ce_high, chart_ce_close, bep_val)
-    bool chart_ce_breakdown = f_breakdown_dn(chart_ce_close, chart_ce_close[1], bep_val)
+    bool chart_pe_cross     = not na(chart_pe_close) and f_crossover_up(chart_pe_close, chart_pe_close[1], bep_val)
+    bool chart_pe_bounce_up = not na(chart_pe_low) and not na(chart_pe_close) and f_bounce_up(chart_pe_low, chart_pe_close, bep_val)
+    bool chart_ce_bounce_dn = not na(chart_ce_high) and not na(chart_ce_close) and f_bounce_dn(chart_ce_high, chart_ce_close, bep_val)
+    bool chart_ce_breakdown = not na(chart_ce_close) and f_breakdown_dn(chart_ce_close, chart_ce_close[1], bep_val)
 
     // Level-specific Security Option Candle Triggers
     bool sec_pe_cross       = not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val)
@@ -660,7 +660,7 @@ f_eval_pe_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, f
     bool sec_ce_bounce_dn   = not na(c_h) and not na(c_c) and f_bounce_dn(c_h, c_c, bep_val)
     bool sec_ce_breakdown   = not na(c_c) and f_breakdown_dn(c_c, c_c[1], bep_val)
 
-    chart_pe_cross or chart_pe_bounce_up or chart_ce_bounce_dn or chart_ce_breakdown or sec_pe_cross or sec_pe_bounce_up or sec_ce_bounce_dn or sec_ce_breakdown
+    (chart_pe_cross == true) or (chart_pe_bounce_up == true) or (chart_ce_bounce_dn == true) or (chart_ce_breakdown == true) or (sec_pe_cross == true) or (sec_pe_bounce_up == true) or (sec_ce_bounce_dn == true) or (sec_ce_breakdown == true)
 
 // Evaluate Triggers Across Active BEP Lines with Exact Matching Option Strike Pairs
 bool ce_trig_m3_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
@@ -678,8 +678,8 @@ bool pe_trig_m2_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_m2, ce
 bool ce_trig_m1_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
 bool ce_trig_m1_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
 
-bool pe_trig_m1_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
-bool pe_trig_m1_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
+bool pe_trig_m1_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_m1)
+bool pe_trig_m1_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_m1)
 
 bool ce_trig_0_rt    = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
 bool ce_trig_0_stat  = show_static_bep   and f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
@@ -697,7 +697,7 @@ bool ce_trig_p2_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_p2,   ce
 bool ce_trig_p2_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
 
 bool pe_trig_p2_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
-bool pe_trig_p2_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool pe_trig_p2_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_m2, pe_c_m2, pe_h_m2, pe_l_m2)
 
 bool ce_trig_p3_rt   = show_realtime_bep and f_eval_ce_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 bool ce_trig_p3_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
@@ -705,13 +705,13 @@ bool ce_trig_p3_stat = show_static_bep   and f_eval_ce_pair_trig(bep_stat_p3, ce
 bool pe_trig_p3_rt   = show_realtime_bep and f_eval_pe_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 bool pe_trig_p3_stat = show_static_bep   and f_eval_pe_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
 
-// Combined Crossovers & Downside Bounces Across All 14 BEP Lines
-bool ce_any_bep_trig = ce_trig_m3_rt or ce_trig_m3_stat or ce_trig_m2_rt or ce_trig_m2_stat or ce_trig_m1_rt or ce_trig_m1_stat or ce_trig_0_rt or ce_trig_0_stat or ce_trig_p1_rt or ce_trig_p1_stat or ce_trig_p2_rt or ce_trig_p2_stat or ce_trig_p3_rt or ce_trig_p3_stat
-bool pe_any_bep_trig = pe_trig_m3_rt or pe_trig_m3_stat or pe_trig_m2_rt or pe_trig_m2_stat or pe_trig_m1_rt or pe_trig_m1_stat or pe_trig_0_rt or pe_trig_0_stat or pe_trig_p1_rt or pe_trig_p1_stat or pe_trig_p2_rt or pe_trig_p2_stat or pe_trig_p3_rt or pe_trig_p3_stat
+// Combined Crossovers & Downside Bounces Across Active BEP Lines
+bool ce_any_bep_trig = (ce_trig_m3_rt == true) or (ce_trig_m3_stat == true) or (ce_trig_m2_rt == true) or (ce_trig_m2_stat == true) or (ce_trig_m1_rt == true) or (ce_trig_m1_stat == true) or (ce_trig_0_rt == true) or (ce_trig_0_stat == true) or (ce_trig_p1_rt == true) or (ce_trig_p1_stat == true) or (ce_trig_p2_rt == true) or (ce_trig_p2_stat == true) or (ce_trig_p3_rt == true) or (ce_trig_p3_stat == true)
+bool pe_any_bep_trig = (pe_trig_m3_rt == true) or (pe_trig_m3_stat == true) or (pe_trig_m2_rt == true) or (pe_trig_m2_stat == true) or (pe_trig_m1_rt == true) or (pe_trig_m1_stat == true) or (pe_trig_0_rt == true) or (pe_trig_0_stat == true) or (pe_trig_p1_rt == true) or (pe_trig_p1_stat == true) or (pe_trig_p2_rt == true) or (pe_trig_p2_stat == true) or (pe_trig_p3_rt == true) or (pe_trig_p3_stat == true)
 
-// --- Combined Raw Buy & Sell Triggers Across All 14 BEP Lines ---
-bool raw_buy_alert  = ce_any_bep_trig and ce_filters_met and not (pe_any_bep_trig and pe_filters_met)
-bool raw_sell_alert = pe_any_bep_trig and pe_filters_met and not (ce_any_bep_trig and ce_filters_met)
+// --- Combined Raw Buy & Sell Triggers Across Active BEP Lines ---
+bool raw_buy_alert  = ce_any_bep_trig and (ce_filters_met == true) and not (pe_any_bep_trig and (pe_filters_met == true))
+bool raw_sell_alert = pe_any_bep_trig and (pe_filters_met == true) and not (ce_any_bep_trig and (ce_filters_met == true))
 
 // --- Strict Alternating Swing Lock State Machine ---
 var int activeSwing = 0 // 0 = Neutral, 1 = In BUY Swing, -1 = In SELL Swing
