@@ -43,6 +43,8 @@ static_bep_basis        = input.string("Day Open Price", "Static BEP Calculation
 // --- Alert Engine Controls ---
 bep_trigger_mode        = input.string("Both", "ATM BEP Trigger Mode", options=["Realtime ATM BEP", "Static ATM BEP", "Both"], group="Alert Engine Controls",
   tooltip="Choose whether Buy/Sell triggers fire on Realtime ATM BEP line, Static ATM BEP line, or Both.")
+strict_iv_filter        = input.bool(false, "Require Strict Intrinsic Value (> 0)", group="Alert Engine Controls",
+  tooltip="Set to false to keep Intrinsic Value non-blocking for ATM crossover alerts.")
 invalidation_pts        = input.float(6.0, "Alert Invalidation Drawdown Threshold (Pts)", minval=0.5, group="Alert Engine Controls",
   tooltip="If price moves against an active signal by more than this point threshold, the current alert is invalidated and the engine re-arms immediately.")
 show_status_table       = input.bool(true, "Show Alert Conditions Status Table", group="Alert Engine Controls",
@@ -317,12 +319,16 @@ float ceAvgChg  = ceAvgCur - ceAvgOpen
 float peAvgChg  = peAvgCur - peAvgOpen
 
 // Realtime Intrinsic Values
-float ce_iv_rt  = math.max(0.0, spot_ltp - ce_strike)
-float pe_iv_rt  = math.max(0.0, pe_strike - spot_ltp)
+// Fallback safety for ATM option prices
+float ce_c_0_clean    = nz(ce_c_0, isCall ? close : nz(opp_c, close))
+float pe_c_0_clean    = nz(pe_c_0, isPut ? close : nz(opp_c, close))
+
+float ce_stat_0_clean = nz(ce_stat_0, isCall ? open : nz(opp_o, open))
+float pe_stat_0_clean = nz(pe_stat_0, isPut ? open : nz(opp_o, open))
 
 // ATM Realtime & Static BEP Lines
-float bep_rt_0   = (ce_c_0 + pe_c_0) / 2.0
-float bep_stat_0 = (ce_stat_0 + pe_stat_0) / 2.0
+float bep_rt_0   = (ce_c_0_clean + pe_c_0_clean) / 2.0
+float bep_stat_0 = (ce_stat_0_clean + pe_stat_0_clean) / 2.0
 
 // Plot ATM Realtime & Static BEP Lines ONLY
 plot(bep_rt_0,   title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
@@ -352,9 +358,9 @@ bool pe_avg_pass = (peAvgCur > peAvgOpen) or both_below_day_open
 bool ce_chg_pass = (ceAvgChg > 0) or both_below_day_open
 bool pe_chg_pass = (peAvgChg > 0) or both_below_day_open
 
-// Intrinsic Value Pass Conditions:
-bool ce_iv_pass  = (ce_iv_rt > 0)
-bool pe_iv_pass  = (pe_iv_rt > 0)
+// Intrinsic Value Pass Conditions (Non-strict by default to prevent blocking ATM crossover alerts):
+bool ce_iv_pass  = not strict_iv_filter or (ce_iv_rt > 0)
+bool pe_iv_pass  = not strict_iv_filter or (pe_iv_rt > 0)
 
 // Full Trigger 1 Confluence Evaluation:
 bool ce_trig1_conds = ce_avg_pass and ce_chg_pass and ce_iv_pass and ce_top_pass
