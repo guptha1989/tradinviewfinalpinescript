@@ -98,6 +98,9 @@ use_stat_bep_alerts         = input.bool(true, "Enable Alerts on Static BEP Line
 use_basket_avg_alerts       = input.bool(true, "Enable Alerts on Basket Average Lines", group="Alert Engine Controls",
   tooltip="Enable or disable Buy/Sell alerts triggered on Basket Average Line Crossovers.")
 
+enable_blast_alerts         = input.bool(true, "Enable CE / PE Blast Alerts & Markers", group="Alert Engine Controls",
+  tooltip="Enable or disable CE/PE Blast alerts and BLAST markers on chart when opponent basket average is below its day open average.")
+
 use_basket_avg_filter       = input.bool(true, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
 use_basket_chg_filter       = input.bool(true, "Require Basket Average Change > 0", group="Alert Engine Controls",
@@ -755,8 +758,8 @@ else if raw_sell_alert and activeSwing != -1
 // --- Momentum BLAST Signals (Evaluated ONLY during regular triggers) ---
 // CE Blast: Regular CE alert AND PE current average is below PE day open average
 // PE Blast: Regular PE alert AND CE current average is below CE day open average
-bool ce_blast_active = overall_buy_alert  and (peAvgCur < peAvgOpen)
-bool pe_blast_active = overall_sell_alert and (ceAvgCur < ceAvgOpen)
+bool ce_blast_active = enable_blast_alerts and overall_buy_alert  and (peAvgCur < peAvgOpen)
+bool pe_blast_active = enable_blast_alerts and overall_sell_alert and (ceAvgCur < ceAvgOpen)
 
 // Special Fresh Intrinsic Value Signals
 bool fresh_iv_buy_signal  = overall_buy_alert and ce_fresh_iv
@@ -817,3 +820,5 @@ if barstate.islast and show_status_table
 // --- TradingView Alert Conditions ---
 alertcondition(overall_buy_alert,  title="CE Signal Alert (Call Buy)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
 alertcondition(overall_sell_alert, title="PE Signal Alert (Put Sell)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
+alertcondition(ce_blast_active,    title="CE BLAST Alert 🔥",          message="CE BLAST ALERT 🔥: Call Blast signal triggered on BEP line on {{ticker}}!")
+alertcondition(pe_blast_active,    title="PE BLAST Alert 🔥",          message="PE BLAST ALERT 🔥: Put Blast signal triggered on BEP line on {{ticker}}!")
