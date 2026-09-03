@@ -370,8 +370,21 @@ float chart_pe_close = isPut  ? close : opp_c
 [pe_pdc_sec, pe_pdh_sec, pe_pdl_sec] = request.security(syminfo.prefix + ":" + pe_ticker, "D", f_get_strike_prev_day(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // Use direct chart candle data if active chart is Call or Put option
-float ce_open = isCall ? ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0) : ce_open_sec
-float pe_open = isPut  ? ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0) : pe_open_sec
+float chart_d_op  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
+float chart_d_pdc = ta.valuewhen(ta.change(time("D")) != 0, close[1], 0)
+chart_d_pdc      := na(chart_d_pdc) ? chart_d_op : chart_d_pdc
+
+var float chart_d_f5m = na
+if ta.change(time("D")) != 0
+    chart_d_f5m := na
+if (hour == 9 and minute >= 19) or hour > 9
+    if na(chart_d_f5m)
+        chart_d_f5m := close
+
+float chart_stat_ref = (static_bep_basis == "Previous Day Close" or static_bep_basis == "Previous Day Settlement") ? chart_d_pdc : (static_bep_basis == "First 5 Min Close" ? (na(chart_d_f5m) ? chart_d_op : chart_d_f5m) : chart_d_op)
+
+float ce_open = isCall ? chart_stat_ref : ce_open_sec
+float pe_open = isPut  ? chart_stat_ref : pe_open_sec
 
 float ce_high = isCall ? high : ce_high_sec
 float pe_high = isPut  ? high : pe_high_sec
@@ -620,13 +633,15 @@ f_bounce_dn(float h_val, float c_val, float bep_val) =>
 f_bounce_up(float l_val, float c_val, float bep_val) =>
     not na(l_val) and not na(c_val) and not na(bep_val) and (l_val <= bep_val) and (c_val > bep_val)
 
-// Breakdown: Previous close was above or equal to BEP line (prev_c >= bep), Current close finishes below (curr_c < bep)
+// Breakdown: Previous close was above or equal to previous bar's BEP line (prev_c >= bep[1]), Current close finishes below current BEP line (curr_c < bep)
 f_breakdown_dn(float curr_c, float prev_c, float bep_val) =>
-    not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c < bep_val) and (prev_c >= bep_val)
+    float prev_bep = nz(bep_val[1], bep_val)
+    not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c < bep_val) and (prev_c >= prev_bep)
 
-// Crossover: Previous close was below or equal to BEP line (prev_c <= bep), Current close finishes above (curr_c > bep)
+// Crossover: Previous close was below or equal to previous bar's BEP line (prev_c <= bep[1]), Current close finishes above current BEP line (curr_c > bep)
 f_crossover_up(float curr_c, float prev_c, float bep_val) =>
-    not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= bep_val)
+    float prev_bep = nz(bep_val[1], bep_val)
+    not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
 
 // Call Buy Alert on a specific BEP line level:
 // Evaluates Call crossover UP, Call support bounce UP, Put resistance rejection DOWN, or Put breakdown DOWN
