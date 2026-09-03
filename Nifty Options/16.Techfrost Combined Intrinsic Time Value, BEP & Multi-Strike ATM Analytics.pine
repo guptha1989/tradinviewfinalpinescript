@@ -74,33 +74,12 @@ macd_slow_len      = input.int(26, "MACD Slow Length", group="Momentum Blast Fil
 macd_signal_len    = input.int(9, "MACD Signal Length", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
 use_macd_hist      = input.bool(true, "Require MACD Histogram Positive for CE / Negative for PE", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
 
-// --- BEP Line Colors & Formatting ---
-col_atm_rt    = input.color(color.white, "ATM Realtime BEP (L0)", group="BEP Line Formatting")
-col_atm_stat  = input.color(color.yellow, "ATM Static BEP (L0)", group="BEP Line Formatting")
-
-col_itm1_rt   = input.color(color.aqua, "ITM1 Realtime BEP (L-1)", group="BEP Line Formatting")
-col_itm1_stat = input.color(color.new(color.aqua, 40), "ITM1 Static BEP (L-1)", group="BEP Line Formatting")
-
-col_itm2_rt   = input.color(color.blue, "ITM2 Realtime BEP (L-2)", group="BEP Line Formatting")
-col_itm2_stat = input.color(color.new(color.blue, 40), "ITM2 Static BEP (L-2)", group="BEP Line Formatting")
-
-col_itm3_rt   = input.color(color.purple, "ITM3 Realtime BEP (L-3)", group="BEP Line Formatting")
-col_itm3_stat = input.color(color.new(color.purple, 40), "ITM3 Static BEP (L-3)", group="BEP Line Formatting")
-
-col_otm1_rt   = input.color(color.orange, "OTM1 Realtime BEP (L+1)", group="BEP Line Formatting")
-col_otm1_stat = input.color(color.new(color.orange, 40), "OTM1 Static BEP (L+1)", group="BEP Line Formatting")
-
-col_otm2_rt   = input.color(color.teal, "OTM2 Realtime BEP (L+2)", group="BEP Line Formatting")
-col_otm2_stat = input.color(color.new(color.teal, 40), "OTM2 Static BEP (L+2)", group="BEP Line Formatting")
-
-col_otm3_rt   = input.color(color.lime, "OTM3 Realtime BEP (L+3)", group="BEP Line Formatting")
-col_otm3_stat = input.color(color.new(color.lime, 40), "OTM3 Static BEP (L+3)", group="BEP Line Formatting")
-
-col_vwap      = input.color(color.new(#E91E63, 0), "Chart Option VWAP Color", group="BEP Line Formatting")
-col_opp_vwap  = input.color(color.new(#9C27B0, 0), "Opposite Option VWAP Color", group="BEP Line Formatting")
-
-width_atm     = input.int(2, "ATM BEP Lines Width", minval=1, maxval=4, group="BEP Line Formatting")
-width_others  = input.int(1, "ITM/OTM BEP Lines Width", minval=1, maxval=4, group="BEP Line Formatting")
+// --- Visual & Intrinsic Formatting ---
+show_signal_shapes  = input.bool(true, "Show CE / PE Signal Markers", group="Visual & Intrinsic Formatting")
+col_ce_iv_diamond   = input.color(#2962FF, "CE Intrinsic Value Diamond Color", group="Visual & Intrinsic Formatting")
+col_pe_iv_diamond   = input.color(#FF6D00, "PE Intrinsic Value Diamond Color", group="Visual & Intrinsic Formatting")
+width_atm           = input.int(2, "ATM BEP Lines Width", minval=1, maxval=4, group="Visual & Intrinsic Formatting")
+width_others        = input.int(1, "ITM/OTM BEP Lines Width", minval=1, maxval=4, group="Visual & Intrinsic Formatting")
 
 // --- Alert Engine Controls ---
 bep_display_mode            = input.string("Both", "BEP Line Visibility & Trigger Mode", options=["Realtime BEP Lines", "Static BEP Lines", "Both"], group="Alert Engine Controls",
@@ -499,33 +478,33 @@ plot(show_ce_prev_hl ? ce_prev_low  : na, title="CE Prev Day Low",  color=color.
 plot(show_pe_prev_hl ? pe_prev_high : na, title="PE Prev Day High", color=color.new(#FF1744, 50), linewidth=1, style=plot.style_linebr)
 plot(show_pe_prev_hl ? pe_prev_low  : na, title="PE Prev Day Low",  color=color.new(#FF1744, 50), linewidth=1, style=plot.style_linebr)
 
-plot(show_vwap ? chart_vwap : na, title="Chart Option VWAP", color=col_vwap, linewidth=2)
-plot(show_vwap ? opp_vwap   : na, title="Opposite Option VWAP", color=col_opp_vwap, linewidth=2)
+plot(show_vwap ? chart_vwap : na, title="Chart Option VWAP", color=#E91E63, linewidth=2)
+plot(show_vwap ? opp_vwap   : na, title="Opposite Option VWAP", color=#9C27B0, linewidth=2)
 
 bool show_rt_bep   = (bep_display_mode == "Realtime BEP Lines") or (bep_display_mode == "Both")
 bool show_stat_bep = (bep_display_mode == "Static BEP Lines")   or (bep_display_mode == "Both")
 
-// --- Plot 7 Levels of BEP Lines with Custom User Colors & Formatting (14 plots) ---
-plot(show_rt_bep ? bep_rt_0 : na,    title="ATM Realtime BEP (L0)", color=col_atm_rt,   linewidth=width_atm)
-plot(show_stat_bep ? bep_stat_0 : na,  title="ATM Static BEP (L0)",   color=col_atm_stat, linewidth=width_atm)
+// --- Plot 7 Levels of BEP Lines (14 plots) ---
+plot(show_rt_bep ? bep_rt_0 : na,    title="ATM Realtime BEP (L0)", color=color.white,   linewidth=width_atm)
+plot(show_stat_bep ? bep_stat_0 : na,  title="ATM Static BEP (L0)",   color=color.yellow,  linewidth=width_atm)
 
-plot(show_rt_bep ? bep_rt_m1 : na,   title="ITM1 Realtime BEP (L-1)", color=col_itm1_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(show_stat_bep ? bep_stat_m1 : na, title="ITM1 Static BEP (L-1)",   color=col_itm1_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_m1 : na,   title="ITM1 Realtime BEP (L-1)", color=color.aqua,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_m1 : na, title="ITM1 Static BEP (L-1)",   color=color.new(color.aqua, 40), linewidth=width_others, style=plot.style_linebr)
 
-plot(show_rt_bep ? bep_rt_m2 : na,   title="ITM2 Realtime BEP (L-2)", color=col_itm2_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(show_stat_bep ? bep_stat_m2 : na, title="ITM2 Static BEP (L-2)",   color=col_itm2_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_m2 : na,   title="ITM2 Realtime BEP (L-2)", color=color.blue,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_m2 : na, title="ITM2 Static BEP (L-2)",   color=color.new(color.blue, 40), linewidth=width_others, style=plot.style_linebr)
 
-plot(show_rt_bep ? bep_rt_m3 : na,   title="ITM3 Realtime BEP (L-3)", color=col_itm3_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(show_stat_bep ? bep_stat_m3 : na, title="ITM3 Static BEP (L-3)",   color=col_itm3_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_m3 : na,   title="ITM3 Realtime BEP (L-3)", color=color.purple, linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_m3 : na, title="ITM3 Static BEP (L-3)",   color=color.new(color.purple, 40), linewidth=width_others, style=plot.style_linebr)
 
-plot(show_rt_bep ? bep_rt_p1 : na,   title="OTM1 Realtime BEP (L+1)", color=col_otm1_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(show_stat_bep ? bep_stat_p1 : na, title="OTM1 Static BEP (L+1)",   color=col_otm1_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_p1 : na,   title="OTM1 Realtime BEP (L+1)", color=color.orange, linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_p1 : na, title="OTM1 Static BEP (L+1)",   color=color.new(color.orange, 40), linewidth=width_others, style=plot.style_linebr)
 
-plot(show_rt_bep ? bep_rt_p2 : na,   title="OTM2 Realtime BEP (L+2)", color=col_otm2_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(show_stat_bep ? bep_stat_p2 : na, title="OTM2 Static BEP (L+2)",   color=col_otm2_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_p2 : na,   title="OTM2 Realtime BEP (L+2)", color=color.teal,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_p2 : na, title="OTM2 Static BEP (L+2)",   color=color.new(color.teal, 40), linewidth=width_others, style=plot.style_linebr)
 
-plot(show_rt_bep ? bep_rt_p3 : na,   title="OTM3 Realtime BEP (L+3)", color=col_otm3_rt,   linewidth=width_others, style=plot.style_linebr)
-plot(show_stat_bep ? bep_stat_p3 : na, title="OTM3 Static BEP (L+3)",   color=col_otm3_stat, linewidth=width_others, style=plot.style_linebr)
+plot(show_rt_bep ? bep_rt_p3 : na,   title="OTM3 Realtime BEP (L+3)", color=color.lime,   linewidth=width_others, style=plot.style_linebr)
+plot(show_stat_bep ? bep_stat_p3 : na, title="OTM3 Static BEP (L+3)",   color=color.new(color.lime, 40), linewidth=width_others, style=plot.style_linebr)
 
 // --- Multi-Strike Basket Averages ---
 int total_count = numStrikesInput == 4 ? 9 : (numStrikesInput == 3 ? 7 : (numStrikesInput == 2 ? 5 : 3))
