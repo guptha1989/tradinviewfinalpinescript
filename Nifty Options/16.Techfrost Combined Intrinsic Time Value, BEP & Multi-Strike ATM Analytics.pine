@@ -686,38 +686,18 @@ f_crossover_up(float curr_c, float prev_c, float bep_val) =>
     not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
 
 //// Call Buy Alert on a specific BEP line level:
-// Evaluates Call crossover UP, Call support bounce UP, Put resistance rejection DOWN, or Put breakdown DOWN
+// Evaluates Call crossover UP above the selected BEP line level
 f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
-    // Active Chart Option Candle Triggers
-    bool chart_ce_cross     = isCall ? f_crossover_up(close, close[1], bep_val) : f_crossover_up(c_c, c_c[1], bep_val)
-    bool chart_ce_bounce_up = isCall ? f_bounce_up(low, close, bep_val) : f_bounce_up(c_l, c_c, bep_val)
-    bool chart_pe_bounce_dn = isPut  ? f_bounce_dn(high, close, bep_val) : f_bounce_dn(p_h, p_c, bep_val)
-    bool chart_pe_breakdown = isPut  ? f_breakdown_dn(close, close[1], bep_val) : f_breakdown_dn(p_c, p_c[1], bep_val)
-
-    // Level-specific Security Option Candle Triggers (Evaluated ONLY if chart_only filter is disabled)
-    bool sec_ce_cross       = not use_chart_only_trig and not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val)
-    bool sec_ce_bounce_up   = not use_chart_only_trig and not na(c_l) and not na(c_c) and f_bounce_up(c_l, c_c, bep_val)
-    bool sec_pe_bounce_dn   = not use_chart_only_trig and not na(p_h) and not na(p_c) and f_bounce_dn(p_h, p_c, bep_val)
-    bool sec_pe_breakdown   = not use_chart_only_trig and not na(p_c) and f_breakdown_dn(p_c, p_c[1], bep_val)
-
-    (chart_ce_cross == true) or (chart_ce_bounce_up == true) or (chart_pe_bounce_dn == true) or (chart_pe_breakdown == true) or (sec_ce_cross == true) or (sec_ce_bounce_up == true) or (sec_pe_bounce_dn == true) or (sec_pe_breakdown == true)
+    bool chart_ce_cross = isCall ? f_crossover_up(close, close[1], bep_val) : f_crossover_up(c_c, c_c[1], bep_val)
+    bool sec_ce_cross   = not use_chart_only_trig and not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val)
+    (chart_ce_cross == true) or (sec_ce_cross == true)
 
 // Put Sell Alert on a specific BEP line level:
-// Evaluates Put crossover UP, Put support bounce UP, Call resistance rejection DOWN, or Call breakdown DOWN
+// Evaluates Put crossover UP above the selected BEP line level
 f_eval_pe_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
-    // Active Chart Option Candle Triggers
-    bool chart_pe_cross     = isPut  ? f_crossover_up(close, close[1], bep_val) : f_crossover_up(p_c, p_c[1], bep_val)
-    bool chart_pe_bounce_up = isPut  ? f_bounce_up(low, close, bep_val) : f_bounce_up(p_l, p_c, bep_val)
-    bool chart_ce_bounce_dn = isCall ? f_bounce_dn(high, close, bep_val) : f_bounce_dn(c_h, c_c, bep_val)
-    bool chart_ce_breakdown = isCall ? f_breakdown_dn(close, close[1], bep_val) : f_breakdown_dn(c_c, c_c[1], bep_val)
-
-    // Level-specific Security Option Candle Triggers (Evaluated ONLY if chart_only filter is disabled)
-    bool sec_pe_cross       = not use_chart_only_trig and not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val)
-    bool sec_pe_bounce_up   = not use_chart_only_trig and not na(p_l) and not na(p_c) and f_bounce_up(p_l, p_c, bep_val)
-    bool sec_ce_bounce_dn   = not use_chart_only_trig and not na(c_h) and not na(c_c) and f_bounce_dn(c_h, c_c, bep_val)
-    bool sec_ce_breakdown   = not use_chart_only_trig and not na(c_c) and f_breakdown_dn(c_c, c_c[1], bep_val)
-
-    (chart_pe_cross == true) or (chart_pe_bounce_up == true) or (chart_ce_bounce_dn == true) or (chart_ce_breakdown == true) or (sec_pe_cross == true) or (sec_pe_bounce_up == true) or (sec_ce_bounce_dn == true) or (sec_ce_breakdown == true)
+    bool chart_pe_cross = isPut  ? f_crossover_up(close, close[1], bep_val) : f_crossover_up(p_c, p_c[1], bep_val)
+    bool sec_pe_cross   = not use_chart_only_trig and not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val)
+    (chart_pe_cross == true) or (sec_pe_cross == true)
 
 //// Evaluate Triggers Across Active BEP Lines with Exact Matching Option Strike Pairs (Unconditional Evaluation)
 bool raw_ce_m3_rt   = f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
@@ -885,12 +865,12 @@ string m_size = f_get_marker_size(signal_marker_size)
 
 if show_signal_shapes
     if overall_buy_alert
-        string ce_lbl = ce_blast_active ? "CE🔥🔥" : (ce_fresh_iv ? "CE IV★" : "CE")
+        string ce_lbl = ce_blast_active ? "CE 🔥🔥" : (ce_fresh_iv ? "CE IV★" : "CE 🔥")
         color  ce_col = ce_blast_active ? #00FF66 : #00E676
         color  ce_txt = ce_blast_active ? color.black : color.white
         label.new(bar_index, low, text=ce_lbl, style=label.style_label_up, color=ce_col, textcolor=ce_txt, size=m_size)
     else if overall_sell_alert
-        string pe_lbl = pe_blast_active ? "PE🔥🔥" : (pe_fresh_iv ? "PE IV★" : "PE")
+        string pe_lbl = pe_blast_active ? "PE 🔥🔥" : (pe_fresh_iv ? "PE IV★" : "PE 🔥")
         color  pe_col = pe_blast_active ? #FF0055 : #FF1744
         color  pe_txt = color.white
         label.new(bar_index, high, text=pe_lbl, style=label.style_label_down, color=pe_col, textcolor=pe_txt, size=m_size)
