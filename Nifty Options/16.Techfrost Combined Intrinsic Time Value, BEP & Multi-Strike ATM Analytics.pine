@@ -691,19 +691,13 @@ bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
 
 //// --- Universal BEP Level Pair Trigger Evaluators ---
 // Upside Bounce: Low touches/dips to BEP line (l_val <= bep), Close finishes above (c_val > bep)
-// Also triggers on immediately next candle when LTP/close crosses above previous candle close
 f_bounce_up(float l_val, float c_val, float bep_val) =>
-    bool bounce_now = not na(l_val) and not na(c_val) and not na(bep_val) and (l_val <= bep_val) and (c_val > bep_val)
-    bool bounce_next_confirm = not na(c_val) and not na(c_val[1]) and not na(l_val[1]) and not na(bep_val[1]) and (l_val[1] <= bep_val[1]) and (c_val[1] > bep_val[1]) and (c_val > c_val[1])
-    bounce_now or bounce_next_confirm
+    not na(l_val) and not na(c_val) and not na(bep_val) and (l_val <= bep_val) and (c_val > bep_val)
 
 // Crossover: Previous close was below or equal to previous bar's BEP line (prev_c <= bep[1]), Current close finishes above current BEP line (curr_c > bep)
-// Also triggers on immediately next candle when LTP/close crosses above previous candle close
 f_crossover_up(float curr_c, float prev_c, float bep_val) =>
     float prev_bep = nz(bep_val[1], bep_val)
-    bool cross_now = not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
-    bool cross_next_confirm = not na(curr_c) and not na(prev_c) and not na(bep_val[1]) and (prev_c > bep_val[1]) and (prev_c[1] <= nz(bep_val[2], bep_val[1])) and (curr_c > prev_c)
-    cross_now or cross_next_confirm
+    not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
 
 //// Call Buy Alert on a specific BEP line level:
 // Evaluates Call crossover UP or Call support bounce UP on the BEP line
