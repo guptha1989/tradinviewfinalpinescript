@@ -670,37 +670,38 @@ bool ce_trig1_conds = (ceAvgCur > ceAvgOpen) and (ceAvgChg > 0) and (ce_iv_rt > 
 // 4. Top Position Rule (if both above or both below Day Open)
 bool pe_trig1_conds = (peAvgCur > peAvgOpen) and (peAvgChg > 0) and (pe_iv_rt > 0) and pe_top_pass
 
-//// --- Crossover Trigger Evaluators ---
+// Blast Sub-Condition Evaluators
+bool ce_blast_cond_met = (peAvgCur < peAvgOpen) and (peAvgChg < 0) and (ceAvgCur > ceAvgOpen) and (ceAvgCur > peAvgCur)
+bool pe_blast_cond_met = (ceAvgCur < ceAvgOpen) and (ceAvgChg < 0) and (peAvgCur > peAvgOpen) and (peAvgCur > ceAvgCur)
+
+//// --- Unconditional Crossover Evaluators at Bar Level (Prevents CW10002 Warnings) ---
 f_crossover_up(float curr_c, float prev_c, float bep_val) =>
     float prev_bep = nz(bep_val[1], bep_val)
     not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
 
-// Call Crossover (includes opposite Put candle on Put chart)
-f_eval_ce_crossover(float bep_val) =>
-    if isCall
-        f_crossover_up(close, close[1], bep_val)
-    else if isPut
-        f_crossover_up(opp_c, opp_c[1], bep_val)
-    else
-        not na(ce_c_0) and f_crossover_up(ce_c_0, ce_c_0[1], bep_val)
+bool cross_chart_close_rt   = f_crossover_up(close, close[1], bep_rt_0)
+bool cross_chart_close_stat = f_crossover_up(close, close[1], bep_stat_0)
 
-// Put Crossover (includes opposite Call candle on Call chart)
-f_eval_pe_crossover(float bep_val) =>
-    if isPut
-        f_crossover_up(close, close[1], bep_val)
-    else if isCall
-        f_crossover_up(opp_c, opp_c[1], bep_val)
-    else
-        not na(pe_c_0) and f_crossover_up(pe_c_0, pe_c_0[1], bep_val)
+bool cross_opp_close_rt     = f_crossover_up(opp_c, opp_c[1], bep_rt_0)
+bool cross_opp_close_stat   = f_crossover_up(opp_c, opp_c[1], bep_stat_0)
+
+bool cross_ce_sec_rt        = not na(ce_c_0) and f_crossover_up(ce_c_0, ce_c_0[1], bep_rt_0)
+bool cross_ce_sec_stat      = not na(ce_c_0) and f_crossover_up(ce_c_0, ce_c_0[1], bep_stat_0)
+
+bool cross_pe_sec_rt        = not na(pe_c_0) and f_crossover_up(pe_c_0, pe_c_0[1], bep_rt_0)
+bool cross_pe_sec_stat      = not na(pe_c_0) and f_crossover_up(pe_c_0, pe_c_0[1], bep_stat_0)
 
 //// Evaluate Triggers on Realtime ATM and Static ATM BEP Lines
-bool ce_cross_rt   = use_atm_bep_trig and f_eval_ce_crossover(bep_rt_0)
-bool ce_cross_stat = use_atm_bep_trig and use_stat_bep_alerts and f_eval_ce_crossover(bep_stat_0)
+bool ce_cross_rt   = use_atm_bep_trig and (isCall ? cross_chart_close_rt : (isPut ? cross_opp_close_rt : cross_ce_sec_rt))
+bool ce_cross_stat = use_atm_bep_trig and use_stat_bep_alerts and (isCall ? cross_chart_close_stat : (isPut ? cross_opp_close_stat : cross_ce_sec_stat))
 bool ce_crossover  = ce_cross_rt or ce_cross_stat
 
-bool pe_cross_rt   = use_atm_bep_trig and f_eval_pe_crossover(bep_rt_0)
-bool pe_cross_stat = use_atm_bep_trig and use_stat_bep_alerts and f_eval_pe_crossover(bep_stat_0)
+bool pe_cross_rt   = use_atm_bep_trig and (isPut ? cross_chart_close_rt : (isCall ? cross_opp_close_rt : cross_pe_sec_rt))
+bool pe_cross_stat = use_atm_bep_trig and use_stat_bep_alerts and (isPut ? cross_chart_close_stat : (isCall ? cross_opp_close_stat : cross_pe_sec_stat))
 bool pe_crossover  = pe_cross_rt or pe_cross_stat
+
+bool ce_any_bep_trig = ce_crossover
+bool pe_any_bep_trig = pe_crossover
 
 // Strict VWAP Exemption Filter
 bool is_near_vwap  = not na(chart_vwap) and (math.abs(close - chart_vwap) <= vwap_exemption_pts)
