@@ -387,10 +387,15 @@ bool pe_iv_pass  = not strict_iv_filter or (pe_iv_rt > 0)
 bool ce_trig1_conds = ce_avg_pass and ce_chg_pass and ce_iv_pass and ce_top_pass
 bool pe_trig1_conds = pe_avg_pass and pe_chg_pass and pe_iv_pass and pe_top_pass
 
-//// --- Unconditional Crossover Evaluators at Bar Level (Prevents CW10002 Warnings) ---
+//// --- Unconditional Crossover & Bounce Evaluators at Bar Level (Prevents CW10002 Warnings) ---
 f_crossover_up(float curr_c, float prev_c, float bep_val) =>
     float prev_bep = nz(bep_val[1], bep_val)
     not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
+
+f_bounce_up(float l_val, float c_val, float bep_val) =>
+    bool bounce_now     = (l_val <= bep_val) and (c_val > bep_val)
+    bool bounce_confirm = not na(l_val[1]) and not na(c_val[1]) and not na(bep_val[1]) and (l_val[1] <= bep_val[1]) and (c_val[1] > bep_val[1]) and (c_val > c_val[1])
+    bounce_now or bounce_confirm
 
 bool cross_chart_close_rt   = f_crossover_up(close, close[1], bep_rt_0)
 bool cross_chart_close_stat = f_crossover_up(close, close[1], bep_stat_0)
@@ -408,12 +413,12 @@ bool cross_pe_sec_stat      = f_crossover_up(pe_0_ltp, pe_0_ltp[1], bep_stat_0)
 bool use_rt_bep   = (bep_trigger_mode == "Realtime ATM BEP") or (bep_trigger_mode == "Both")
 bool use_stat_bep = (bep_trigger_mode == "Static ATM BEP")   or (bep_trigger_mode == "Both")
 
-bool ce_cross_rt   = use_rt_bep   and (isCall ? cross_chart_close_rt   : (isPut ? cross_opp_close_rt   : cross_ce_sec_rt))
-bool ce_cross_stat = use_stat_bep and (isCall ? cross_chart_close_stat : (isPut ? cross_opp_close_stat : cross_ce_sec_stat))
+bool ce_cross_rt   = use_rt_bep   and (isCall ? (cross_chart_close_rt or f_bounce_up(low, close, bep_rt_0))   : (isPut ? (cross_opp_close_rt or f_bounce_up(opp_l, opp_c, bep_rt_0))   : cross_ce_sec_rt))
+bool ce_cross_stat = use_stat_bep and (isCall ? (cross_chart_close_stat or f_bounce_up(low, close, bep_stat_0)) : (isPut ? (cross_opp_close_stat or f_bounce_up(opp_l, opp_c, bep_stat_0)) : cross_ce_sec_stat))
 bool ce_crossover  = ce_cross_rt or ce_cross_stat
 
-bool pe_cross_rt   = use_rt_bep   and (isPut ? cross_chart_close_rt   : (isCall ? cross_opp_close_rt   : cross_pe_sec_rt))
-bool pe_cross_stat = use_stat_bep and (isPut ? cross_chart_close_stat : (isCall ? cross_opp_close_stat : cross_pe_sec_stat))
+bool pe_cross_rt   = use_rt_bep   and (isPut ? (cross_chart_close_rt or f_bounce_up(low, close, bep_rt_0))   : (isCall ? (cross_opp_close_rt or f_bounce_up(opp_l, opp_c, bep_rt_0))   : cross_pe_sec_rt))
+bool pe_cross_stat = use_stat_bep and (isPut ? (cross_chart_close_stat or f_bounce_up(low, close, bep_stat_0)) : (isCall ? (cross_opp_close_stat or f_bounce_up(opp_l, opp_c, bep_stat_0)) : cross_pe_sec_stat))
 bool pe_crossover  = pe_cross_rt or pe_cross_stat
 
 // Combined Raw Signals

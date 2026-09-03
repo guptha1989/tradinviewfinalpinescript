@@ -579,8 +579,11 @@ f_bounce_dn(float h_val, float c_val, float bep_val) =>
     (h_val >= bep_val) and (c_val < bep_val)
 
 // Upside Bounce: Low touches/dips to BEP line (l_val <= bep), Close finishes above (c_val > bep)
+// Also triggers on next candle when its close price crosses above bounce candle's close price
 f_bounce_up(float l_val, float c_val, float bep_val) =>
-    (l_val <= bep_val) and (c_val > bep_val)
+    bool bounce_now     = (l_val <= bep_val) and (c_val > bep_val)
+    bool bounce_confirm = not na(l_val[1]) and not na(c_val[1]) and not na(bep_val[1]) and (l_val[1] <= bep_val[1]) and (c_val[1] > bep_val[1]) and (c_val > c_val[1])
+    bounce_now or bounce_confirm
 
 // Breakdown: Previous close was above or equal to BEP line (prev_c >= bep), Current close finishes below (curr_c < bep)
 f_breakdown_dn(float curr_c, float prev_c, float bep_val) =>
