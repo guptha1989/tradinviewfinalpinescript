@@ -685,85 +685,83 @@ f_crossover_up(float curr_c, float prev_c, float bep_val) =>
     float prev_bep = nz(bep_val[1], bep_val)
     not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
 
-//// Call Buy Alert on a specific BEP line level:
+////// Call Buy Alert on a specific BEP line level:
 // Evaluates Call crossover UP above the selected BEP line level
-f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
-    bool chart_ce_cross = isCall ? f_crossover_up(close, close[1], bep_val) : f_crossover_up(c_c, c_c[1], bep_val)
-    bool sec_ce_cross   = not use_chart_only_trig and not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val)
-    (chart_ce_cross == true) or (sec_ce_cross == true)
+f_eval_ce_pair_trig(float bep_val, float c_c) =>
+    bool ce_cross = isCall ? f_crossover_up(close, close[1], bep_val) : (not use_chart_only_trig and not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val))
+    (ce_cross == true)
 
 // Put Sell Alert on a specific BEP line level:
 // Evaluates Put crossover UP above the selected BEP line level
-f_eval_pe_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
-    bool chart_pe_cross = isPut  ? f_crossover_up(close, close[1], bep_val) : f_crossover_up(p_c, p_c[1], bep_val)
-    bool sec_pe_cross   = not use_chart_only_trig and not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val)
-    (chart_pe_cross == true) or (sec_pe_cross == true)
+f_eval_pe_pair_trig(float bep_val, float p_c) =>
+    bool pe_cross = isPut ? f_crossover_up(close, close[1], bep_val) : (not use_chart_only_trig and not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val))
+    (pe_cross == true)
 
 //// Evaluate Triggers Across Active BEP Lines with Exact Matching Option Strike Pairs (Unconditional Evaluation)
-bool raw_ce_m3_rt   = f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
-bool raw_ce_m3_stat = f_eval_ce_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
-bool raw_pe_m3_rt   = f_eval_pe_pair_trig(bep_rt_m3,   ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
-bool raw_pe_m3_stat = f_eval_pe_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3)
+bool raw_ce_m3_rt   = f_eval_ce_pair_trig(bep_rt_m3,   ce_c_m3)
+bool raw_ce_m3_stat = f_eval_ce_pair_trig(bep_stat_m3, ce_c_m3)
+bool raw_pe_m3_rt   = f_eval_pe_pair_trig(bep_rt_m3,   pe_c_p3)
+bool raw_pe_m3_stat = f_eval_pe_pair_trig(bep_stat_m3, pe_c_p3)
 
 bool ce_trig_m3_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_ce_m3_rt
 bool ce_trig_m3_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_ce_m3_stat
 bool pe_trig_m3_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_pe_m3_rt
 bool pe_trig_m3_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_pe_m3_stat
 
-bool raw_ce_m2_rt   = f_eval_ce_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
-bool raw_ce_m2_stat = f_eval_ce_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
-bool raw_pe_m2_rt   = f_eval_pe_pair_trig(bep_rt_m2,   ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
-bool raw_pe_m2_stat = f_eval_pe_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2)
+bool raw_ce_m2_rt   = f_eval_ce_pair_trig(bep_rt_m2,   ce_c_m2)
+bool raw_ce_m2_stat = f_eval_ce_pair_trig(bep_stat_m2, ce_c_m2)
+bool raw_pe_m2_rt   = f_eval_pe_pair_trig(bep_rt_m2,   pe_c_p2)
+bool raw_pe_m2_stat = f_eval_pe_pair_trig(bep_stat_m2, pe_c_p2)
 
 bool ce_trig_m2_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_ce_m2_rt
 bool ce_trig_m2_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_ce_m2_stat
 bool pe_trig_m2_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_pe_m2_rt
 bool pe_trig_m2_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_pe_m2_stat
 
-bool raw_ce_m1_rt   = f_eval_ce_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
-bool raw_ce_m1_stat = f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
-bool raw_pe_m1_rt   = f_eval_pe_pair_trig(bep_rt_m1,   ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
-bool raw_pe_m1_stat = f_eval_pe_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1)
+bool raw_ce_m1_rt   = f_eval_ce_pair_trig(bep_rt_m1,   ce_c_m1)
+bool raw_ce_m1_stat = f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1)
+bool raw_pe_m1_rt   = f_eval_pe_pair_trig(bep_rt_m1,   pe_c_p1)
+bool raw_pe_m1_stat = f_eval_pe_pair_trig(bep_stat_m1, pe_c_p1)
 
 bool ce_trig_m1_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_ce_m1_rt
 bool ce_trig_m1_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_ce_m1_stat
 bool pe_trig_m1_rt   = use_rt_bep_alerts   and use_itm_bep_trig and raw_pe_m1_rt
 bool pe_trig_m1_stat = use_stat_bep_alerts and use_itm_bep_trig and raw_pe_m1_stat
 
-bool raw_ce_0_rt    = f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
-bool raw_ce_0_stat  = f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
-bool raw_pe_0_rt    = f_eval_pe_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
-bool raw_pe_0_stat  = f_eval_pe_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool raw_ce_0_rt    = f_eval_ce_pair_trig(bep_rt_0,   ce_c_0)
+bool raw_ce_0_stat  = f_eval_ce_pair_trig(bep_stat_0, ce_c_0)
+bool raw_pe_0_rt    = f_eval_pe_pair_trig(bep_rt_0,   pe_c_0)
+bool raw_pe_0_stat  = f_eval_pe_pair_trig(bep_stat_0, pe_c_0)
 
 bool ce_trig_0_rt    = use_rt_bep_alerts   and use_atm_bep_trig and raw_ce_0_rt
 bool ce_trig_0_stat  = use_stat_bep_alerts and use_atm_bep_trig and raw_ce_0_stat
 bool pe_trig_0_rt    = use_rt_bep_alerts   and use_atm_bep_trig and raw_pe_0_rt
 bool pe_trig_0_stat  = use_stat_bep_alerts and use_atm_bep_trig and raw_pe_0_stat
 
-bool raw_ce_p1_rt   = f_eval_ce_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
-bool raw_ce_p1_stat = f_eval_ce_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
-bool raw_pe_p1_rt   = f_eval_pe_pair_trig(bep_rt_p1,   ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
-bool raw_pe_p1_stat = f_eval_pe_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1)
+bool raw_ce_p1_rt   = f_eval_ce_pair_trig(bep_rt_p1,   ce_c_p1)
+bool raw_ce_p1_stat = f_eval_ce_pair_trig(bep_stat_p1, ce_c_p1)
+bool raw_pe_p1_rt   = f_eval_pe_pair_trig(bep_rt_p1,   pe_c_p1)
+bool raw_pe_p1_stat = f_eval_pe_pair_trig(bep_stat_p1, pe_c_p1)
 
 bool ce_trig_p1_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_ce_p1_rt
 bool ce_trig_p1_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_ce_p1_stat
 bool pe_trig_p1_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_pe_p1_rt
 bool pe_trig_p1_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_pe_p1_stat
 
-bool raw_ce_p2_rt   = f_eval_ce_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
-bool raw_ce_p2_stat = f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
-bool raw_pe_p2_rt   = f_eval_pe_pair_trig(bep_rt_p2,   ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
-bool raw_pe_p2_stat = f_eval_pe_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2)
+bool raw_ce_p2_rt   = f_eval_ce_pair_trig(bep_rt_p2,   ce_c_p2)
+bool raw_ce_p2_stat = f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2)
+bool raw_pe_p2_rt   = f_eval_pe_pair_trig(bep_rt_p2,   pe_c_p2)
+bool raw_pe_p2_stat = f_eval_pe_pair_trig(bep_stat_p2, pe_c_p2)
 
 bool ce_trig_p2_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_ce_p2_rt
 bool ce_trig_p2_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_ce_p2_stat
 bool pe_trig_p2_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_pe_p2_rt
 bool pe_trig_p2_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_pe_p2_stat
 
-bool raw_ce_p3_rt   = f_eval_ce_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
-bool raw_ce_p3_stat = f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
-bool raw_pe_p3_rt   = f_eval_pe_pair_trig(bep_rt_p3,   ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
-bool raw_pe_p3_stat = f_eval_pe_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3)
+bool raw_ce_p3_rt   = f_eval_ce_pair_trig(bep_rt_p3,   ce_c_p3)
+bool raw_ce_p3_stat = f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3)
+bool raw_pe_p3_rt   = f_eval_pe_pair_trig(bep_rt_p3,   pe_c_p3)
+bool raw_pe_p3_stat = f_eval_pe_pair_trig(bep_stat_p3, pe_c_p3)
 
 bool ce_trig_p3_rt   = use_rt_bep_alerts   and use_otm_bep_trig and raw_ce_p3_rt
 bool ce_trig_p3_stat = use_stat_bep_alerts and use_otm_bep_trig and raw_ce_p3_stat
