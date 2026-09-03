@@ -55,24 +55,21 @@ show_ce_prev_hl   = input.bool(true, "Show CE Previous Day High & Low", group="R
 show_pe_prev_hl   = input.bool(true, "Show PE Previous Day High & Low", group="Reference Line Plots")
 show_vwap         = input.bool(true, "Show VWAP Lines (Chart Option & Opposite Option)", group="Reference Line Plots")
 
-// --- Momentum Blast Filters (RSI, ADX, DI & MACD) ---
-use_rsi_filter     = input.bool(true, "Enable RSI Filter for Blast Alert", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-rsi_len            = input.int(14, "RSI Period Length", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-rsi_ce_level       = input.float(60.0, "RSI CE Threshold (Buy)", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-rsi_pe_level       = input.float(40.0, "RSI PE Threshold (Sell)", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
+// --- Momentum Blast Filters (RSI, DI & MACD) ---
+use_rsi_filter     = input.bool(true, "Enable RSI Filter for Blast Alert", group="Momentum Blast Filters (RSI, DI & MACD)")
+rsi_len            = input.int(14, "RSI Period Length", group="Momentum Blast Filters (RSI, DI & MACD)")
+rsi_ce_level       = input.float(60.0, "RSI CE Threshold (Buy)", group="Momentum Blast Filters (RSI, DI & MACD)")
+rsi_pe_level       = input.float(40.0, "RSI PE Threshold (Sell)", group="Momentum Blast Filters (RSI, DI & MACD)")
 
-use_adx_filter     = input.bool(true, "Enable ADX & DI Filter for Blast Alert", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-adx_len            = input.int(14, "ADX Smoothing Period", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-di_len             = input.int(14, "DI Period Length", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-adx_min_val        = input.float(20.0, "ADX Minimum Threshold Level", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-require_adx_up     = input.bool(true, "Require ADX Slanting Upwards", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-use_di_cross       = input.bool(false, "Require DI+ > DI- for CE / DI- > DI+ for PE", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
+use_di_filter      = input.bool(true, "Enable DI Threshold Filter for Blast Alert", group="Momentum Blast Filters (RSI, DI & MACD)")
+di_len             = input.int(14, "DI Period Length", group="Momentum Blast Filters (RSI, DI & MACD)")
+di_thresh_val      = input.float(20.0, "DI Minimum Threshold Level", group="Momentum Blast Filters (RSI, DI & MACD)")
 
-use_macd_filter    = input.bool(true, "Enable MACD Filter for Blast Alert", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-macd_fast_len      = input.int(12, "MACD Fast Length", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-macd_slow_len      = input.int(26, "MACD Slow Length", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-macd_signal_len    = input.int(9, "MACD Signal Length", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
-use_macd_hist      = input.bool(true, "Require MACD Histogram Positive for CE / Negative for PE", group="Momentum Blast Filters (RSI, ADX, DI & MACD)")
+use_macd_filter    = input.bool(true, "Enable MACD Filter for Blast Alert", group="Momentum Blast Filters (RSI, DI & MACD)")
+macd_fast_len      = input.int(12, "MACD Fast Length", group="Momentum Blast Filters (RSI, DI & MACD)")
+macd_slow_len      = input.int(26, "MACD Slow Length", group="Momentum Blast Filters (RSI, DI & MACD)")
+macd_signal_len    = input.int(9, "MACD Signal Length", group="Momentum Blast Filters (RSI, DI & MACD)")
+use_macd_zero      = input.bool(true, "Require MACD Line > 0 for CE / < 0 for PE", group="Momentum Blast Filters (RSI, DI & MACD)")
 
 // --- Visual & Intrinsic Formatting ---
 show_signal_shapes  = input.bool(true, "Show CE / PE Signal Markers", group="Visual & Intrinsic Formatting")
@@ -423,25 +420,20 @@ spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 // CORE CALCULATIONS, VWAP & MOMENTUM INDICATORS
 // ==========================================
 
-// RSI Calculation
+// RSI Calculation (RSI > 60 for CE, RSI < 40 for PE)
 float rsi_val = ta.rsi(close, rsi_len)
 bool ce_rsi_blast_cond = not use_rsi_filter or (rsi_val > rsi_ce_level)
 bool pe_rsi_blast_cond = not use_rsi_filter or (rsi_val < rsi_pe_level)
 
-// ADX & DI Calculations
-[plusDI, minusDI, adx_val] = ta.dmi(di_len, adx_len)
-bool adx_level_pass = adx_val > adx_min_val
-bool adx_up_slant   = not require_adx_up or (adx_val > adx_val[1])
-bool ce_di_pass     = not use_di_cross or (plusDI > minusDI)
-bool pe_di_pass     = not use_di_cross or (minusDI > plusDI)
+// DI Calculations (DI+ > 20 for CE, DI- > 20 for PE)
+[plusDI, minusDI, _] = ta.dmi(di_len, 14)
+bool ce_di_blast_cond = not use_di_filter or (plusDI > di_thresh_val)
+bool pe_di_blast_cond = not use_di_filter or (minusDI > di_thresh_val)
 
-bool ce_adx_blast_cond = not use_adx_filter or (adx_level_pass and adx_up_slant and ce_di_pass)
-bool pe_adx_blast_cond = not use_adx_filter or (adx_level_pass and adx_up_slant and pe_di_pass)
-
-// MACD Calculation
+// MACD Calculation (MACD > 0 for CE, MACD < 0 for PE)
 [macdLine, signalLine, histLine] = ta.macd(close, macd_fast_len, macd_slow_len, macd_signal_len)
-bool ce_macd_pass = not use_macd_filter or (use_macd_hist ? histLine > 0 : macdLine > signalLine)
-bool pe_macd_pass = not use_macd_filter or (use_macd_hist ? histLine < 0 : macdLine < signalLine)
+bool ce_macd_pass = not use_macd_filter or (use_macd_zero ? macdLine > 0 : macdLine > signalLine)
+bool pe_macd_pass = not use_macd_filter or (use_macd_zero ? macdLine < 0 : macdLine < signalLine)
 
 // VWAP Calculations (Chart Option & Opposite Option)
 float chart_vwap = ta.vwap(hlc3)
@@ -714,8 +706,8 @@ else if raw_sell_alert and activeSwing != -1
     activeSwing        := -1
 
 // --- Momentum BLAST Signals (Evaluated ONLY during regular triggers when enabled) ---
-bool ce_blast_active = enable_blast_alerts and overall_buy_alert  and ce_rsi_blast_cond and ce_adx_blast_cond and ce_macd_pass
-bool pe_blast_active = enable_blast_alerts and overall_sell_alert and pe_rsi_blast_cond and pe_adx_blast_cond and pe_macd_pass
+bool ce_blast_active = enable_blast_alerts and overall_buy_alert  and ce_rsi_blast_cond and ce_di_blast_cond and ce_macd_pass
+bool pe_blast_active = enable_blast_alerts and overall_sell_alert and pe_rsi_blast_cond and pe_di_blast_cond and pe_macd_pass
 
 // Special Fresh Intrinsic Value Signals
 bool fresh_iv_buy_signal  = overall_buy_alert and ce_fresh_iv
@@ -766,24 +758,24 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 0, 3, "CE 3-Candle Delta Winner", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 3, (ce_delta_3bar > 0) ? ("CE BUY WINNER (+" + str.tostring(ce_delta_3bar, "#") + ")") : ("PE WINNER / CE SELL (" + str.tostring(ce_delta_3bar, "#") + ")"), bgcolor=(ce_delta_3bar > 0) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 4, "RSI Filter (" + (use_rsi_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 4, not use_rsi_filter ? "OFF (" + str.tostring(rsi_val, "#.1") + ")" : (ce_rsi_blast_cond ? "CE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : (pe_rsi_blast_cond ? "PE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : "NEUTRAL (" + str.tostring(rsi_val, "#.1") + ")")), bgcolor=not use_rsi_filter ? #424242 : (ce_rsi_blast_cond ? #00FF66 : (pe_rsi_blast_cond ? #FF0055 : #212121)), text_color=ce_rsi_blast_cond and use_rsi_filter ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 4, "RSI Filter (" + (use_rsi_filter ? "> " + str.tostring(rsi_ce_level, "#") + " CE / < " + str.tostring(rsi_pe_level, "#") + " PE" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 4, not use_rsi_filter ? "OFF (" + str.tostring(rsi_val, "#.1") + ")" : (ce_rsi_blast_cond ? "CE (RSI " + str.tostring(rsi_val, "#.1") + ")" : (pe_rsi_blast_cond ? "PE (RSI " + str.tostring(rsi_val, "#.1") + ")" : "FAIL (" + str.tostring(rsi_val, "#.1") + ")")), bgcolor=not use_rsi_filter ? #424242 : ((ce_rsi_blast_cond or pe_rsi_blast_cond) ? #1B5E20 : #880E4F), text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 5, "ADX Filter (" + (use_adx_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 5, not use_adx_filter ? "OFF (" + str.tostring(adx_val, "#.1") + ")" : (adx_level_pass and adx_up_slant ? "PASS (" + str.tostring(adx_val, "#.1") + ")" : "FAIL (" + str.tostring(adx_val, "#.1") + ")"), bgcolor=not use_adx_filter ? #424242 : (adx_level_pass and adx_up_slant ? #1B5E20 : #880E4F), text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 5, "DI Threshold Filter (" + (use_di_filter ? "DI+ > " + str.tostring(di_thresh_val, "#") + " CE / DI- > " + str.tostring(di_thresh_val, "#") + " PE" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 5, not use_di_filter ? "OFF" : (plusDI > di_thresh_val ? ("CE (DI+ " + str.tostring(plusDI, "#.1") + ")") : (minusDI > di_thresh_val ? ("PE (DI- " + str.tostring(minusDI, "#.1") + ")") : "FAIL")), bgcolor=not use_di_filter ? #424242 : ((plusDI > di_thresh_val or minusDI > di_thresh_val) ? #1B5E20 : #880E4F), text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 6, "DI+ / DI- Cross Filter (" + (use_di_cross ? "ON" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 6, not use_di_cross ? "OFF" : (plusDI > minusDI ? "CE (DI+ > DI-)" : "PE (DI- > DI+)"), bgcolor=not use_di_cross ? #424242 : (plusDI > minusDI ? #1B5E20 : #880E4F), text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 6, "MACD Filter (" + (use_macd_filter ? (use_macd_zero ? "> 0 CE / < 0 PE" : "> Signal") : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 6, not use_macd_filter ? "OFF" : (ce_macd_pass ? "CE MACD OK" : (pe_macd_pass ? "PE MACD OK" : "FAIL")), bgcolor=not use_macd_filter ? #424242 : (ce_macd_pass ? #1B5E20 : (pe_macd_pass ? #880E4F : #212121)), text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 7, "MACD Filter (" + (use_macd_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 7, not use_macd_filter ? "OFF" : (ce_macd_pass ? "CE MACD OK" : (pe_macd_pass ? "PE MACD OK" : "NEUTRAL")), bgcolor=not use_macd_filter ? #424242 : (ce_macd_pass ? #1B5E20 : (pe_macd_pass ? #880E4F : #212121)), text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 7, "Fresh Intrinsic Value State", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 7, ce_fresh_iv ? "CE FRESH IV ★" : (pe_fresh_iv ? "PE FRESH IV ★" : "NONE"), bgcolor=(ce_fresh_iv or pe_fresh_iv) ? #FFD700 : #212121, text_color=(ce_fresh_iv or pe_fresh_iv) ? color.black : color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 8, "Fresh Intrinsic Value State", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 8, ce_fresh_iv ? "CE FRESH IV ★" : (pe_fresh_iv ? "PE FRESH IV ★" : "NONE"), bgcolor=(ce_fresh_iv or pe_fresh_iv) ? #FFD700 : #212121, text_color=(ce_fresh_iv or pe_fresh_iv) ? color.black : color.white, text_size=size.small)
-
-    table.cell(statusTable, 0, 9, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 9, ce_blast_active ? "CE BLAST 🔥" : (pe_blast_active ? "PE BLAST 🔥" : (overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"))), bgcolor=ce_blast_active ? #00FF66 : (pe_blast_active ? #FF0055 : (overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black))), text_color=(ce_blast_active or overall_buy_alert) ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 8, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 8, ce_blast_active ? "CE BLAST 🔥" : (pe_blast_active ? "PE BLAST 🔥" : (overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"))), bgcolor=ce_blast_active ? #00FF66 : (pe_blast_active ? #FF0055 : (overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black))), text_color=(ce_blast_active or overall_buy_alert) ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
 alertcondition(overall_buy_alert,  title="CE Signal Alert (Call Buy)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
 alertcondition(overall_sell_alert, title="PE Signal Alert (Put Sell)", message="PE ALERT: Put signal triggered on BEP line on {{ticker}}!")
+
+alertcondition(ce_blast_active, title="CE BLAST Alert (RSI + DI + MACD)", message="CE BLAST ALERT: Strong Call momentum blast triggered on {{ticker}}!")
+alertcondition(pe_blast_active, title="PE BLAST Alert (RSI + DI + MACD)", message="PE BLAST ALERT: Strong Put momentum blast triggered on {{ticker}}!")
