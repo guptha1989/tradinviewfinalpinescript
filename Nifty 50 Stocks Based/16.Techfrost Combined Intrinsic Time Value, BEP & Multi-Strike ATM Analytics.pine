@@ -96,14 +96,17 @@ allow_normal_alerts         = input.bool(true, "Allow Normal Alerts (CE / PE)", 
 allow_blast_alerts          = input.bool(true, "Allow Blast Alerts (CE BLAST / PE BLAST)", group="Alert Engine Controls",
   tooltip="Enable CE BLAST and PE BLAST alerts when selected Blast conditions are met.")
 
-use_atm_bep_trig            = input.bool(true, "Enable ATM BEP Line Triggers (Primary)", group="Alert Engine Controls",
+use_atm_bep_trig            = input.bool(true, "Enable ATM BEP Line Triggers (White Line)", group="Alert Engine Controls",
   tooltip="Enable Buy/Sell alerts triggered on Realtime and Static ATM BEP lines.")
-use_itm_bep_trig            = input.bool(false, "Enable ITM BEP Line Triggers", group="Alert Engine Controls",
-  tooltip="Enable Buy/Sell alerts triggered on ITM BEP lines.")
-use_otm_bep_trig            = input.bool(false, "Enable OTM BEP Line Triggers", group="Alert Engine Controls",
-  tooltip="Enable Buy/Sell alerts triggered on OTM BEP lines.")
-use_stat_bep_alerts         = input.bool(true, "Enable Static ATM BEP Line Triggers", group="Alert Engine Controls",
-  tooltip="Enable Buy/Sell alerts on Static ATM BEP line in addition to Realtime ATM BEP line.")
+use_itm_bep_trig            = input.bool(true, "Enable ITM BEP Line Triggers (Blue Lines)", group="Alert Engine Controls",
+  tooltip="Enable Buy/Sell alerts triggered on Realtime and Static ITM BEP lines.")
+use_otm_bep_trig            = input.bool(true, "Enable OTM BEP Line Triggers (Orange Lines)", group="Alert Engine Controls",
+  tooltip="Enable Buy/Sell alerts triggered on Realtime and Static OTM BEP lines.")
+use_stat_bep_alerts         = input.bool(true, "Enable Static BEP Line Triggers", group="Alert Engine Controls",
+  tooltip="Enable Buy/Sell alerts on Static BEP lines in addition to Realtime BEP lines.")
+
+vwap_exemption_pts          = input.float(2.0, "VWAP Exemption Proximity (Pts)", minval=0.0, group="Alert Engine Controls",
+  tooltip="Alerts will be strictly exempted and blocked when price is within this point distance from the VWAP line to ensure VWAP never triggers alerts.")
 
 use_basket_top_filter       = input.bool(false, "Require Own Basket Average On Top", group="Alert Engine Controls",
   tooltip="Requires CE Basket Average > PE Basket Average for CE alert, and PE Basket Average > CE Basket Average for PE alert.")
@@ -713,16 +716,33 @@ f_eval_pe_pair_trig(float bep_val, float p_c, float p_h, float p_l) =>
     bool pe_bounce = isPut ? f_bounce_up(low, close, bep_val) : (isCall ? false : (not na(p_l) and not na(p_c) and f_bounce_up(p_l, p_c, bep_val)))
     (pe_cross == true) or (pe_bounce == true)
 
-//// Evaluate Triggers Strictly on Realtime ATM and Static ATM BEP Lines
-bool ce_trig_0_rt    = use_atm_bep_trig   and f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0)
-bool ce_trig_0_stat  = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0)
+//// Evaluate Triggers Across White (ATM), Blue (ITM), and Orange (OTM) Realtime and Static BEP Lines
+bool ce_trig_0_rt     = use_atm_bep_trig   and f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0)
+bool ce_trig_0_stat   = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0)
 
-bool pe_trig_0_rt    = use_atm_bep_trig   and f_eval_pe_pair_trig(bep_rt_0,   pe_c_0, pe_h_0, pe_l_0)
-bool pe_trig_0_stat  = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_0, pe_c_0, pe_h_0, pe_l_0)
+bool pe_trig_0_rt     = use_atm_bep_trig   and f_eval_pe_pair_trig(bep_rt_0,   pe_c_0, pe_h_0, pe_l_0)
+bool pe_trig_0_stat   = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_0, pe_c_0, pe_h_0, pe_l_0)
 
-// Combined Triggers (Strictly Realtime ATM & Static ATM Lines)
-bool ce_any_bep_trig = (ce_trig_0_rt == true) or (ce_trig_0_stat == true)
-bool pe_any_bep_trig = (pe_trig_0_rt == true) or (pe_trig_0_stat == true)
+// ITM BEP Line Triggers (Blue Lines)
+bool ce_trig_itm_rt   = use_itm_bep_trig   and (f_eval_ce_pair_trig(bep_rt_m1, ce_c_m1, ce_h_m1, ce_l_m1) or f_eval_ce_pair_trig(bep_rt_m2, ce_c_m2, ce_h_m2, ce_l_m2) or f_eval_ce_pair_trig(bep_rt_m3, ce_c_m3, ce_h_m3, ce_l_m3))
+bool ce_trig_itm_stat = use_itm_bep_trig   and use_stat_bep_alerts and (f_eval_ce_pair_trig(bep_stat_m1, ce_c_m1, ce_h_m1, ce_l_m1) or f_eval_ce_pair_trig(bep_stat_m2, ce_c_m2, ce_h_m2, ce_l_m2) or f_eval_ce_pair_trig(bep_stat_m3, ce_c_m3, ce_h_m3, ce_l_m3))
+
+bool pe_trig_itm_rt   = use_itm_bep_trig   and (f_eval_pe_pair_trig(bep_rt_m1, pe_c_p1, pe_h_p1, pe_l_p1) or f_eval_pe_pair_trig(bep_rt_m2, pe_c_p2, pe_h_p2, pe_l_p2) or f_eval_pe_pair_trig(bep_rt_m3, pe_c_p3, pe_h_p3, pe_l_p3))
+bool pe_trig_itm_stat = use_itm_bep_trig   and use_stat_bep_alerts and (f_eval_pe_pair_trig(bep_stat_m1, pe_c_p1, pe_h_p1, pe_l_p1) or f_eval_pe_pair_trig(bep_stat_m2, pe_c_p2, pe_h_p2, pe_l_p2) or f_eval_pe_pair_trig(bep_stat_m3, pe_c_p3, pe_h_p3, pe_l_p3))
+
+// OTM BEP Line Triggers (Orange Lines)
+bool ce_trig_otm_rt   = use_otm_bep_trig   and (f_eval_ce_pair_trig(bep_rt_p1, ce_c_p1, ce_h_p1, ce_l_p1) or f_eval_ce_pair_trig(bep_rt_p2, ce_c_p2, ce_h_p2, ce_l_p2) or f_eval_ce_pair_trig(bep_rt_p3, ce_c_p3, ce_h_p3, ce_l_p3))
+bool ce_trig_otm_stat = use_otm_bep_trig   and use_stat_bep_alerts and (f_eval_ce_pair_trig(bep_stat_p1, ce_c_p1, ce_h_p1, ce_l_p1) or f_eval_ce_pair_trig(bep_stat_p2, ce_c_p2, ce_h_p2, ce_l_p2) or f_eval_ce_pair_trig(bep_stat_p3, ce_c_p3, ce_h_p3, ce_l_p3))
+
+bool pe_trig_otm_rt   = use_otm_bep_trig   and (f_eval_pe_pair_trig(bep_rt_p1, pe_c_m1, pe_h_m1, pe_l_m1) or f_eval_pe_pair_trig(bep_rt_p2, pe_c_m2, pe_h_m2, pe_l_m2) or f_eval_pe_pair_trig(bep_rt_p3, pe_c_m3, pe_h_m3, pe_l_m3))
+bool pe_trig_otm_stat = use_otm_bep_trig   and use_stat_bep_alerts and (f_eval_pe_pair_trig(bep_stat_p1, pe_c_m1, pe_h_m1, pe_l_m1) or f_eval_pe_pair_trig(bep_stat_p2, pe_c_m2, pe_h_m2, pe_l_m2) or f_eval_pe_pair_trig(bep_stat_p3, pe_c_m3, pe_h_m3, pe_l_m3))
+
+// Strict VWAP Exemption Filter (Exempts/Blocks triggers when price is near VWAP line)
+bool is_near_vwap     = not na(chart_vwap) and (math.abs(close - chart_vwap) <= vwap_exemption_pts)
+
+// Combined Triggers across White (ATM), Blue (ITM), and Orange (OTM) BEP Lines with VWAP Exemption
+bool ce_any_bep_trig  = not is_near_vwap and ((ce_trig_0_rt == true) or (ce_trig_0_stat == true) or (ce_trig_itm_rt == true) or (ce_trig_itm_stat == true) or (ce_trig_otm_rt == true) or (ce_trig_otm_stat == true))
+bool pe_any_bep_trig  = not is_near_vwap and ((pe_trig_0_rt == true) or (pe_trig_0_stat == true) or (pe_trig_itm_rt == true) or (pe_trig_itm_stat == true) or (pe_trig_otm_rt == true) or (pe_trig_otm_stat == true))
 
 // Mode Pass Evaluation: If Blast is unselected but Normal alerts are allowed, fallback to Normal CE/PE alert
 bool ce_pass_mode = (ce_blast_cond_met and allow_blast_alerts) or allow_normal_alerts
