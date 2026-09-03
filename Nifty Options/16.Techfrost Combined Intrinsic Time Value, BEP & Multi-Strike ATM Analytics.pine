@@ -420,20 +420,43 @@ spot_ltp := na(spot_ltp) ? chartStrikePrice : spot_ltp
 // CORE CALCULATIONS, VWAP & MOMENTUM INDICATORS
 // ==========================================
 
-// RSI Calculation (RSI > 60 for CE, RSI < 40 for PE)
-float rsi_val = ta.rsi(close, rsi_len)
-bool ce_rsi_blast_cond = not use_rsi_filter or (rsi_val > rsi_ce_level)
-bool pe_rsi_blast_cond = not use_rsi_filter or (rsi_val < rsi_pe_level)
+//// RSI Calculations (CE evaluated on Call candles, PE evaluated on Put candles)
+float ce_rsi_val = ta.rsi(chart_ce_close, rsi_len)
+float pe_rsi_val = ta.rsi(chart_pe_close, rsi_len)
+float rsi_val    = isCall ? ce_rsi_val : pe_rsi_val
 
-// DI Calculations (DI+ > 20 for CE, DI- > 20 for PE)
-[plusDI, minusDI, _] = ta.dmi(di_len, 14)
-bool ce_di_blast_cond = not use_di_filter or (plusDI > di_thresh_val)
-bool pe_di_blast_cond = not use_di_filter or (minusDI > di_thresh_val)
+bool ce_rsi_blast_cond = not use_rsi_filter or (ce_rsi_val > rsi_ce_level)
+bool pe_rsi_blast_cond = not use_rsi_filter or (pe_rsi_val < rsi_pe_level)
 
-// MACD Calculation (MACD > 0 for CE, MACD < 0 for PE)
-[macdLine, signalLine, histLine] = ta.macd(close, macd_fast_len, macd_slow_len, macd_signal_len)
-bool ce_macd_pass = not use_macd_filter or (use_macd_zero ? macdLine > 0 : macdLine > signalLine)
-bool pe_macd_pass = not use_macd_filter or (use_macd_zero ? macdLine < 0 : macdLine < signalLine)
+// DI Calculations (CE evaluated on Call candles, PE evaluated on Put candles)
+f_dmi(float h_ser, float l_ser, float c_ser, int d_len) =>
+    float up_m   = h_ser - h_ser[1]
+    float dn_m   = l_ser[1] - l_ser
+    float plusDM  = (up_m > dn_m and up_m > 0) ? up_m : 0.0
+    float minusDM = (dn_m > up_m and dn_m > 0) ? dn_m : 0.0
+    float tr_val  = math.max(h_ser - l_ser, math.max(math.abs(h_ser - c_ser[1]), math.abs(l_ser - c_ser[1])))
+    float tr_smooth   = ta.rma(tr_val, d_len)
+    float plus_smooth  = ta.rma(plusDM, d_len)
+    float minus_smooth = ta.rma(minusDM, d_len)
+    float p_di = tr_smooth != 0 ? 100.0 * plus_smooth / tr_smooth : 0.0
+    float m_di = tr_smooth != 0 ? 100.0 * minus_smooth / tr_smooth : 0.0
+    [p_di, m_di]
+
+[ce_plusDI, ce_minusDI] = f_dmi(chart_ce_high, chart_ce_low, chart_ce_close, di_len)
+[pe_plusDI, pe_minusDI] = f_dmi(chart_pe_high, chart_pe_low, chart_pe_close, di_len)
+
+float plusDI  = isCall ? ce_plusDI : pe_plusDI
+float minusDI = isCall ? ce_minusDI : pe_minusDI
+
+bool ce_di_blast_cond = not use_di_filter or (ce_plusDI > di_thresh_val)
+bool pe_di_blast_cond = not use_di_filter or (pe_minusDI > di_thresh_val)
+
+// MACD Calculations (CE evaluated on Call candles, PE evaluated on Put candles)
+[ce_macdLine, ce_signalLine, ce_histLine] = ta.macd(chart_ce_close, macd_fast_len, macd_slow_len, macd_signal_len)
+[pe_macdLine, pe_signalLine, pe_histLine] = ta.macd(chart_pe_close, macd_fast_len, macd_slow_len, macd_signal_len)
+
+bool ce_macd_pass = not use_macd_filter or (use_macd_zero ? ce_macdLine > 0 : ce_macdLine > ce_signalLine)
+bool pe_macd_pass = not use_macd_filter or (use_macd_zero ? pe_macdLine < 0 : pe_macdLine < pe_signalLine)
 
 // VWAP Calculations (Chart Option & Opposite Option)
 float chart_vwap = ta.vwap(hlc3)
