@@ -385,12 +385,15 @@ bool pe_chg_pass = (peAvgChg > 0) or both_below_day_open
 bool ce_iv_pass  = not strict_iv_filter or (ce_iv_rt > 0)
 bool pe_iv_pass  = not strict_iv_filter or (pe_iv_rt > 0)
 
-// --- 3-Candle Cumulative Delta Volume Calculation ---
-float bar_delta    = (close >= open) ? volume : -volume
-float delta_3bar   = math.sum(bar_delta, 3)
+// --- 3-Candle Cumulative CE Delta Volume Calculation ---
+// Heavy buying in CE (ce_delta_3bar > 0) -> CE Buy Confluence
+// Heavy selling in CE (ce_delta_3bar < 0) -> PE Sell Confluence
+float chart_ce_vol  = isCall ? volume : opp_v
+float ce_bar_delta  = (chart_ce_close >= chart_ce_open) ? chart_ce_vol : -chart_ce_vol
+float ce_delta_3bar = math.sum(ce_bar_delta, 3)
 
-bool ce_delta_pass = not use_delta_vol_filter or (delta_3bar > 0)
-bool pe_delta_pass = not use_delta_vol_filter or (delta_3bar < 0)
+bool ce_delta_pass = not use_delta_vol_filter or (ce_delta_3bar > 0)
+bool pe_delta_pass = not use_delta_vol_filter or (ce_delta_3bar < 0)
 
 // Full Trigger 1 Confluence Evaluation:
 bool ce_trig1_conds = ce_avg_pass and ce_chg_pass and ce_iv_pass and ce_top_pass and ce_delta_pass
@@ -506,8 +509,8 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 0, 2, "Basket Average > Day Open", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 2, ce_avg_pass ? "CE OK" : (pe_avg_pass ? "PE OK" : "FAIL"), bgcolor=(ce_avg_pass or pe_avg_pass) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 3, "3-Candle Delta Vol Winner", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 3, (delta_3bar > 0) ? ("BUY WINNER (+" + str.tostring(delta_3bar, "#") + ")") : ("SELL WINNER (" + str.tostring(delta_3bar, "#") + ")"), bgcolor=(delta_3bar > 0) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 3, "CE 3-Candle Delta Winner", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 3, (ce_delta_3bar > 0) ? ("CE BUY WINNER (+" + str.tostring(ce_delta_3bar, "#") + ")") : ("PE WINNER / CE SELL (" + str.tostring(ce_delta_3bar, "#") + ")"), bgcolor=(ce_delta_3bar > 0) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
     table.cell(statusTable, 0, 4, "Basket Change > 0 (Optional)", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 4, ce_chg_pass ? "CE CHG OK" : (pe_chg_pass ? "PE CHG OK" : "FAIL"), bgcolor=(ce_chg_pass or pe_chg_pass) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)

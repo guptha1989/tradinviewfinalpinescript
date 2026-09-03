@@ -335,7 +335,7 @@ f_get_strike_prev_day() =>
 
 // Fetch Opposite Option Ticker & Candle Data for Overlay
 string opp_ticker = f_build_option_symbol(chartStrikePrice, not isCall)
-[opp_o, opp_h, opp_l, opp_c] = request.security(syminfo.prefix + ":" + opp_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+[opp_o, opp_h, opp_l, opp_c, opp_v] = request.security(syminfo.prefix + ":" + opp_ticker, timeframe.period, [open, high, low, close, volume], ignore_invalid_symbol=true)
 
 // Plot Opposite Option Candles Overlay (1 plotcandle call = 4 plots)
 show_opp_candles = input.bool(true, "Show Opposite Option Candles Overlay", group="Visual Signals")
@@ -571,12 +571,15 @@ bool pe_top_pass = not pe_top_required or (peAvgCur > ceAvgCur)
 bool ce_iv_pass  = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0)
 bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_iv_rt > ce_iv_rt) or (pe_iv_rt > 0)
 
-// --- 3-Candle Cumulative Delta Volume Calculation ---
-float bar_delta    = (close >= open) ? volume : -volume
-float delta_3bar   = math.sum(bar_delta, 3)
+// --- 3-Candle Cumulative CE Delta Volume Calculation ---
+// Heavy buying in CE (ce_delta_3bar > 0) -> CE Buy Confluence
+// Heavy selling in CE (ce_delta_3bar < 0) -> PE Sell Confluence
+float chart_ce_vol  = isCall ? volume : opp_v
+float ce_bar_delta  = (chart_ce_close >= chart_ce_open) ? chart_ce_vol : -chart_ce_vol
+float ce_delta_3bar = math.sum(ce_bar_delta, 3)
 
-bool ce_delta_pass = not use_delta_vol_filter or (delta_3bar > 0)
-bool pe_delta_pass = not use_delta_vol_filter or (delta_3bar < 0)
+bool ce_delta_pass = not use_delta_vol_filter or (ce_delta_3bar > 0)
+bool pe_delta_pass = not use_delta_vol_filter or (ce_delta_3bar < 0)
 
 // Directional Filters with Strict Confluence
 bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass and ce_delta_pass
@@ -755,8 +758,8 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 0, 2, "Basket Top Position Rule", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 2, (ceAvgCur > peAvgCur) ? "CE ON TOP (CE OK)" : "PE ON TOP (PE OK)", bgcolor=(ceAvgCur > peAvgCur) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 3, "3-Candle Delta Vol Winner", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 3, (delta_3bar > 0) ? ("BUY WINNER (+" + str.tostring(delta_3bar, "#") + ")") : ("SELL WINNER (" + str.tostring(delta_3bar, "#") + ")"), bgcolor=(delta_3bar > 0) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 3, "CE 3-Candle Delta Winner", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 3, (ce_delta_3bar > 0) ? ("CE BUY WINNER (+" + str.tostring(ce_delta_3bar, "#") + ")") : ("PE WINNER / CE SELL (" + str.tostring(ce_delta_3bar, "#") + ")"), bgcolor=(ce_delta_3bar > 0) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
     table.cell(statusTable, 0, 4, "RSI Filter (" + (use_rsi_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 4, not use_rsi_filter ? "OFF (" + str.tostring(rsi_val, "#.1") + ")" : (ce_rsi_blast_cond ? "CE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : (pe_rsi_blast_cond ? "PE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : "NEUTRAL (" + str.tostring(rsi_val, "#.1") + ")")), bgcolor=not use_rsi_filter ? #424242 : (ce_rsi_blast_cond ? #00FF66 : (pe_rsi_blast_cond ? #FF0055 : #212121)), text_color=ce_rsi_blast_cond and use_rsi_filter ? color.black : color.white, text_size=size.small)
