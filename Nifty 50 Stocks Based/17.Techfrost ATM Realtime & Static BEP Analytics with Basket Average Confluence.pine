@@ -35,8 +35,8 @@ spotTicker              = input.symbol("NSE:NIFTY", "Spot Index Ticker", group="
   tooltip="Spot index ticker used to calculate Realtime Intrinsic Value (e.g. NSE:NIFTY, NSE:BANKNIFTY).")
 
 // --- Basket Average Module Inputs ---
-numStrikesInput         = input.int(5, "Basket Average Strike Count (Per Side)", minval=1, maxval=7, group="Basket Average Settings",
-  tooltip="Number of ITM/OTM strike pairs included in basket average calculations (1 = ATM pair only, 5 = ATM +/- 4 strikes).")
+numStrikesInput         = input.int(5, "Basket Average Strike Count (Per Side)", minval=1, maxval=6, group="Basket Average Settings",
+  tooltip="Number of ITM/OTM strike pairs included in basket average calculations (1 = ATM pair only, 6 = ATM +/- 5 strikes).")
 static_bep_basis        = input.string("Day Open Price", "Static BEP Calculation Basis", options=["Day Open Price", "Previous Day Close", "First 5 Min Close", "Previous Day Settlement"], group="Basket Average Settings",
   tooltip="Select baseline reference price used to compute Static BEP lines (Matches Indicator 4 & 5A).")
 
