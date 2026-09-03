@@ -727,7 +727,9 @@ bool fresh_iv_buy_signal  = overall_buy_alert and ce_fresh_iv
 bool fresh_iv_sell_signal = overall_sell_alert and pe_fresh_iv
 
 // --- Dynamic Label & Shape Drawing using label.new (0 plot slots consumed!) ---
-show_signal_shapes = input.bool(true, "Show CE / PE Signal Markers", group="Visual Signals")
+show_signal_shapes  = input.bool(true, "Show CE / PE Signal Markers", group="Visual Signals")
+col_ce_iv_diamond   = input.color(#2962FF, "CE Intrinsic Value Diamond Color", group="Visual Signals")
+col_pe_iv_diamond   = input.color(#FF6D00, "PE Intrinsic Value Diamond Color", group="Visual Signals")
 
 if show_signal_shapes
     if overall_buy_alert
@@ -743,9 +745,9 @@ if show_signal_shapes
     
     float iv_offset_dist = nz(ta.atr(14) * 0.35, 2.0)
     if ce_fresh_iv and not overall_buy_alert
-        label.new(bar_index, low - iv_offset_dist, text="", style=label.style_diamond, color=#2962FF, size=size.tiny)
+        label.new(bar_index, low - iv_offset_dist, text="", style=label.style_diamond, color=col_ce_iv_diamond, size=size.tiny)
     if pe_fresh_iv and not overall_sell_alert
-        label.new(bar_index, high + iv_offset_dist, text="", style=label.style_diamond, color=#FF6D00, size=size.tiny)
+        label.new(bar_index, high + iv_offset_dist, text="", style=label.style_diamond, color=col_pe_iv_diamond, size=size.tiny)
 
 // ==========================================
 // LIVE ALERT CONDITIONS STATUS TABLE
