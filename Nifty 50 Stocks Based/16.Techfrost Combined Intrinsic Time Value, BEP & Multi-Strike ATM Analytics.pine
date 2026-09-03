@@ -103,6 +103,8 @@ width_atm     = input.int(2, "ATM BEP Lines Width", minval=1, maxval=4, group="B
 width_others  = input.int(1, "ITM/OTM BEP Lines Width", minval=1, maxval=4, group="BEP Line Formatting")
 
 // --- Alert Engine Controls ---
+enable_blast_alerts         = input.bool(true, "Enable BLAST Alert Badges (CE BLAST / PE BLAST)", group="Alert Engine Controls",
+  tooltip="When enabled, signals meeting Momentum Blast conditions display as CE BLAST / PE BLAST. When disabled, normal CE / PE alerts will still trigger.")
 use_basket_avg_filter       = input.bool(true, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
 use_basket_chg_filter       = input.bool(true, "Require Basket Average Change > 0", group="Alert Engine Controls",
@@ -685,9 +687,9 @@ else if raw_sell_alert and activeSwing != -1
     overall_sell_alert := true
     activeSwing        := -1
 
-// --- Momentum BLAST Signals (Evaluated ONLY during regular triggers) ---
-bool ce_blast_active = overall_buy_alert  and ce_rsi_blast_cond and ce_adx_blast_cond and ce_macd_pass
-bool pe_blast_active = overall_sell_alert and pe_rsi_blast_cond and pe_adx_blast_cond and pe_macd_pass
+// --- Momentum BLAST Signals (Evaluated ONLY during regular triggers when enabled) ---
+bool ce_blast_active = enable_blast_alerts and overall_buy_alert  and ce_rsi_blast_cond and ce_adx_blast_cond and ce_macd_pass
+bool pe_blast_active = enable_blast_alerts and overall_sell_alert and pe_rsi_blast_cond and pe_adx_blast_cond and pe_macd_pass
 
 // Special Fresh Intrinsic Value Signals
 bool fresh_iv_buy_signal  = overall_buy_alert and ce_fresh_iv
