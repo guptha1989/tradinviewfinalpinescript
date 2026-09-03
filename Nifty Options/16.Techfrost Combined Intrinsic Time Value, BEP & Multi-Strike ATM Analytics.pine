@@ -742,9 +742,9 @@ if show_signal_shapes
         label.new(bar_index, high, text=pe_lbl, style=label.style_label_down, color=pe_col, textcolor=pe_txt, size=pe_blast_active ? size.normal : size.small)
     
     if ce_fresh_iv and not overall_buy_alert
-        label.new(bar_index, low, text="CE IV★", style=label.style_diamond, color=#FFD700, textcolor=color.black, size=size.tiny)
+        label.new(bar_index, low, text="", style=label.style_diamond, color=#00E676, size=size.tiny)
     if pe_fresh_iv and not overall_sell_alert
-        label.new(bar_index, high, text="PE IV★", style=label.style_diamond, color=#FFD700, textcolor=color.black, size=size.tiny)
+        label.new(bar_index, high, text="", style=label.style_diamond, color=#FF1744, size=size.tiny)
 
 // ==========================================
 // LIVE ALERT CONDITIONS STATUS TABLE
