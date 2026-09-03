@@ -189,7 +189,7 @@ if ticker_len > 7
 // Helper function to dynamically compute current week's expiry date string (YYMMDD format)
 f_calc_auto_weekly_expiry(string r_tkr, int t_val) =>
     int exp_dow = 5 // Default Thursday (Nifty, BankNifty)
-    string u_tkr = str.toupper(r_tkr)
+    string u_tkr = str.upper(r_tkr)
     if str.contains(u_tkr, "BANK")
         exp_dow := 4 // Wednesday
     else if str.contains(u_tkr, "FIN")
