@@ -34,8 +34,8 @@ enum StepOverrideChoice
 // --- Instrument Settings ---
 underlyingInput    = input.enum(UnderlyingAsset.auto, "Underlying Asset", group="Instrument Settings")
 optionTypeInput    = input.enum(OptionType.auto, "Option Type", group="Instrument Settings")
-numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side", minval=1, maxval=4, group="Instrument Settings",
-  tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes (2 ITM + ATM + 2 OTM), 3 = 7 Strikes, 4 = 9 Strikes.")
+numStrikesInput    = input.int(4, "Number of ITM/OTM Strikes Each Side", minval=1, maxval=6, group="Instrument Settings",
+  tooltip="1 = 3 Strikes (1 ITM + ATM + 1 OTM), 2 = 5 Strikes, 3 = 7 Strikes, 4 = 9 Strikes, 5 = 11 Strikes, 6 = 13 Strikes.")
 spotTickerOverride = input.symbol("", "Spot Symbol Override (e.g. NSE:RELIANCE)", group="Instrument Settings")
 strikeOverride     = input.float(0.0, "Strike Price Override", minval=0.0, group="Instrument Settings")
 strikeStepInput    = input.enum(StepOverrideChoice.auto, "Strike Step Override", group="Instrument Settings",
@@ -46,7 +46,7 @@ showTableInput       = input.bool(true, "Show Summary & Strike Table", group="Di
   tooltip="Enable or disable the summary & strike analytics table.")
 tablePosInput        = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Display Controls")
 tableTextSizeInput   = input.string("Small", "Table Text Size / Resizing", options=["Auto", "Tiny", "Small", "Normal", "Large"], group="Display Controls",
-  tooltip="Adjust the table font and cell size (Auto, Tiny, Small, Normal, Large).")
+  tooltip="Adjust text size inside the summary table.")
 
 displayChartModeInput = input.string("Both Lines & Histograms", "Sub-Pane Display Mode", options=["Both Lines & Histograms", "Basket Average Lines Only", "Average Change Histograms / Lines Only"], group="Display Controls",
   tooltip="Select 'Average Change Histograms / Lines Only' to hide high-value price lines and allow histograms to auto-scale across full vertical height.")
@@ -70,13 +70,24 @@ biasBadgePosInput    = input.string("Bottom Left", "Bias Badge Position", option
   tooltip="Position of the Bullish / Bearish Bias badge in the sub-window indicator pane.")
 
 // --- Styling & Colors ---
-colorCEAvgOpen     = input.color(color.new(#00C853, 50), "CE Day Open Basket Avg Line Color", group="Styling & Colors")
-colorCEAvgCur      = input.color(#00E676, "CE Current Basket Avg Line Color", group="Styling & Colors")
+colorCEAvgCur        = input.color(#00E676, "CE Current Basket Avg Line Color", group="Styling & Colors")
+colorCEAvgOpen       = input.color(color.new(#00C853, 50), "CE Day Open Basket Avg Line Color", group="Styling & Colors")
+ceLineWidth          = input.int(2, "CE Basket Line Width", minval=1, maxval=5, group="Styling & Colors")
 
-colorPEAvgOpen     = input.color(color.new(#D50000, 50), "PE Day Open Basket Avg Line Color", group="Styling & Colors")
-colorPEAvgCur      = input.color(#FF1744, "PE Current Basket Avg Line Color", group="Styling & Colors")
+colorPEAvgCur        = input.color(#FF1744, "PE Current Basket Avg Line Color", group="Styling & Colors")
+colorPEAvgOpen       = input.color(color.new(#D50000, 50), "PE Day Open Basket Avg Line Color", group="Styling & Colors")
+peLineWidth          = input.int(2, "PE Basket Line Width", minval=1, maxval=5, group="Styling & Colors")
 
-colorZeroLine      = input.color(color.new(color.gray, 30), "Zero Baseline Color", group="Styling & Colors")
+colorCEAvgChgPos     = input.color(#00E676, "CE Avg Change Positive Color (Bullish)", group="Styling & Colors")
+colorCEAvgChgNeg     = input.color(#FF1744, "CE Avg Change Negative Color (Bearish)", group="Styling & Colors")
+
+colorPEAvgChgPos     = input.color(#00B0FF, "PE Avg Change Positive Color (Bullish)", group="Styling & Colors")
+colorPEAvgChgNeg     = input.color(#FF9100, "PE Avg Change Negative Color (Bearish)", group="Styling & Colors")
+
+avgChgTransparency   = input.int(20, "Avg Change Bar Transparency (0-100%)", minval=0, maxval=100, group="Styling & Colors",
+  tooltip="Set fill transparency percentage for bottom Average Change histograms / columns (0 = Solid, 100 = Transparent).")
+
+colorZeroLine        = input.color(color.new(color.gray, 30), "Zero Baseline Color", group="Styling & Colors")
 
 colorCurATMHighlight = input.color(#FFEE58, "Current ATM Cell Highlight (Yellow)", group="Styling & Colors")
 colorDayATMHighlight = input.color(#00E5FF, "Day Open ATM Cell Highlight (Cyan)", group="Styling & Colors")
@@ -251,25 +262,35 @@ f_build_option_symbol(float target_strike, bool target_is_ce) =>
 f_build_ce_ticker(float target_strike) => f_build_option_symbol(target_strike, true)
 f_build_pe_ticker(float target_strike) => f_build_option_symbol(target_strike, false)
 
-// 9 Strikes centered strictly around Day Open ATM (baseStrike is always middle row)
+// 13 Strikes centered strictly around Day Open ATM (baseStrike is always middle row)
 float k_0  = baseStrike
 float k_p1 = baseStrike + 1.0 * stepVal
 float k_p2 = baseStrike + 2.0 * stepVal
 float k_p3 = baseStrike + 3.0 * stepVal
 float k_p4 = baseStrike + 4.0 * stepVal
+float k_p5 = baseStrike + 5.0 * stepVal
+float k_p6 = baseStrike + 6.0 * stepVal
 
 float k_m1 = baseStrike - 1.0 * stepVal
 float k_m2 = baseStrike - 2.0 * stepVal
 float k_m3 = baseStrike - 3.0 * stepVal
 float k_m4 = baseStrike - 4.0 * stepVal
+float k_m5 = baseStrike - 5.0 * stepVal
+float k_m6 = baseStrike - 6.0 * stepVal
 
 // ==========================================
-// DATA FETCHING FOR STRIKES (STATIC 18 CALLS TOTAL)
+// DATA FETCHING FOR STRIKES
 // ==========================================
 
 f_get_strike_open_and_close() =>
     float d_op = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
     [d_op, close]
+
+[ce_o_p6, ce_c_p6] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p6), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p6, pe_c_p6] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p6), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_p5, ce_c_p5] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p5), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p5, pe_c_p5] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p5), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 [ce_o_p4, ce_c_p4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_p4, pe_c_p4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
@@ -298,10 +319,18 @@ f_get_strike_open_and_close() =>
 [ce_o_m4, ce_c_m4] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 [pe_o_m4, pe_c_m4] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m4), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
+[ce_o_m5, ce_c_m5] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m5), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m5, pe_c_m5] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m5), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
+[ce_o_m6, ce_c_m6] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m6), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m6, pe_c_m6] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m6), timeframe.period, f_get_strike_open_and_close(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+
 // ==========================================
 // DAY OPEN ATM CALCULATION (MIN |CE OPEN - PE OPEN|)
 // ==========================================
 
+float diff_open_p6 = math.abs(nz(ce_o_p6) - nz(pe_o_p6))
+float diff_open_p5 = math.abs(nz(ce_o_p5) - nz(pe_o_p5))
 float diff_open_p4 = math.abs(nz(ce_o_p4) - nz(pe_o_p4))
 float diff_open_p3 = math.abs(nz(ce_o_p3) - nz(pe_o_p3))
 float diff_open_p2 = math.abs(nz(ce_o_p2) - nz(pe_o_p2))
@@ -311,11 +340,17 @@ float diff_open_m1 = math.abs(nz(ce_o_m1) - nz(pe_o_m1))
 float diff_open_m2 = math.abs(nz(ce_o_m2) - nz(pe_o_m2))
 float diff_open_m3 = math.abs(nz(ce_o_m3) - nz(pe_o_m3))
 float diff_open_m4 = math.abs(nz(ce_o_m4) - nz(pe_o_m4))
+float diff_open_m5 = math.abs(nz(ce_o_m5) - nz(pe_o_m5))
+float diff_open_m6 = math.abs(nz(ce_o_m6) - nz(pe_o_m6))
 
-float minDiffOpen = math.min(diff_open_p4, math.min(diff_open_p3, math.min(diff_open_p2, math.min(diff_open_p1, math.min(diff_open_0, math.min(diff_open_m1, math.min(diff_open_m2, math.min(diff_open_m3, diff_open_m4))))))))
+float minDiffOpen = math.min(diff_open_p6, math.min(diff_open_p5, math.min(diff_open_p4, math.min(diff_open_p3, math.min(diff_open_p2, math.min(diff_open_p1, math.min(diff_open_0, math.min(diff_open_m1, math.min(diff_open_m2, math.min(diff_open_m3, math.min(diff_open_m4, math.min(diff_open_m5, diff_open_m6))))))))))))
 
 float dayOpenATMStrike = k_0
-if minDiffOpen == diff_open_p4
+if minDiffOpen == diff_open_p6
+    dayOpenATMStrike := k_p6
+else if minDiffOpen == diff_open_p5
+    dayOpenATMStrike := k_p5
+else if minDiffOpen == diff_open_p4
     dayOpenATMStrike := k_p4
 else if minDiffOpen == diff_open_p3
     dayOpenATMStrike := k_p3
@@ -333,11 +368,17 @@ else if minDiffOpen == diff_open_m3
     dayOpenATMStrike := k_m3
 else if minDiffOpen == diff_open_m4
     dayOpenATMStrike := k_m4
+else if minDiffOpen == diff_open_m5
+    dayOpenATMStrike := k_m5
+else if minDiffOpen == diff_open_m6
+    dayOpenATMStrike := k_m6
 
 // ==========================================
 // CURRENT REALTIME ATM CALCULATION (MIN |CE LTP - PE LTP|)
 // ==========================================
 
+float diff_cur_p6 = math.abs(nz(ce_c_p6) - nz(pe_c_p6))
+float diff_cur_p5 = math.abs(nz(ce_c_p5) - nz(pe_c_p5))
 float diff_cur_p4 = math.abs(nz(ce_c_p4) - nz(pe_c_p4))
 float diff_cur_p3 = math.abs(nz(ce_c_p3) - nz(pe_c_p3))
 float diff_cur_p2 = math.abs(nz(ce_c_p2) - nz(pe_c_p2))
@@ -347,11 +388,17 @@ float diff_cur_m1 = math.abs(nz(ce_c_m1) - nz(pe_c_m1))
 float diff_cur_m2 = math.abs(nz(ce_c_m2) - nz(pe_c_m2))
 float diff_cur_m3 = math.abs(nz(ce_c_m3) - nz(pe_c_m3))
 float diff_cur_m4 = math.abs(nz(ce_c_m4) - nz(pe_c_m4))
+float diff_cur_m5 = math.abs(nz(ce_c_m5) - nz(pe_c_m5))
+float diff_cur_m6 = math.abs(nz(ce_c_m6) - nz(pe_c_m6))
 
-float minDiffCur = math.min(diff_cur_p4, math.min(diff_cur_p3, math.min(diff_cur_p2, math.min(diff_cur_p1, math.min(diff_cur_0, math.min(diff_cur_m1, math.min(diff_cur_m2, math.min(diff_cur_m3, diff_cur_m4))))))))
+float minDiffCur = math.min(diff_cur_p6, math.min(diff_cur_p5, math.min(diff_cur_p4, math.min(diff_cur_p3, math.min(diff_cur_p2, math.min(diff_cur_p1, math.min(diff_cur_0, math.min(diff_cur_m1, math.min(diff_cur_m2, math.min(diff_cur_m3, math.min(diff_cur_m4, math.min(diff_cur_m5, diff_cur_m6))))))))))))
 
 float curATMStrike = k_0
-if minDiffCur == diff_cur_p4
+if minDiffCur == diff_cur_p6
+    curATMStrike := k_p6
+else if minDiffCur == diff_cur_p5
+    curATMStrike := k_p5
+else if minDiffCur == diff_cur_p4
     curATMStrike := k_p4
 else if minDiffCur == diff_cur_p3
     curATMStrike := k_p3
@@ -369,6 +416,10 @@ else if minDiffCur == diff_cur_m3
     curATMStrike := k_m3
 else if minDiffCur == diff_cur_m4
     curATMStrike := k_m4
+else if minDiffCur == diff_cur_m5
+    curATMStrike := k_m5
+else if minDiffCur == diff_cur_m6
+    curATMStrike := k_m6
 
 // ==========================================
 // BASKET AVERAGE CALCULATIONS (BASED ON numStrikesInput)
@@ -403,6 +454,18 @@ if numStrikesInput >= 4
     sum_pe_open += nz(pe_o_p4) + nz(pe_o_m4)
     sum_ce_cur  += nz(ce_c_p4) + nz(ce_c_m4)
     sum_pe_cur  += nz(pe_c_p4) + nz(pe_c_m4)
+
+if numStrikesInput >= 5
+    sum_ce_open += nz(ce_o_p5) + nz(ce_o_m5)
+    sum_pe_open += nz(pe_o_p5) + nz(pe_o_m5)
+    sum_ce_cur  += nz(ce_c_p5) + nz(ce_c_m5)
+    sum_pe_cur  += nz(pe_c_p5) + nz(pe_c_m5)
+
+if numStrikesInput >= 6
+    sum_ce_open += nz(ce_o_p6) + nz(ce_o_m6)
+    sum_pe_open += nz(pe_o_p6) + nz(pe_o_m6)
+    sum_ce_cur  += nz(ce_c_p6) + nz(ce_c_m6)
+    sum_pe_cur  += nz(pe_c_p6) + nz(pe_c_m6)
 
 float ceAvgOpen = sum_ce_open / float(total_count)
 float peAvgOpen = sum_pe_open / float(total_count)
@@ -523,22 +586,25 @@ bool renderLines = (displayChartModeInput == "Both Lines & Histograms" or displa
 bool renderHist  = (displayChartModeInput == "Both Lines & Histograms" or displayChartModeInput == "Average Change Histograms / Lines Only") and showHistogramsInput
 
 plot(renderLines ? ceAvgOpen : na, title="CE Basket Day Open Avg", color=colorCEAvgOpen, linewidth=1, style=plot.style_stepline)
-plot(renderLines ? ceAvgCur  : na, title="CE Basket Current Avg",  color=colorCEAvgCur,  linewidth=2)
+plot(renderLines ? ceAvgCur  : na, title="CE Basket Current Avg",  color=colorCEAvgCur,  linewidth=ceLineWidth)
 
 plot(renderLines ? peAvgOpen : na, title="PE Basket Day Open Avg", color=colorPEAvgOpen, linewidth=1, style=plot.style_stepline)
-plot(renderLines ? peAvgCur  : na, title="PE Basket Current Avg",  color=colorPEAvgCur,  linewidth=2)
+plot(renderLines ? peAvgCur  : na, title="PE Basket Current Avg",  color=colorPEAvgCur,  linewidth=peLineWidth)
 
-// Average Change Series Plot (Lines, Histograms, or Solid Columns with exact Image 2 styling)
-color col_ceAvgChg = ceAvgChg >= 0 ? #00E676 : #FF1744
-color col_peAvgChg = peAvgChg >= 0 ? #00B0FF : #FF9100
+// Average Change Series Plot (Lines, Histograms, or Solid Columns with user-configurable colors & transparency)
+color col_ceAvgChg = ceAvgChg >= 0 ? colorCEAvgChgPos : colorCEAvgChgNeg
+color col_peAvgChg = peAvgChg >= 0 ? colorPEAvgChgPos : colorPEAvgChgNeg
+
+color col_ce_fill = color.new(col_ceAvgChg, avgChgTransparency)
+color col_pe_fill = color.new(col_peAvgChg, avgChgTransparency)
 
 // Histogram Style (linewidth = 3/4 for bold thick bars, histbase = 0.0)
-plot(renderHist and changePlotStyleInput == "Histogram" ? ceAvgChg : na, title="CE Basket Avg Change (Histogram)", color=color.new(col_ceAvgChg, 20), linewidth=histLineWidthInput, style=plot.style_histogram, histbase=0.0)
-plot(renderHist and changePlotStyleInput == "Histogram" ? peAvgChg : na, title="PE Basket Avg Change (Histogram)", color=color.new(col_peAvgChg, 20), linewidth=histLineWidthInput, style=plot.style_histogram, histbase=0.0)
+plot(renderHist and changePlotStyleInput == "Histogram" ? ceAvgChg : na, title="CE Basket Avg Change (Histogram)", color=col_ce_fill, linewidth=histLineWidthInput, style=plot.style_histogram, histbase=0.0)
+plot(renderHist and changePlotStyleInput == "Histogram" ? peAvgChg : na, title="PE Basket Avg Change (Histogram)", color=col_pe_fill, linewidth=histLineWidthInput, style=plot.style_histogram, histbase=0.0)
 
 // Columns Style (full solid column bars, histbase = 0.0)
-plot(renderHist and changePlotStyleInput == "Columns" ? ceAvgChg : na, title="CE Basket Avg Change (Columns)", color=color.new(col_ceAvgChg, 20), style=plot.style_columns, histbase=0.0)
-plot(renderHist and changePlotStyleInput == "Columns" ? peAvgChg : na, title="PE Basket Avg Change (Columns)", color=color.new(col_peAvgChg, 20), style=plot.style_columns, histbase=0.0)
+plot(renderHist and changePlotStyleInput == "Columns" ? ceAvgChg : na, title="CE Basket Avg Change (Columns)", color=col_ce_fill, style=plot.style_columns, histbase=0.0)
+plot(renderHist and changePlotStyleInput == "Columns" ? peAvgChg : na, title="PE Basket Avg Change (Columns)", color=col_pe_fill, style=plot.style_columns, histbase=0.0)
 
 // Continuous Line Style
 plot(renderHist and changePlotStyleInput == "Line" ? ceAvgChg : na, title="CE Basket Avg Change from Open", color=col_ceAvgChg, linewidth=2, style=plot.style_line)
@@ -594,7 +660,7 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
-var table summaryTable = table.new(f_get_table_pos(tablePosInput), 8, 15, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTable = table.new(f_get_table_pos(tablePosInput), 8, 20, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 
 string underlyingName = switch actualUnderlying
     UnderlyingAsset.banknifty => "BANKNIFTY"
@@ -695,6 +761,14 @@ if barstate.islast
 
         // Rows 4+: Populate active selected strikes grid
         int rowIdx = 4
+        if numStrikesInput >= 6
+            f_fill_grid_row(summaryTable, rowIdx, k_p6, k_p6 == curATMStrike, k_p6 == dayOpenATMStrike, ce_o_p6, ce_c_p6, pe_o_p6, pe_c_p6, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 5
+            f_fill_grid_row(summaryTable, rowIdx, k_p5, k_p5 == curATMStrike, k_p5 == dayOpenATMStrike, ce_o_p5, ce_c_p5, pe_o_p5, pe_c_p5, curTextSize)
+            rowIdx += 1
+
         if numStrikesInput >= 4
             f_fill_grid_row(summaryTable, rowIdx, k_p4, k_p4 == curATMStrike, k_p4 == dayOpenATMStrike, ce_o_p4, ce_c_p4, pe_o_p4, pe_c_p4, curTextSize)
             rowIdx += 1
@@ -729,4 +803,12 @@ if barstate.islast
 
         if numStrikesInput >= 4
             f_fill_grid_row(summaryTable, rowIdx, k_m4, k_m4 == curATMStrike, k_m4 == dayOpenATMStrike, ce_o_m4, ce_c_m4, pe_o_m4, pe_c_m4, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 5
+            f_fill_grid_row(summaryTable, rowIdx, k_m5, k_m5 == curATMStrike, k_m5 == dayOpenATMStrike, ce_o_m5, ce_c_m5, pe_o_m5, pe_c_m5, curTextSize)
+            rowIdx += 1
+
+        if numStrikesInput >= 6
+            f_fill_grid_row(summaryTable, rowIdx, k_m6, k_m6 == curATMStrike, k_m6 == dayOpenATMStrike, ce_o_m6, ce_c_m6, pe_o_m6, pe_c_m6, curTextSize)
             rowIdx += 1
