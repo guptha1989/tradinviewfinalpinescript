@@ -45,6 +45,8 @@ bep_trigger_mode        = input.string("Both", "ATM BEP Trigger Mode", options=[
   tooltip="Choose whether Buy/Sell triggers fire on Realtime ATM BEP line, Static ATM BEP line, or Both.")
 strict_iv_filter        = input.bool(false, "Require Strict Intrinsic Value (> 0)", group="Alert Engine Controls",
   tooltip="Set to false to keep Intrinsic Value non-blocking for ATM crossover alerts.")
+use_delta_vol_filter    = input.bool(false, "Require 3-Candle Delta Volume Confluence", group="Alert Engine Controls",
+  tooltip="Requires 3-candle cumulative Delta Volume to be positive (> 0) for CE Buy alert and negative (< 0) for PE Sell alert.")
 invalidation_pts        = input.float(6.0, "Alert Invalidation Drawdown Threshold (Pts)", minval=0.5, group="Alert Engine Controls",
   tooltip="If price moves against an active signal by more than this point threshold, the current alert is invalidated and the engine re-arms immediately.")
 show_status_table       = input.bool(true, "Show Alert Conditions Status Table", group="Alert Engine Controls",
@@ -383,9 +385,16 @@ bool pe_chg_pass = (peAvgChg > 0) or both_below_day_open
 bool ce_iv_pass  = not strict_iv_filter or (ce_iv_rt > 0)
 bool pe_iv_pass  = not strict_iv_filter or (pe_iv_rt > 0)
 
+// --- 3-Candle Cumulative Delta Volume Calculation ---
+float bar_delta    = (close >= open) ? volume : -volume
+float delta_3bar   = math.sum(bar_delta, 3)
+
+bool ce_delta_pass = not use_delta_vol_filter or (delta_3bar > 0)
+bool pe_delta_pass = not use_delta_vol_filter or (delta_3bar < 0)
+
 // Full Trigger 1 Confluence Evaluation:
-bool ce_trig1_conds = ce_avg_pass and ce_chg_pass and ce_iv_pass and ce_top_pass
-bool pe_trig1_conds = pe_avg_pass and pe_chg_pass and pe_iv_pass and pe_top_pass
+bool ce_trig1_conds = ce_avg_pass and ce_chg_pass and ce_iv_pass and ce_top_pass and ce_delta_pass
+bool pe_trig1_conds = pe_avg_pass and pe_chg_pass and pe_iv_pass and pe_top_pass and pe_delta_pass
 
 //// --- Unconditional Crossover & Bounce Evaluators at Bar Level (Prevents CW10002 Warnings) ---
 f_crossover_up(float curr_c, float prev_c, float bep_val) =>
@@ -485,7 +494,7 @@ f_get_table_pos(string pos_str) =>
         "Bottom Left"  => position.bottom_left
         => position.bottom_right
 
-var table statusTable = table.new(f_get_table_pos(table_pos_input), 2, 6, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+var table statusTable = table.new(f_get_table_pos(table_pos_input), 2, 7, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 if barstate.islast and show_status_table
     table.cell(statusTable, 0, 0, "Alert Condition Rule", bgcolor=#1565C0, text_color=color.white, text_size=size.small)
@@ -497,14 +506,17 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 0, 2, "Basket Average > Day Open", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 2, ce_avg_pass ? "CE OK" : (pe_avg_pass ? "PE OK" : "FAIL"), bgcolor=(ce_avg_pass or pe_avg_pass) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 3, "Basket Change > 0 (Optional)", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 3, ce_chg_pass ? "CE CHG OK" : (pe_chg_pass ? "PE CHG OK" : "FAIL"), bgcolor=(ce_chg_pass or pe_chg_pass) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 3, "3-Candle Delta Vol Winner", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 3, (delta_3bar > 0) ? ("BUY WINNER (+" + str.tostring(delta_3bar, "#") + ")") : ("SELL WINNER (" + str.tostring(delta_3bar, "#") + ")"), bgcolor=(delta_3bar > 0) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 4, "Top Position Rule", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 4, (ceAvgCur > peAvgCur) ? "CE ON TOP" : "PE ON TOP", bgcolor=(ceAvgCur > peAvgCur) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 4, "Basket Change > 0 (Optional)", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 4, ce_chg_pass ? "CE CHG OK" : (pe_chg_pass ? "PE CHG OK" : "FAIL"), bgcolor=(ce_chg_pass or pe_chg_pass) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 5, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 5, overall_buy_alert ? "CE ALERT ACTIVE" : (overall_sell_alert ? "PE ALERT ACTIVE" : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 5, "Top Position Rule", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 5, (ceAvgCur > peAvgCur) ? "CE ON TOP" : "PE ON TOP", bgcolor=(ceAvgCur > peAvgCur) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 6, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 6, overall_buy_alert ? "CE ALERT ACTIVE" : (overall_sell_alert ? "PE ALERT ACTIVE" : "WAITING"), bgcolor=overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black), text_color=overall_buy_alert ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
 alertcondition(overall_buy_alert,  title="CE Signal Alert (Call Buy)", message="CE ALERT: Call signal triggered on ATM BEP line on {{ticker}}!")

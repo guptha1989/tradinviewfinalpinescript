@@ -111,6 +111,8 @@ use_basket_chg_filter       = input.bool(true, "Require Basket Average Change > 
   tooltip="Requires CE/PE Basket Average Change from Day Open to be positive (> 0).")
 strict_iv_filter            = input.bool(false, "Require Strict Intrinsic Value Filter Condition", group="Alert Engine Controls",
   tooltip="Set to false to keep Intrinsic Value non-strict for alerts. Fresh Intrinsic Value formations will be highlighted with special gold markers.")
+use_delta_vol_filter        = input.bool(false, "Require 3-Candle Delta Volume Confluence", group="Alert Engine Controls",
+  tooltip="Requires 3-candle cumulative Delta Volume to be positive (> 0) for CE Buy alert and negative (< 0) for PE Sell alert.")
 
 show_status_table           = input.bool(true, "Show Alert Conditions Status Table", group="Alert Engine Controls",
   tooltip="Displays a live status panel in the corner showing the exact pass/fail state of all alert conditions.")
@@ -569,9 +571,16 @@ bool pe_top_pass = not pe_top_required or (peAvgCur > ceAvgCur)
 bool ce_iv_pass  = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0)
 bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_iv_rt > ce_iv_rt) or (pe_iv_rt > 0)
 
+// --- 3-Candle Cumulative Delta Volume Calculation ---
+float bar_delta    = (close >= open) ? volume : -volume
+float delta_3bar   = math.sum(bar_delta, 3)
+
+bool ce_delta_pass = not use_delta_vol_filter or (delta_3bar > 0)
+bool pe_delta_pass = not use_delta_vol_filter or (delta_3bar < 0)
+
 // Directional Filters with Strict Confluence
-bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
-bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
+bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass and ce_delta_pass
+bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass and pe_delta_pass
 
 // --- Universal BEP Level Pair Trigger Evaluators ---
 // Downside Rejection: High touches/surpasses BEP line (h_val >= bep), Close finishes below (c_val < bep)
@@ -734,7 +743,7 @@ f_get_table_pos(string pos_str) =>
         "Bottom Left"  => position.bottom_left
         => position.bottom_right
 
-var table statusTable = table.new(f_get_table_pos(table_pos_input), 2, 9, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
+var table statusTable = table.new(f_get_table_pos(table_pos_input), 2, 10, bgcolor=color.black, border_width=1, border_color=color.gray, force_overlay=true)
 
 if barstate.islast and show_status_table
     table.cell(statusTable, 0, 0, "Alert Condition Rule", bgcolor=#1565C0, text_color=color.white, text_size=size.small)
@@ -746,23 +755,26 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 0, 2, "Basket Top Position Rule", bgcolor=#212121, text_color=color.white, text_size=size.small)
     table.cell(statusTable, 1, 2, (ceAvgCur > peAvgCur) ? "CE ON TOP (CE OK)" : "PE ON TOP (PE OK)", bgcolor=(ceAvgCur > peAvgCur) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 3, "RSI Filter (" + (use_rsi_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 3, not use_rsi_filter ? "OFF (" + str.tostring(rsi_val, "#.1") + ")" : (ce_rsi_blast_cond ? "CE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : (pe_rsi_blast_cond ? "PE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : "NEUTRAL (" + str.tostring(rsi_val, "#.1") + ")")), bgcolor=not use_rsi_filter ? #424242 : (ce_rsi_blast_cond ? #00FF66 : (pe_rsi_blast_cond ? #FF0055 : #212121)), text_color=ce_rsi_blast_cond and use_rsi_filter ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 3, "3-Candle Delta Vol Winner", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 3, (delta_3bar > 0) ? ("BUY WINNER (+" + str.tostring(delta_3bar, "#") + ")") : ("SELL WINNER (" + str.tostring(delta_3bar, "#") + ")"), bgcolor=(delta_3bar > 0) ? #1B5E20 : #880E4F, text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 4, "ADX Filter (" + (use_adx_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 4, not use_adx_filter ? "OFF (" + str.tostring(adx_val, "#.1") + ")" : (adx_level_pass and adx_up_slant ? "PASS (" + str.tostring(adx_val, "#.1") + ")" : "FAIL (" + str.tostring(adx_val, "#.1") + ")"), bgcolor=not use_adx_filter ? #424242 : (adx_level_pass and adx_up_slant ? #1B5E20 : #880E4F), text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 4, "RSI Filter (" + (use_rsi_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 4, not use_rsi_filter ? "OFF (" + str.tostring(rsi_val, "#.1") + ")" : (ce_rsi_blast_cond ? "CE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : (pe_rsi_blast_cond ? "PE BLAST (RSI " + str.tostring(rsi_val, "#.1") + ")" : "NEUTRAL (" + str.tostring(rsi_val, "#.1") + ")")), bgcolor=not use_rsi_filter ? #424242 : (ce_rsi_blast_cond ? #00FF66 : (pe_rsi_blast_cond ? #FF0055 : #212121)), text_color=ce_rsi_blast_cond and use_rsi_filter ? color.black : color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 5, "DI+ / DI- Cross Filter (" + (use_di_cross ? "ON" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 5, not use_di_cross ? "OFF" : (plusDI > minusDI ? "CE (DI+ > DI-)" : "PE (DI- > DI+)"), bgcolor=not use_di_cross ? #424242 : (plusDI > minusDI ? #1B5E20 : #880E4F), text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 5, "ADX Filter (" + (use_adx_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 5, not use_adx_filter ? "OFF (" + str.tostring(adx_val, "#.1") + ")" : (adx_level_pass and adx_up_slant ? "PASS (" + str.tostring(adx_val, "#.1") + ")" : "FAIL (" + str.tostring(adx_val, "#.1") + ")"), bgcolor=not use_adx_filter ? #424242 : (adx_level_pass and adx_up_slant ? #1B5E20 : #880E4F), text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 6, "MACD Filter (" + (use_macd_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 6, not use_macd_filter ? "OFF" : (ce_macd_pass ? "CE MACD OK" : (pe_macd_pass ? "PE MACD OK" : "NEUTRAL")), bgcolor=not use_macd_filter ? #424242 : (ce_macd_pass ? #1B5E20 : (pe_macd_pass ? #880E4F : #212121)), text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 0, 6, "DI+ / DI- Cross Filter (" + (use_di_cross ? "ON" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 6, not use_di_cross ? "OFF" : (plusDI > minusDI ? "CE (DI+ > DI-)" : "PE (DI- > DI+)"), bgcolor=not use_di_cross ? #424242 : (plusDI > minusDI ? #1B5E20 : #880E4F), text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 7, "Fresh Intrinsic Value State", bgcolor=#212121, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 7, ce_fresh_iv ? "CE FRESH IV ★" : (pe_fresh_iv ? "PE FRESH IV ★" : "NONE"), bgcolor=(ce_fresh_iv or pe_fresh_iv) ? #FFD700 : #212121, text_color=(ce_fresh_iv or pe_fresh_iv) ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 7, "MACD Filter (" + (use_macd_filter ? "ENABLED" : "OFF") + ")", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 7, not use_macd_filter ? "OFF" : (ce_macd_pass ? "CE MACD OK" : (pe_macd_pass ? "PE MACD OK" : "NEUTRAL")), bgcolor=not use_macd_filter ? #424242 : (ce_macd_pass ? #1B5E20 : (pe_macd_pass ? #880E4F : #212121)), text_color=color.white, text_size=size.small)
 
-    table.cell(statusTable, 0, 8, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 8, ce_blast_active ? "CE BLAST 🔥" : (pe_blast_active ? "PE BLAST 🔥" : (overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"))), bgcolor=ce_blast_active ? #00FF66 : (pe_blast_active ? #FF0055 : (overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black))), text_color=(ce_blast_active or overall_buy_alert) ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 0, 8, "Fresh Intrinsic Value State", bgcolor=#212121, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 8, ce_fresh_iv ? "CE FRESH IV ★" : (pe_fresh_iv ? "PE FRESH IV ★" : "NONE"), bgcolor=(ce_fresh_iv or pe_fresh_iv) ? #FFD700 : #212121, text_color=(ce_fresh_iv or pe_fresh_iv) ? color.black : color.white, text_size=size.small)
+
+    table.cell(statusTable, 0, 9, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 9, ce_blast_active ? "CE BLAST 🔥" : (pe_blast_active ? "PE BLAST 🔥" : (overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"))), bgcolor=ce_blast_active ? #00FF66 : (pe_blast_active ? #FF0055 : (overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black))), text_color=(ce_blast_active or overall_buy_alert) ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
 alertcondition(overall_buy_alert,  title="CE Signal Alert (Call Buy)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
