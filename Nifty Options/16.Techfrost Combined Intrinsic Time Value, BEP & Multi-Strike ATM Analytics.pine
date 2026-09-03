@@ -91,6 +91,11 @@ width_atm     = input.int(2, "ATM BEP Lines Width", minval=1, maxval=4, group="B
 width_others  = input.int(1, "ITM/OTM BEP Lines Width", minval=1, maxval=4, group="BEP Line Formatting")
 
 // --- Alert Engine Controls ---
+allow_normal_alerts         = input.bool(true, "Allow Normal Alerts (CE / PE)", group="Alert Engine Controls",
+  tooltip="Enable standard CE and PE alerts that do not meet full Blast conditions.")
+allow_blast_alerts          = input.bool(true, "Allow Blast Alerts (CE BLAST / PE BLAST)", group="Alert Engine Controls",
+  tooltip="Enable CE BLAST and PE BLAST alerts when selected Blast conditions are met.")
+
 use_rt_bep_alerts           = input.bool(true, "Enable Alerts on Realtime BEP Lines", group="Alert Engine Controls",
   tooltip="Enable or disable Buy/Sell alerts triggered on Realtime BEP lines.")
 use_stat_bep_alerts         = input.bool(true, "Enable Alerts on Static BEP Lines", group="Alert Engine Controls",
@@ -98,18 +103,22 @@ use_stat_bep_alerts         = input.bool(true, "Enable Alerts on Static BEP Line
 use_basket_avg_alerts       = input.bool(true, "Enable Alerts on Basket Average Lines", group="Alert Engine Controls",
   tooltip="Enable or disable Buy/Sell alerts triggered on Basket Average Line Crossovers.")
 
-enable_blast_alerts         = input.bool(true, "Enable CE / PE Blast Alerts & Markers", group="Alert Engine Controls",
-  tooltip="Enable or disable CE/PE Blast alerts and BLAST markers on chart when opponent basket average is below its day open average.")
-
-use_blast_filter            = input.bool(false, "Require Blast Condition for Buy/Sell Alerts", group="Alert Engine Controls",
-  tooltip="When enabled, requires PE current average < PE day open average for CE alerts, and CE current average < CE day open average for PE alerts.")
-
 use_basket_avg_filter       = input.bool(false, "Require Basket Average > Day Open Average", group="Alert Engine Controls",
   tooltip="Requires CE/PE Current Basket Average to be greater than Day Open Basket Average.")
 use_basket_chg_filter       = input.bool(false, "Require Basket Average Change > 0", group="Alert Engine Controls",
   tooltip="Requires CE/PE Basket Average Change from Day Open to be positive (> 0).")
 strict_iv_filter            = input.bool(false, "Require Strict Intrinsic Value Filter Condition", group="Alert Engine Controls",
   tooltip="Set to false to keep Intrinsic Value non-strict for alerts. Fresh Intrinsic Value formations will be highlighted with special gold markers.")
+
+// --- Blast Condition Sub-Filters ---
+blast_cond_opp_below_open   = input.bool(true, "Blast Cond 1: Opponent Basket < Day Open", group="Blast Condition Sub-Filters",
+  tooltip="Requires PE Basket Average < PE Day Open Average for CE Blast, and CE Basket Average < CE Day Open Average for PE Blast.")
+blast_cond_opp_chg_neg      = input.bool(true, "Blast Cond 2: Opponent Basket Change < 0", group="Blast Condition Sub-Filters",
+  tooltip="Requires PE Basket Change < 0 for CE Blast, and CE Basket Change < 0 for PE Blast.")
+blast_cond_own_above_open    = input.bool(true, "Blast Cond 3: Own Basket > Day Open", group="Blast Condition Sub-Filters",
+  tooltip="Requires CE Basket Average > CE Day Open Average for CE Blast, and PE Basket Average > PE Day Open Average for PE Blast.")
+blast_cond_own_on_top        = input.bool(true, "Blast Cond 4: Own Basket > Opponent Basket (On Top)", group="Blast Condition Sub-Filters",
+  tooltip="Requires CE Basket Average > PE Basket Average for CE Blast, and PE Basket Average > CE Basket Average for PE Blast.")
 
 show_status_table           = input.bool(true, "Show Alert Conditions Status Table", group="Alert Engine Controls",
   tooltip="Displays a live status panel in the corner showing the exact pass/fail state of all alert conditions.")
@@ -633,13 +642,24 @@ bool pe_top_pass = not both_above_day_open or (peAvgCur > ceAvgCur)
 bool ce_iv_pass  = not strict_iv_filter or (ce_iv_signed > pe_iv_signed) or (ce_iv_rt > pe_iv_rt) or (ce_iv_rt > 0)
 bool pe_iv_pass  = not strict_iv_filter or (pe_iv_signed > ce_iv_signed) or (pe_iv_rt > ce_iv_rt) or (pe_iv_rt > 0)
 
-// Blast Condition Pass Evaluator: Enforced ONLY when use_blast_filter is enabled
-bool ce_blast_pass = not use_blast_filter or (peAvgCur < peAvgOpen)
-bool pe_blast_pass = not use_blast_filter or (ceAvgCur < ceAvgOpen)
+//// --- Blast Sub-Condition Evaluators ---
+bool ce_b1 = not blast_cond_opp_below_open or (peAvgCur < peAvgOpen)
+bool ce_b2 = not blast_cond_opp_chg_neg    or (peAvgChg < 0)
+bool ce_b3 = not blast_cond_own_above_open or (ceAvgCur > ceAvgOpen)
+bool ce_b4 = not blast_cond_own_on_top     or (ceAvgCur > peAvgCur)
+
+bool ce_blast_cond_met = ce_b1 and ce_b2 and ce_b3 and ce_b4
+
+bool pe_b1 = not blast_cond_opp_below_open or (ceAvgCur < ceAvgOpen)
+bool pe_b2 = not blast_cond_opp_chg_neg    or (ceAvgChg < 0)
+bool pe_b3 = not blast_cond_own_above_open or (peAvgCur > peAvgOpen)
+bool pe_b4 = not blast_cond_own_on_top     or (peAvgCur > ceAvgCur)
+
+bool pe_blast_cond_met = pe_b1 and pe_b2 and pe_b3 and pe_b4
 
 // Directional Filters with Strict Confluence
-bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass and ce_blast_pass
-bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass and pe_blast_pass
+bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
+bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass
 
 // --- Universal BEP Level Pair Trigger Evaluators ---
 // Downside Rejection: High touches/surpasses BEP line (h_val >= bep), Close finishes below (c_val < bep)
@@ -745,9 +765,13 @@ bool pe_avg_trig = use_basket_avg_alerts and (peAvgCur > peAvgOpen) and (nz(peAv
 bool ce_any_bep_trig = (ce_trig_m3_rt == true) or (ce_trig_m3_stat == true) or (ce_trig_m2_rt == true) or (ce_trig_m2_stat == true) or (ce_trig_m1_rt == true) or (ce_trig_m1_stat == true) or (ce_trig_0_rt == true) or (ce_trig_0_stat == true) or (ce_trig_p1_rt == true) or (ce_trig_p1_stat == true) or (ce_trig_p2_rt == true) or (ce_trig_p2_stat == true) or (ce_trig_p3_rt == true) or (ce_trig_p3_stat == true) or (ce_avg_trig == true)
 bool pe_any_bep_trig = (pe_trig_m3_rt == true) or (pe_trig_m3_stat == true) or (pe_trig_m2_rt == true) or (pe_trig_m2_stat == true) or (pe_trig_m1_rt == true) or (pe_trig_m1_stat == true) or (pe_trig_0_rt == true) or (pe_trig_0_stat == true) or (pe_trig_p1_rt == true) or (pe_trig_p1_stat == true) or (pe_trig_p2_rt == true) or (pe_trig_p2_stat == true) or (pe_trig_p3_rt == true) or (pe_trig_p3_stat == true) or (pe_avg_trig == true)
 
+// Mode Pass Evaluation
+bool ce_pass_mode = (ce_blast_cond_met and allow_blast_alerts) or (not ce_blast_cond_met and allow_normal_alerts)
+bool pe_pass_mode = (pe_blast_cond_met and allow_blast_alerts) or (not pe_blast_cond_met and allow_normal_alerts)
+
 // --- Combined Raw Buy & Sell Triggers Across Active Modules ---
-bool raw_buy_alert  = ce_any_bep_trig and (ce_filters_met == true) and not (pe_any_bep_trig and (pe_filters_met == true))
-bool raw_sell_alert = pe_any_bep_trig and (pe_filters_met == true) and not (ce_any_bep_trig and (ce_filters_met == true))
+bool raw_buy_alert  = ce_any_bep_trig and (ce_filters_met == true) and ce_pass_mode and not (pe_any_bep_trig and (pe_filters_met == true) and pe_pass_mode)
+bool raw_sell_alert = pe_any_bep_trig and (pe_filters_met == true) and pe_pass_mode and not (ce_any_bep_trig and (ce_filters_met == true) and ce_pass_mode)
 
 // --- Strict Alternating Swing Lock State Machine ---
 var int activeSwing = 0 // 0 = Neutral, 1 = In BUY Swing, -1 = In SELL Swing
@@ -767,10 +791,8 @@ else if raw_sell_alert and activeSwing != -1
     activeSwing        := -1
 
 // --- Momentum BLAST Signals (Evaluated ONLY during regular triggers) ---
-// CE Blast: Regular CE alert AND PE current average is below PE day open average
-// PE Blast: Regular PE alert AND CE current average is below CE day open average
-bool ce_blast_active = enable_blast_alerts and overall_buy_alert  and (peAvgCur < peAvgOpen)
-bool pe_blast_active = enable_blast_alerts and overall_sell_alert and (ceAvgCur < ceAvgOpen)
+bool ce_blast_active = allow_blast_alerts and overall_buy_alert  and ce_blast_cond_met
+bool pe_blast_active = allow_blast_alerts and overall_sell_alert and pe_blast_cond_met
 
 // Special Fresh Intrinsic Value Signals
 bool fresh_iv_buy_signal  = overall_buy_alert and ce_fresh_iv
