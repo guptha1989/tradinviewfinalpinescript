@@ -716,12 +716,12 @@ bool fresh_iv_sell_signal = overall_sell_alert and pe_fresh_iv
 // --- Dynamic Label & Shape Drawing using label.new (0 plot slots consumed!) ---
 if show_signal_shapes
     if overall_buy_alert
-        string ce_lbl = ce_blast_active ? "CE BLAST 🔥" : (ce_fresh_iv ? "FRESH IV CE ★" : "CE")
+        string ce_lbl = ce_blast_active ? "🔥🔥" : (ce_fresh_iv ? "FRESH IV CE ★" : "CE")
         color  ce_col = ce_blast_active ? #00FF66 : (ce_fresh_iv ? #FFD700 : #00E676)
         color  ce_txt = (ce_blast_active or ce_fresh_iv) ? color.black : color.white
         label.new(bar_index, low, text=ce_lbl, style=label.style_label_up, color=ce_col, textcolor=ce_txt, size=ce_blast_active ? size.normal : size.small)
     else if overall_sell_alert
-        string pe_lbl = pe_blast_active ? "PE BLAST 🔥" : (pe_fresh_iv ? "FRESH IV PE ★" : "PE")
+        string pe_lbl = pe_blast_active ? "🔥🔥" : (pe_fresh_iv ? "FRESH IV PE ★" : "PE")
         color  pe_col = pe_blast_active ? #FF0055 : (pe_fresh_iv ? #FFD700 : #FF1744)
         color  pe_txt = color.white
         label.new(bar_index, high, text=pe_lbl, style=label.style_label_down, color=pe_col, textcolor=pe_txt, size=pe_blast_active ? size.normal : size.small)
@@ -771,7 +771,7 @@ if barstate.islast and show_status_table
     table.cell(statusTable, 1, 7, ce_fresh_iv ? "CE FRESH IV ★" : (pe_fresh_iv ? "PE FRESH IV ★" : "NONE"), bgcolor=(ce_fresh_iv or pe_fresh_iv) ? #FFD700 : #212121, text_color=(ce_fresh_iv or pe_fresh_iv) ? color.black : color.white, text_size=size.small)
 
     table.cell(statusTable, 0, 8, "Overall Alert Status", bgcolor=#37474F, text_color=color.white, text_size=size.small)
-    table.cell(statusTable, 1, 8, ce_blast_active ? "CE BLAST 🔥" : (pe_blast_active ? "PE BLAST 🔥" : (overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"))), bgcolor=ce_blast_active ? #00FF66 : (pe_blast_active ? #FF0055 : (overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black))), text_color=(ce_blast_active or overall_buy_alert) ? color.black : color.white, text_size=size.small)
+    table.cell(statusTable, 1, 8, ce_blast_active ? "CE BLAST 🔥🔥" : (pe_blast_active ? "PE BLAST 🔥🔥" : (overall_buy_alert ? (ce_fresh_iv ? "FRESH IV CE ★" : "CE ALERT ACTIVE") : (overall_sell_alert ? (pe_fresh_iv ? "FRESH IV PE ★" : "PE ALERT ACTIVE") : "WAITING"))), bgcolor=ce_blast_active ? #00FF66 : (pe_blast_active ? #FF0055 : (overall_buy_alert ? #00E676 : (overall_sell_alert ? #FF1744 : color.black))), text_color=(ce_blast_active or overall_buy_alert) ? color.black : color.white, text_size=size.small)
 
 // --- TradingView Alert Conditions ---
 alertcondition(overall_buy_alert,  title="CE Signal Alert (Call Buy)", message="CE ALERT: Call signal triggered on BEP line on {{ticker}}!")
