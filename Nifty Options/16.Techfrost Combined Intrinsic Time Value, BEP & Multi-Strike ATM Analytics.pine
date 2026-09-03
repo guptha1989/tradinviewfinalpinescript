@@ -690,15 +690,6 @@ bool ce_filters_met = ce_avg_pass and ce_chg_pass and ce_top_pass and ce_iv_pass
 bool pe_filters_met = pe_avg_pass and pe_chg_pass and pe_top_pass and pe_iv_pass and pe_opp_sr_pass
 
 //// --- Universal BEP Level Pair Trigger Evaluators ---
-// Downside Rejection: High touches/surpasses BEP line (h_val >= bep), Close finishes below (c_val < bep)
-f_bounce_dn(float h_val, float c_val, float bep_val) =>
-    not na(h_val) and not na(c_val) and not na(bep_val) and (h_val >= bep_val) and (c_val < bep_val)
-
-// Breakdown: Previous close was above or equal to previous bar's BEP line (prev_c >= bep[1]), Current close finishes below current BEP line (curr_c < bep)
-f_breakdown_dn(float curr_c, float prev_c, float bep_val) =>
-    float prev_bep = nz(bep_val[1], bep_val)
-    not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c < bep_val) and (prev_c >= prev_bep)
-
 // Upside Bounce: Low touches/dips to BEP line (l_val <= bep), Close finishes above (c_val > bep)
 f_bounce_up(float l_val, float c_val, float bep_val) =>
     not na(l_val) and not na(c_val) and not na(bep_val) and (l_val <= bep_val) and (c_val > bep_val)
@@ -709,27 +700,25 @@ f_crossover_up(float curr_c, float prev_c, float bep_val) =>
     not na(curr_c) and not na(prev_c) and not na(bep_val) and (curr_c > bep_val) and (prev_c <= prev_bep)
 
 //// Call Buy Alert on a specific BEP line level:
-// Evaluates Call crossover/bounce UP, OR opposite Put rejection/breakdown DOWN
-f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l, float p_c, float p_h, float p_l) =>
-    bool ce_cross   = isCall ? f_crossover_up(close, close[1], bep_val) : (not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val))
-    bool ce_bounce  = isCall ? f_bounce_up(low, close, bep_val) : (not na(c_l) and not na(c_c) and f_bounce_up(c_l, c_c, bep_val))
-    bool opp_pe_rej = isPut  ? (f_bounce_dn(high, close, bep_val) or f_breakdown_dn(close, close[1], bep_val)) : (not na(p_c) and (f_bounce_dn(p_h, p_c, bep_val) or f_breakdown_dn(p_c, p_c[1], bep_val)))
-    (ce_cross == true) or (ce_bounce == true) or (opp_pe_rej == true)
+// Evaluates Call crossover UP or Call support bounce UP on the BEP line
+f_eval_ce_pair_trig(float bep_val, float c_c, float c_h, float c_l) =>
+    bool ce_cross  = isCall ? f_crossover_up(close, close[1], bep_val) : (not na(c_c) and f_crossover_up(c_c, c_c[1], bep_val))
+    bool ce_bounce = isCall ? f_bounce_up(low, close, bep_val) : (not na(c_l) and not na(c_c) and f_bounce_up(c_l, c_c, bep_val))
+    (ce_cross == true) or (ce_bounce == true)
 
 // Put Sell Alert on a specific BEP line level:
-// Evaluates Put crossover/bounce UP, OR opposite Call rejection/breakdown DOWN
-f_eval_pe_pair_trig(float bep_val, float p_c, float p_h, float p_l, float c_c, float c_h, float c_l) =>
-    bool pe_cross   = isPut  ? f_crossover_up(close, close[1], bep_val) : (not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val))
-    bool pe_bounce  = isPut  ? f_bounce_up(low, close, bep_val) : (not na(p_l) and not na(p_c) and f_bounce_up(p_l, p_c, bep_val))
-    bool opp_ce_rej = isCall ? (f_bounce_dn(high, close, bep_val) or f_breakdown_dn(close, close[1], bep_val)) : (not na(c_c) and (f_bounce_dn(c_h, c_c, bep_val) or f_breakdown_dn(c_c, c_c[1], bep_val)))
-    (pe_cross == true) or (pe_bounce == true) or (opp_ce_rej == true)
+// Evaluates Put crossover UP or Put support bounce UP on the BEP line
+f_eval_pe_pair_trig(float bep_val, float p_c, float p_h, float p_l) =>
+    bool pe_cross  = isPut ? f_crossover_up(close, close[1], bep_val) : (not na(p_c) and f_crossover_up(p_c, p_c[1], bep_val))
+    bool pe_bounce = isPut ? f_bounce_up(low, close, bep_val) : (not na(p_l) and not na(p_c) and f_bounce_up(p_l, p_c, bep_val))
+    (pe_cross == true) or (pe_bounce == true)
 
 //// Evaluate Triggers Strictly on Realtime ATM and Static ATM BEP Lines
-bool ce_trig_0_rt    = use_atm_bep_trig   and f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
-bool ce_trig_0_stat  = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
+bool ce_trig_0_rt    = use_atm_bep_trig   and f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0)
+bool ce_trig_0_stat  = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0)
 
-bool pe_trig_0_rt    = use_atm_bep_trig   and f_eval_pe_pair_trig(bep_rt_0,   pe_c_0, pe_h_0, pe_l_0, ce_c_0, ce_h_0, ce_l_0)
-bool pe_trig_0_stat  = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_0, pe_c_0, pe_h_0, pe_l_0, ce_c_0, ce_h_0, ce_l_0)
+bool pe_trig_0_rt    = use_atm_bep_trig   and f_eval_pe_pair_trig(bep_rt_0,   pe_c_0, pe_h_0, pe_l_0)
+bool pe_trig_0_stat  = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_0, pe_c_0, pe_h_0, pe_l_0)
 
 // Combined Triggers (Strictly Realtime ATM & Static ATM Lines)
 bool ce_any_bep_trig = (ce_trig_0_rt == true) or (ce_trig_0_stat == true)
