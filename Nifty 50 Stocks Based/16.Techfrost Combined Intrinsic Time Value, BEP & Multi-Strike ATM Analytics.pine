@@ -741,10 +741,11 @@ if show_signal_shapes
         color  pe_txt = color.white
         label.new(bar_index, high, text=pe_lbl, style=label.style_label_down, color=pe_col, textcolor=pe_txt, size=pe_blast_active ? size.normal : size.small)
     
+    float iv_offset_dist = nz(ta.atr(14) * 0.35, 2.0)
     if ce_fresh_iv and not overall_buy_alert
-        label.new(bar_index, low, text="", style=label.style_diamond, color=#00E676, size=size.tiny)
+        label.new(bar_index, low - iv_offset_dist, text="", style=label.style_diamond, color=#2962FF, size=size.tiny)
     if pe_fresh_iv and not overall_sell_alert
-        label.new(bar_index, high, text="", style=label.style_diamond, color=#FF1744, size=size.tiny)
+        label.new(bar_index, high + iv_offset_dist, text="", style=label.style_diamond, color=#FF6D00, size=size.tiny)
 
 // ==========================================
 // LIVE ALERT CONDITIONS STATUS TABLE
