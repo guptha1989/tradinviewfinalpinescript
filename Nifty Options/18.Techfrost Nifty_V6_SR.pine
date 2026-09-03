@@ -1,5 +1,5 @@
 //@version=6
-indicator("Techfrost Nifty_V6_SR", overlay=true, max_labels_count=500, max_boxes_count=500, max_lines_count=500)
+indicator("18.Techfrost Nifty_V6_SR", shorttitle="18.Techfrost Nifty_V6_SR", overlay=true, max_labels_count=500, max_boxes_count=500, max_lines_count=500)
 
 // =========================================================================
 // INPUTS & USER SETTINGS
