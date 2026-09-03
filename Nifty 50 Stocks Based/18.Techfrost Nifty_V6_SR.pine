@@ -281,8 +281,8 @@ for i = 0 to 10
     
     // Real-time tick-by-tick query on chart timeframe (timeframe.period)
     // Returns [Day Open, Previous Day Close, Real-time LTP] on every tick
-    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, f_get_contract_tuple())
-    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, f_get_contract_tuple())
+    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
+    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
     
     array.set(ce_opens, i, ce_o)
     array.set(ce_prevs, i, ce_p)
@@ -304,12 +304,12 @@ string cvd_pe5 = exchange + ":" + final_root + final_expiry + "P" + str.tostring
 string cvd_ce6 = exchange + ":" + final_root + final_expiry + "C" + str.tostring(final_strike + 1 * strike_step)
 string cvd_pe6 = exchange + ":" + final_root + final_expiry + "P" + str.tostring(final_strike + 1 * strike_step)
 
-[cvd4_ce_h, cvd4_ce_l, cvd4_ce_v, cvd4_ce_vw] = request.security(cvd_ce4, tf_to_use, [high, low, volume, ta.vwap])
-[cvd4_pe_h, cvd4_pe_l, cvd4_pe_v, cvd4_pe_vw] = request.security(cvd_pe4, tf_to_use, [high, low, volume, ta.vwap])
-[cvd5_ce_h, cvd5_ce_l, cvd5_ce_v, cvd5_ce_vw] = request.security(cvd_ce5, tf_to_use, [high, low, volume, ta.vwap])
-[cvd5_pe_h, cvd5_pe_l, cvd5_pe_v, cvd5_pe_vw] = request.security(cvd_pe5, tf_to_use, [high, low, volume, ta.vwap])
-[cvd6_ce_h, cvd6_ce_l, cvd6_ce_v, cvd6_ce_vw] = request.security(cvd_ce6, tf_to_use, [high, low, volume, ta.vwap])
-[cvd6_pe_h, cvd6_pe_l, cvd6_pe_v, cvd6_pe_vw] = request.security(cvd_pe6, tf_to_use, [high, low, volume, ta.vwap])
+[cvd4_ce_h, cvd4_ce_l, cvd4_ce_v, cvd4_ce_vw] = request.security(cvd_ce4, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
+[cvd4_pe_h, cvd4_pe_l, cvd4_pe_v, cvd4_pe_vw] = request.security(cvd_pe4, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
+[cvd5_ce_h, cvd5_ce_l, cvd5_ce_v, cvd5_ce_vw] = request.security(cvd_ce5, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
+[cvd5_pe_h, cvd5_pe_l, cvd5_pe_v, cvd5_pe_vw] = request.security(cvd_pe5, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
+[cvd6_ce_h, cvd6_ce_l, cvd6_ce_v, cvd6_ce_vw] = request.security(cvd_ce6, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
+[cvd6_pe_h, cvd6_pe_l, cvd6_pe_v, cvd6_pe_vw] = request.security(cvd_pe6, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
 
 // Populate the arrays at indices 4, 5, 6
 array.set(ce_highs, 4, cvd4_ce_h), array.set(ce_lows, 4, cvd4_ce_l), array.set(ce_vols, 4, cvd4_ce_v), array.set(ce_vwaps, 4, cvd4_ce_vw)
@@ -569,7 +569,7 @@ else if orb_strike_mode == "OTM"
 string orb_sym = exchange + ":" + final_root + final_expiry + (orb_opt_type == "CE" ? "C" : "P") + str.tostring(orb_strike)
 
 // Fetch ORB High and Low
-[orb_h_raw, orb_l_raw] = request.security(orb_sym, orb_timeframe, f_orb_range())
+[orb_h_raw, orb_l_raw] = request.security(orb_sym, orb_timeframe, f_orb_range(), ignore_invalid_symbol=true)
 
 float orb_high_plot = show_orb_lines ? orb_h_raw : na
 float orb_low_plot = show_orb_lines ? orb_l_raw : na
@@ -826,7 +826,7 @@ if is_new_day
     pe_vwap_plot_final := na
 
 // Fetch real-time opposite option contract candles to plot
-[opp_o, opp_h, opp_l, opp_c] = request.security(opp_sym, timeframe.period, [open, high, low, close])
+[opp_o, opp_h, opp_l, opp_c] = request.security(opp_sym, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
 
 candle_o = is_option and show_opp_candles ? opp_o : na
 candle_h = is_option and show_opp_candles ? opp_h : na
