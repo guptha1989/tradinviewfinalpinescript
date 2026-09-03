@@ -813,12 +813,12 @@ string m_size = f_get_marker_size(signal_marker_size)
 
 if show_signal_shapes
     if overall_buy_alert
-        string ce_lbl = ce_blast_active ? "CE BLAST🔥" : (ce_fresh_iv ? "CE★" : "CE")
+        string ce_lbl = ce_blast_active ? "CE BLAST🔥" : (ce_fresh_iv ? "CE IV★" : "CE")
         color  ce_col = ce_blast_active ? #00FF66 : #00E676
         color  ce_txt = ce_blast_active ? color.black : color.white
         label.new(bar_index, low, text=ce_lbl, style=label.style_label_up, color=ce_col, textcolor=ce_txt, size=m_size)
     else if overall_sell_alert
-        string pe_lbl = pe_blast_active ? "PE BLAST🔥" : (pe_fresh_iv ? "PE★" : "PE")
+        string pe_lbl = pe_blast_active ? "PE BLAST🔥" : (pe_fresh_iv ? "PE IV★" : "PE")
         color  pe_col = pe_blast_active ? #FF0055 : #FF1744
         color  pe_txt = color.white
         label.new(bar_index, high, text=pe_lbl, style=label.style_label_down, color=pe_col, textcolor=pe_txt, size=m_size)
