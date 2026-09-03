@@ -348,23 +348,9 @@ float k_m7 = baseStrike - 7.0 * offsetPts
 // DATA FETCHING & OPPOSITE CANDLES OVERLAY
 // ==========================================
 
-f_get_strike_ohlc() =>
-    float d_op  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
-    float d_pdc = ta.valuewhen(ta.change(time("D")) != 0, close[1], 0)
-    d_pdc      := na(d_pdc) ? d_op : d_pdc
-
-    var float d_f5m = na
-    if ta.change(time("D")) != 0
-        d_f5m := na
-    if (hour == 9 and minute >= 19) or hour > 9
-        if na(d_f5m)
-            d_f5m := close
-
-    float stat_ref = (static_bep_basis == "Previous Day Close" or static_bep_basis == "Previous Day Settlement") ? d_pdc : (static_bep_basis == "First 5 Min Close" ? (na(d_f5m) ? d_op : d_f5m) : d_op)
-    [d_op, stat_ref, high, low, close]
-
-f_get_strike_prev_day() =>
-    [close[1], high[1], low[1]]
+// Helper function to resolve static reference basis from open and previous close
+f_resolve_stat_ref(float op, float pdc) =>
+    (static_bep_basis == "Previous Day Close" or static_bep_basis == "Previous Day Settlement") ? (na(pdc) ? op : pdc) : op
 
 // Fetch Opposite Option Ticker & Candle Data for Overlay
 string opp_ticker = f_build_option_symbol(chartStrikePrice, not isCall)
@@ -395,11 +381,14 @@ float chart_pe_low   = isPut  ? low   : opp_l
 float chart_pe_close = isPut  ? close : opp_c
 
 // Fetch ATM Option OHLC & Previous Day Data
-[ce_dop_sec, ce_stat_sec, ce_high_sec, ce_low_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_dop_sec, pe_stat_sec, pe_high_sec, pe_low_sec, pe_ltp_sec] = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_dop_sec, ce_pdc_raw, ce_high_sec, ce_low_sec, ce_ltp_sec] = request.security(syminfo.prefix + ":" + ce_ticker, timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_dop_sec, pe_pdc_raw, pe_high_sec, pe_low_sec, pe_ltp_sec] = request.security(syminfo.prefix + ":" + pe_ticker, timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
-[ce_pdc_sec, ce_pdh_sec, ce_pdl_sec] = request.security(syminfo.prefix + ":" + ce_ticker, "D", f_get_strike_prev_day(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_pdc_sec, pe_pdh_sec, pe_pdl_sec] = request.security(syminfo.prefix + ":" + pe_ticker, "D", f_get_strike_prev_day(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float ce_stat_sec = f_resolve_stat_ref(ce_dop_sec, ce_pdc_raw)
+float pe_stat_sec = f_resolve_stat_ref(pe_dop_sec, pe_pdc_raw)
+
+[ce_pdc_sec, ce_pdh_sec, ce_pdl_sec] = request.security(syminfo.prefix + ":" + ce_ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_pdc_sec, pe_pdh_sec, pe_pdl_sec] = request.security(syminfo.prefix + ":" + pe_ticker, "D", [close[1], high[1], low[1]], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // Use direct chart candle data if active chart is Call or Put option
 float chart_d_op  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
@@ -442,23 +431,35 @@ float ce_o_0 = ce_dop_sec, float ce_stat_0 = ce_stat_sec, float ce_h_0 = ce_high
 float pe_o_0 = pe_dop_sec, float pe_stat_0 = pe_stat_sec, float pe_h_0 = pe_high_sec, float pe_l_0 = pe_low_sec, float pe_c_0 = pe_ltp_sec
 
 // Fetch 7 Active ITM, ATM & OTM Strike Levels OHLC Data (-3 to +3)
-[ce_o_m3, ce_stat_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m3, pe_stat_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m3, ce_pdc_m3, ce_h_m3, ce_l_m3, ce_c_m3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m3), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m3, pe_pdc_m3, pe_h_m3, pe_l_m3, pe_c_m3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m3), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float ce_stat_m3 = f_resolve_stat_ref(ce_o_m3, ce_pdc_m3)
+float pe_stat_m3 = f_resolve_stat_ref(pe_o_m3, pe_pdc_m3)
 
-[ce_o_m2, ce_stat_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m2, pe_stat_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m2, ce_pdc_m2, ce_h_m2, ce_l_m2, ce_c_m2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m2), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m2, pe_pdc_m2, pe_h_m2, pe_l_m2, pe_c_m2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m2), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float ce_stat_m2 = f_resolve_stat_ref(ce_o_m2, ce_pdc_m2)
+float pe_stat_m2 = f_resolve_stat_ref(pe_o_m2, pe_pdc_m2)
 
-[ce_o_m1, ce_stat_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_m1, pe_stat_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_m1, ce_pdc_m1, ce_h_m1, ce_l_m1, ce_c_m1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_m1), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_m1, pe_pdc_m1, pe_h_m1, pe_l_m1, pe_c_m1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_m1), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float ce_stat_m1 = f_resolve_stat_ref(ce_o_m1, ce_pdc_m1)
+float pe_stat_m1 = f_resolve_stat_ref(pe_o_m1, pe_pdc_m1)
 
-[ce_o_p1, ce_stat_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p1, pe_stat_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p1, ce_pdc_p1, ce_h_p1, ce_l_p1, ce_c_p1] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p1), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p1, pe_pdc_p1, pe_h_p1, pe_l_p1, pe_c_p1] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p1), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float ce_stat_p1 = f_resolve_stat_ref(ce_o_p1, ce_pdc_p1)
+float pe_stat_p1 = f_resolve_stat_ref(pe_o_p1, pe_pdc_p1)
 
-[ce_o_p2, ce_stat_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p2, pe_stat_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p2, ce_pdc_p2, ce_h_p2, ce_l_p2, ce_c_p2] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p2), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p2, pe_pdc_p2, pe_h_p2, pe_l_p2, pe_c_p2] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p2), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float ce_stat_p2 = f_resolve_stat_ref(ce_o_p2, ce_pdc_p2)
+float pe_stat_p2 = f_resolve_stat_ref(pe_o_p2, pe_pdc_p2)
 
-[ce_o_p3, ce_stat_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_o_p3, pe_stat_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, f_get_strike_ohlc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[ce_o_p3, ce_pdc_p3, ce_h_p3, ce_l_p3, ce_c_p3] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p3), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+[pe_o_p3, pe_stat_p3, pe_h_p3, pe_l_p3, pe_c_p3] = request.security(syminfo.prefix + ":" + f_build_pe_ticker(k_p3), timeframe.period, [open, close[1], high, low, close], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+float ce_stat_p3 = f_resolve_stat_ref(ce_o_p3, ce_pdc_p3)
+float pe_stat_p3 = f_resolve_stat_ref(pe_o_p3, pe_pdc_p3)
 
 // Outer strike aliases to preserve 15-strike basket formulas without extra security calls
 float ce_o_m7 = ce_o_m3, float ce_stat_m7 = ce_stat_m3, float ce_h_m7 = ce_h_m3, float ce_l_m7 = ce_l_m3, float ce_c_m7 = ce_c_m3
