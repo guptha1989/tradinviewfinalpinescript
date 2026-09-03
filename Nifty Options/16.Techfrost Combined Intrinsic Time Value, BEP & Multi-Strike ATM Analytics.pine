@@ -639,15 +639,17 @@ float pe_iv_signed = pe_strike - spot_ltp
 
 // --- Basket Average Confluence Evaluations ---
 bool both_above_day_open = (ceAvgCur > ceAvgOpen) and (peAvgCur > peAvgOpen)
+bool both_below_day_open = (ceAvgCur < ceAvgOpen) and (peAvgCur < peAvgOpen)
 
-bool ce_avg_pass = not use_basket_avg_filter or (ceAvgCur > ceAvgOpen)
-bool pe_avg_pass = not use_basket_avg_filter or (peAvgCur > peAvgOpen)
+// If both averages are below day open, bypass change/avg filter so crossover triggers on top average line:
+bool ce_avg_pass = not use_basket_avg_filter or (ceAvgCur > ceAvgOpen) or both_below_day_open
+bool pe_avg_pass = not use_basket_avg_filter or (peAvgCur > peAvgOpen) or both_below_day_open
 
-bool ce_chg_pass = not use_basket_chg_filter or (ceAvgChg > 0)
-bool pe_chg_pass = not use_basket_chg_filter or (peAvgChg > 0)
+bool ce_chg_pass = not use_basket_chg_filter or (ceAvgChg > 0) or both_below_day_open
+bool pe_chg_pass = not use_basket_chg_filter or (peAvgChg > 0) or both_below_day_open
 
-//// ABSOLUTE UNCONDITIONAL TOP POSITION RULE:
-// Current option basket average MUST be strictly on top of opponent's basket average
+// TOP POSITION RULE:
+// When both averages are below day open, require the current average line that is on top
 bool ce_top_pass = not use_basket_top_filter or (ceAvgCur > peAvgCur)
 bool pe_top_pass = not use_basket_top_filter or (peAvgCur > ceAvgCur)
 
@@ -722,24 +724,16 @@ f_eval_pe_pair_trig(float bep_val, float p_c, float p_h, float p_l, float c_c, f
     bool opp_ce_rej = isCall ? (f_bounce_dn(high, close, bep_val) or f_breakdown_dn(close, close[1], bep_val)) : (not na(c_c) and (f_bounce_dn(c_h, c_c, bep_val) or f_breakdown_dn(c_c, c_c[1], bep_val)))
     (pe_cross == true) or (pe_bounce == true) or (opp_ce_rej == true)
 
-//// Evaluate Triggers Across ATM, ITM, and OTM BEP Lines
+//// Evaluate Triggers Strictly on Realtime ATM and Static ATM BEP Lines
 bool ce_trig_0_rt    = use_atm_bep_trig   and f_eval_ce_pair_trig(bep_rt_0,   ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
 bool ce_trig_0_stat  = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_ce_pair_trig(bep_stat_0, ce_c_0, ce_h_0, ce_l_0, pe_c_0, pe_h_0, pe_l_0)
 
 bool pe_trig_0_rt    = use_atm_bep_trig   and f_eval_pe_pair_trig(bep_rt_0,   pe_c_0, pe_h_0, pe_l_0, ce_c_0, ce_h_0, ce_l_0)
 bool pe_trig_0_stat  = use_atm_bep_trig   and use_stat_bep_alerts and f_eval_pe_pair_trig(bep_stat_0, pe_c_0, pe_h_0, pe_l_0, ce_c_0, ce_h_0, ce_l_0)
 
-// Optional ITM Triggers
-bool ce_trig_itm_rt  = use_itm_bep_trig   and (f_eval_ce_pair_trig(bep_rt_m1, ce_c_m1, ce_h_m1, ce_l_m1, pe_c_p1, pe_h_p1, pe_l_p1) or f_eval_ce_pair_trig(bep_rt_m2, ce_c_m2, ce_h_m2, ce_l_m2, pe_c_p2, pe_h_p2, pe_l_p2) or f_eval_ce_pair_trig(bep_rt_m3, ce_c_m3, ce_h_m3, ce_l_m3, pe_c_p3, pe_h_p3, pe_l_p3))
-bool pe_trig_itm_rt  = use_itm_bep_trig   and (f_eval_pe_pair_trig(bep_rt_m1, pe_c_p1, pe_h_p1, pe_l_p1, ce_c_m1, ce_h_m1, ce_l_m1) or f_eval_pe_pair_trig(bep_rt_m2, pe_c_p2, pe_h_p2, pe_l_p2, ce_c_m2, ce_h_m2, ce_l_m2) or f_eval_pe_pair_trig(bep_rt_m3, pe_c_p3, pe_h_p3, pe_l_p3, ce_c_m3, ce_h_m3, ce_l_m3))
-
-// Optional OTM Triggers
-bool ce_trig_otm_rt  = use_otm_bep_trig   and (f_eval_ce_pair_trig(bep_rt_p1, ce_c_p1, ce_h_p1, ce_l_p1, pe_c_m1, pe_h_m1, pe_l_m1) or f_eval_ce_pair_trig(bep_rt_p2, ce_c_p2, ce_h_p2, ce_l_p2, pe_c_m2, pe_h_m2, pe_l_m2) or f_eval_ce_pair_trig(bep_rt_p3, ce_c_p3, ce_h_p3, ce_l_p3, pe_c_m3, pe_h_m3, pe_l_m3))
-bool pe_trig_otm_rt  = use_otm_bep_trig   and (f_eval_pe_pair_trig(bep_rt_p1, pe_c_m1, pe_h_m1, pe_l_m1, ce_c_p1, ce_h_p1, ce_l_p1) or f_eval_pe_pair_trig(bep_rt_p2, pe_c_m2, pe_h_m2, pe_l_m2, ce_c_p2, ce_h_p2, ce_l_p2) or f_eval_pe_pair_trig(bep_rt_p3, pe_c_m3, pe_h_m3, pe_l_m3, ce_c_p3, ce_h_p3, ce_l_p3))
-
-// Combined Triggers across ATM (Primary), ITM, and OTM
-bool ce_any_bep_trig = (ce_trig_0_rt == true) or (ce_trig_0_stat == true) or (ce_trig_itm_rt == true) or (ce_trig_otm_rt == true)
-bool pe_any_bep_trig = (pe_trig_0_rt == true) or (pe_trig_0_stat == true) or (pe_trig_itm_rt == true) or (pe_trig_otm_rt == true)
+// Combined Triggers (Strictly Realtime ATM & Static ATM Lines)
+bool ce_any_bep_trig = (ce_trig_0_rt == true) or (ce_trig_0_stat == true)
+bool pe_any_bep_trig = (pe_trig_0_rt == true) or (pe_trig_0_stat == true)
 
 // Mode Pass Evaluation: If Blast is unselected but Normal alerts are allowed, fallback to Normal CE/PE alert
 bool ce_pass_mode = (ce_blast_cond_met and allow_blast_alerts) or allow_normal_alerts
