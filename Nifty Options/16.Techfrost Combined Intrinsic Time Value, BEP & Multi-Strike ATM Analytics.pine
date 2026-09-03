@@ -326,13 +326,16 @@ float k_m4 = baseStrike - 4.0 * offsetPts
 
 f_get_strike_ohlc() =>
     float d_op  = ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0)
-    float d_pdc = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
+    float d_pdc = ta.valuewhen(ta.change(time("D")) != 0, close[1], 0)
+    d_pdc      := na(d_pdc) ? d_op : d_pdc
+
     var float d_f5m = na
     if ta.change(time("D")) != 0
         d_f5m := na
     if (hour == 9 and minute >= 19) or hour > 9
         if na(d_f5m)
             d_f5m := close
+
     float stat_ref = (static_bep_basis == "Previous Day Close" or static_bep_basis == "Previous Day Settlement") ? d_pdc : (static_bep_basis == "First 5 Min Close" ? (na(d_f5m) ? d_op : d_f5m) : d_op)
     [stat_ref, high, low, close]
 
