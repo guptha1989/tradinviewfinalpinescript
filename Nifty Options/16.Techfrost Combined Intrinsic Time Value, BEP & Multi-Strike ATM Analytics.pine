@@ -706,10 +706,6 @@ bool fresh_iv_buy_signal  = overall_buy_alert and ce_fresh_iv
 bool fresh_iv_sell_signal = overall_sell_alert and pe_fresh_iv
 
 // --- Dynamic Label & Shape Drawing using label.new (0 plot slots consumed!) ---
-show_signal_shapes  = input.bool(true, "Show CE / PE Signal Markers", group="Visual Signals")
-col_ce_iv_diamond   = input.color(#2962FF, "CE Intrinsic Value Diamond Color", group="Visual Signals")
-col_pe_iv_diamond   = input.color(#FF6D00, "PE Intrinsic Value Diamond Color", group="Visual Signals")
-
 if show_signal_shapes
     if overall_buy_alert
         string ce_lbl = ce_blast_active ? "CE BLAST 🔥" : (ce_fresh_iv ? "FRESH IV CE ★" : "CE")

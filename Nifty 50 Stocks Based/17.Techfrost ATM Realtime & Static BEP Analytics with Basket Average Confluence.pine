@@ -424,16 +424,18 @@ bool cross_ce_sec_stat      = f_crossover_up(ce_0_ltp, ce_0_ltp[1], bep_stat_0)
 bool cross_pe_sec_rt        = f_crossover_up(pe_0_ltp, pe_0_ltp[1], bep_rt_0)
 bool cross_pe_sec_stat      = f_crossover_up(pe_0_ltp, pe_0_ltp[1], bep_stat_0)
 
-// Mode Selection (Realtime ATM BEP, Static ATM BEP, or Both)
-bool use_rt_bep   = (bep_trigger_mode == "Realtime ATM BEP") or (bep_trigger_mode == "Both")
-bool use_stat_bep = (bep_trigger_mode == "Static ATM BEP")   or (bep_trigger_mode == "Both")
+bool bounce_chart_rt   = f_bounce_up(low, close, bep_rt_0)
+bool bounce_chart_stat = f_bounce_up(low, close, bep_stat_0)
 
-bool ce_cross_rt   = use_rt_bep   and (isCall ? (cross_chart_close_rt or f_bounce_up(low, close, bep_rt_0))   : (isPut ? (cross_opp_close_rt or f_bounce_up(opp_l, opp_c, bep_rt_0))   : cross_ce_sec_rt))
-bool ce_cross_stat = use_stat_bep and (isCall ? (cross_chart_close_stat or f_bounce_up(low, close, bep_stat_0)) : (isPut ? (cross_opp_close_stat or f_bounce_up(opp_l, opp_c, bep_stat_0)) : cross_ce_sec_stat))
+bool bounce_opp_rt     = f_bounce_up(opp_l, opp_c, bep_rt_0)
+bool bounce_opp_stat   = f_bounce_up(opp_l, opp_c, bep_stat_0)
+
+bool ce_cross_rt   = use_rt_bep   and (isCall ? (cross_chart_close_rt or bounce_chart_rt)   : (isPut ? (cross_opp_close_rt or bounce_opp_rt)   : cross_ce_sec_rt))
+bool ce_cross_stat = use_stat_bep and (isCall ? (cross_chart_close_stat or bounce_chart_stat) : (isPut ? (cross_opp_close_stat or bounce_opp_stat) : cross_ce_sec_stat))
 bool ce_crossover  = ce_cross_rt or ce_cross_stat
 
-bool pe_cross_rt   = use_rt_bep   and (isPut ? (cross_chart_close_rt or f_bounce_up(low, close, bep_rt_0))   : (isCall ? (cross_opp_close_rt or f_bounce_up(opp_l, opp_c, bep_rt_0))   : cross_pe_sec_rt))
-bool pe_cross_stat = use_stat_bep and (isPut ? (cross_chart_close_stat or f_bounce_up(low, close, bep_stat_0)) : (isCall ? (cross_opp_close_stat or f_bounce_up(opp_l, opp_c, bep_stat_0)) : cross_pe_sec_stat))
+bool pe_cross_rt   = use_rt_bep   and (isPut ? (cross_chart_close_rt or bounce_chart_rt)   : (isCall ? (cross_opp_close_rt or bounce_opp_rt)   : cross_pe_sec_rt))
+bool pe_cross_stat = use_stat_bep and (isPut ? (cross_chart_close_stat or bounce_chart_stat) : (isCall ? (cross_opp_close_stat or bounce_opp_stat) : cross_pe_sec_stat))
 bool pe_crossover  = pe_cross_rt or pe_cross_stat
 
 // Combined Raw Signals
