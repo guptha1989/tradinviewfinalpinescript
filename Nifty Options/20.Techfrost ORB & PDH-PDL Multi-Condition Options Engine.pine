@@ -252,52 +252,23 @@ f_build_option_symbol(float target_strike, bool target_is_ce) =>
         string sfx = target_is_ce ? "CE" : "PE"
         (root != "" ? root : cleanTicker) + target_st_str + sfx
 
-// Evaluate Candidate Strikes around spotDayOpen for MIN |CE Open - PE Open|
-float base_center_strike = not na(spotDayOpen) and stepVal > 0 ? math.round(spotDayOpen / stepVal) * stepVal : 24000.0
+// Base Center Strike & Strike Resolution
+var float base_center_strike = na
+if barstate.isfirst or na(base_center_strike)
+    float ref_p = not na(spotDayOpen) and spotDayOpen > 0 ? spotDayOpen : open
+    base_center_strike := stepVal > 0 ? math.round(ref_p / stepVal) * stepVal : 24000.0
 
-float cand_m2 = base_center_strike - 2.0 * stepVal
-float cand_m1 = base_center_strike - 1.0 * stepVal
-float cand_0  = base_center_strike
-float cand_p1 = base_center_strike + 1.0 * stepVal
-float cand_p2 = base_center_strike + 2.0 * stepVal
-
-[ce_do_m2] = request.security(f_build_option_symbol(cand_m2, true),  "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_do_m2] = request.security(f_build_option_symbol(cand_m2, false), "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_do_m1] = request.security(f_build_option_symbol(cand_m1, true),  "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_do_m1] = request.security(f_build_option_symbol(cand_m1, false), "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_do_0]  = request.security(f_build_option_symbol(cand_0,  true),  "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_do_0]  = request.security(f_build_option_symbol(cand_0,  false), "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_do_p1] = request.security(f_build_option_symbol(cand_p1, true),  "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_do_p1] = request.security(f_build_option_symbol(cand_p1, false), "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-[ce_do_p2] = request.security(f_build_option_symbol(cand_p2, true),  "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-[pe_do_p2] = request.security(f_build_option_symbol(cand_p2, false), "D", [open], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
-
-float diff_m2 = na(ce_do_m2) or na(pe_do_m2) ? 1e10 : math.abs(ce_do_m2 - pe_do_m2)
-float diff_m1 = na(ce_do_m1) or na(pe_do_m1) ? 1e10 : math.abs(ce_do_m1 - pe_do_m1)
-float diff_0  = na(ce_do_0)  or na(pe_do_0)  ? 1e10 : math.abs(ce_do_0  - pe_do_0)
-float diff_p1 = na(ce_do_p1) or na(pe_do_p1) ? 1e10 : math.abs(ce_do_p1 - pe_do_p1)
-float diff_p2 = na(ce_do_p2) or na(pe_do_p2) ? 1e10 : math.abs(ce_do_p2 - pe_do_p2)
-
-float min_open_diff = math.min(diff_m2, math.min(diff_m1, math.min(diff_0, math.min(diff_p1, diff_p2))))
-
-float day_open_atm_strike = cand_0
-if min_open_diff == diff_p1
-    day_open_atm_strike := cand_p1
-else if min_open_diff == diff_p2
-    day_open_atm_strike := cand_p2
-else if min_open_diff == diff_m1
-    day_open_atm_strike := cand_m1
-else if min_open_diff == diff_m2
-    day_open_atm_strike := cand_m2
+float day_open_atm_strike = not na(spotDayOpen) and stepVal > 0 ? math.round(spotDayOpen / stepVal) * stepVal : base_center_strike
 
 if na(detectedStrike) or detectedStrike <= 0
     detectedStrike := day_open_atm_strike
 
-float chartStrikePrice = strikeOverride > 0.0 ? strikeOverride : (manualStrikeInput > 0 ? float(manualStrikeInput) : detectedStrike)
+var float chartStrikePrice = na
+if barstate.isfirst or na(chartStrikePrice)
+    chartStrikePrice := strikeOverride > 0.0 ? strikeOverride : (manualStrikeInput > 0 ? float(manualStrikeInput) : detectedStrike)
+
+if na(chartStrikePrice) or chartStrikePrice <= 0
+    chartStrikePrice := day_open_atm_strike
 
 if actualUnderlying == UnderlyingAsset.stock and strikeStepInput == StepOverrideChoice.auto
     stepVal := f_auto_detect_step(chartStrikePrice)
