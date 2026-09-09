@@ -91,9 +91,27 @@ show_otm_ce_candle = input.bool(true, "Show OTM CE Candle Overlay", group="Optio
 color_otm_ce_up    = input.color(#76FF03, "OTM CE Candle Up Color", group="Option Candle Settings")
 color_otm_ce_dn    = input.color(#1DE9B6, "OTM CE Candle Down Color", group="Option Candle Settings")
 
-show_otm_pe_candle = input.bool(true, "Show OTM PE Candle Overlay", group="Option Candle Settings")
-color_otm_pe_up    = input.color(#FF5252, "OTM PE Candle Up Color", group="Option Candle Settings")
-color_otm_pe_dn    = input.color(#E040FB, "OTM PE Candle Down Color", group="Option Candle Settings")
+show_otm_pe_candle = input.bool(true, "Show OTM 1 PE Candle Overlay", group="Option Candle Settings")
+color_otm_pe_up    = input.color(#FF5252, "OTM 1 PE Candle Up Color", group="Option Candle Settings")
+color_otm_pe_dn    = input.color(#E040FB, "OTM 1 PE Candle Down Color", group="Option Candle Settings")
+
+show_itm2_ce_candle = input.bool(true, "Show ITM 2 CE Candle Overlay", group="Option Candle Settings")
+color_itm2_ce_up    = input.color(#00C853, "ITM 2 CE Candle Up Color", group="Option Candle Settings")
+color_itm2_ce_dn    = input.color(#0091EA, "ITM 2 CE Candle Down Color", group="Option Candle Settings")
+
+show_itm2_pe_candle = input.bool(true, "Show ITM 2 PE Candle Overlay", group="Option Candle Settings")
+color_itm2_pe_up    = input.color(#D50000, "ITM 2 PE Candle Up Color", group="Option Candle Settings")
+color_itm2_pe_dn    = input.color(#FF6D00, "ITM 2 PE Candle Down Color", group="Option Candle Settings")
+
+show_otm2_ce_candle = input.bool(true, "Show OTM 2 CE Candle Overlay", group="Option Candle Settings")
+color_otm2_ce_up    = input.color(#64DD17, "OTM 2 CE Candle Up Color", group="Option Candle Settings")
+color_otm2_ce_dn    = input.color(#00BFA5, "OTM 2 CE Candle Down Color", group="Option Candle Settings")
+
+show_otm2_pe_candle = input.bool(true, "Show OTM 2 PE Candle Overlay", group="Option Candle Settings")
+color_otm2_pe_up    = input.color(#FF1744, "OTM 2 PE Candle Up Color", group="Option Candle Settings")
+color_otm2_pe_dn    = input.color(#AA00FF, "OTM 2 PE Candle Down Color", group="Option Candle Settings")
+
+show_strike_labels  = input.bool(true, "Show Strike Name Labels on Candles", group="Option Candle Settings")
 
 // --- Dashboard Table Controls ---
 showTableInput = input.bool(true, "Show Analytics Dashboard Table", group="Dashboard Settings")
@@ -261,6 +279,12 @@ float itm_pe_strike = chartStrikePrice + offsetPts
 float otm_ce_strike = chartStrikePrice + offsetPts
 float otm_pe_strike = chartStrikePrice - offsetPts
 
+float itm2_ce_strike = chartStrikePrice - (2.0 * offsetPts)
+float itm2_pe_strike = chartStrikePrice + (2.0 * offsetPts)
+
+float otm2_ce_strike = chartStrikePrice + (2.0 * offsetPts)
+float otm2_pe_strike = chartStrikePrice - (2.0 * offsetPts)
+
 string ce_ticker = f_build_option_symbol(ce_strike, true)
 string pe_ticker = f_build_option_symbol(pe_strike, false)
 
@@ -269,6 +293,12 @@ string pe_itm_ticker = f_build_option_symbol(itm_pe_strike, false)
 
 string ce_otm_ticker = f_build_option_symbol(otm_ce_strike, true)
 string pe_otm_ticker = f_build_option_symbol(otm_pe_strike, false)
+
+string ce_itm2_ticker = f_build_option_symbol(itm2_ce_strike, true)
+string pe_itm2_ticker = f_build_option_symbol(itm2_pe_strike, false)
+
+string ce_otm2_ticker = f_build_option_symbol(otm2_ce_strike, true)
+string pe_otm2_ticker = f_build_option_symbol(otm2_pe_strike, false)
 
 // ==========================================
 // 5-DAY HISTORICAL DATA FETCHING
@@ -303,6 +333,12 @@ float spot_ltp = request.security(spotTicker, timeframe.period, close, ignore_in
 
 [ce_otm_o, ce_otm_h, ce_otm_l, ce_otm_c] = request.security(ce_otm_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
 [pe_otm_o, pe_otm_h, pe_otm_l, pe_otm_c] = request.security(pe_otm_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+[ce_itm2_o, ce_itm2_h, ce_itm2_l, ce_itm2_c] = request.security(ce_itm2_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+[pe_itm2_o, pe_itm2_h, pe_itm2_l, pe_itm2_c] = request.security(pe_itm2_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+
+[ce_otm2_o, ce_otm2_h, ce_otm2_l, ce_otm2_c] = request.security(ce_otm2_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
+[pe_otm2_o, pe_otm2_h, pe_otm2_l, pe_otm2_c] = request.security(pe_otm2_ticker, timeframe.period, [open, high, low, close], ignore_invalid_symbol=true)
 
 float ce_ltp     = ce_c
 float pe_ltp     = pe_c
@@ -503,14 +539,82 @@ plotcandle(show_otm_ce_candle ? ce_otm_o : na,
            show_otm_ce_candle ? ce_otm_c : na,
            title="OTM CE Candle", color=col_otm_ce)
 
-// OTM PE Candle
+// OTM 1 PE Candle
 bool is_otm_pe_bull = nz(pe_otm_c) >= nz(pe_otm_o)
 color col_otm_pe    = is_otm_pe_bull ? color_otm_pe_up : color_otm_pe_dn
 plotcandle(show_otm_pe_candle ? pe_otm_o : na,
            show_otm_pe_candle ? pe_otm_h : na,
            show_otm_pe_candle ? pe_otm_l : na,
            show_otm_pe_candle ? pe_otm_c : na,
-           title="OTM PE Candle", color=col_otm_pe)
+           title="OTM 1 PE Candle", color=col_otm_pe)
+
+// ITM 2 CE Candle
+bool is_itm2_ce_bull = nz(ce_itm2_c) >= nz(ce_itm2_o)
+color col_itm2_ce    = is_itm2_ce_bull ? color_itm2_ce_up : color_itm2_ce_dn
+plotcandle(show_itm2_ce_candle ? ce_itm2_o : na,
+           show_itm2_ce_candle ? ce_itm2_h : na,
+           show_itm2_ce_candle ? ce_itm2_l : na,
+           show_itm2_ce_candle ? ce_itm2_c : na,
+           title="ITM 2 CE Candle", color=col_itm2_ce)
+
+// ITM 2 PE Candle
+bool is_itm2_pe_bull = nz(pe_itm2_c) >= nz(pe_itm2_o)
+color col_itm2_pe    = is_itm2_pe_bull ? color_itm2_pe_up : color_itm2_pe_dn
+plotcandle(show_itm2_pe_candle ? pe_itm2_o : na,
+           show_itm2_pe_candle ? pe_itm2_h : na,
+           show_itm2_pe_candle ? pe_itm2_l : na,
+           show_itm2_pe_candle ? pe_itm2_c : na,
+           title="ITM 2 PE Candle", color=col_itm2_pe)
+
+// OTM 2 CE Candle
+bool is_otm2_ce_bull = nz(ce_otm2_c) >= nz(ce_otm2_o)
+color col_otm2_ce    = is_otm2_ce_bull ? color_otm2_ce_up : color_otm2_ce_dn
+plotcandle(show_otm2_ce_candle ? ce_otm2_o : na,
+           show_otm2_ce_candle ? ce_otm2_h : na,
+           show_otm2_ce_candle ? ce_otm2_l : na,
+           show_otm2_ce_candle ? ce_otm2_c : na,
+           title="OTM 2 CE Candle", color=col_otm2_ce)
+
+// OTM 2 PE Candle
+bool is_otm2_pe_bull = nz(pe_otm2_c) >= nz(pe_otm2_o)
+color col_otm2_pe    = is_otm2_pe_bull ? color_otm2_pe_up : color_otm2_pe_dn
+plotcandle(show_otm2_pe_candle ? pe_otm2_o : na,
+           show_otm2_pe_candle ? pe_otm2_h : na,
+           show_otm2_pe_candle ? pe_otm2_l : na,
+           show_otm2_pe_candle ? pe_otm2_c : na,
+           title="OTM 2 PE Candle", color=col_otm2_pe)
+
+// ==========================================
+// STRIKE NAME LABELS FOR CANDLES
+// ==========================================
+var label lbl_itm1_ce = na
+var label lbl_itm1_pe = na
+var label lbl_otm1_ce = na
+var label lbl_otm1_pe = na
+
+var label lbl_itm2_ce = na
+var label lbl_itm2_pe = na
+var label lbl_otm2_ce = na
+var label lbl_otm2_pe = na
+
+f_update_strike_label(label existing_lbl, bool show_flag, float price_val, string label_text, color lbl_col) =>
+    if barstate.islast and show_strike_labels and show_flag and not na(price_val)
+        label.delete(existing_lbl)
+        label.new(bar_index, price_val, text=label_text, color=lbl_col, textcolor=color.white, style=label.style_label_left, size=size.small)
+    else
+        label.delete(existing_lbl)
+        na
+
+if barstate.islast
+    lbl_itm1_ce := f_update_strike_label(lbl_itm1_ce, show_itm_ce_candle, ce_itm_c, ce_itm_ticker + " (ITM 1)", color_itm_ce_up)
+    lbl_itm1_pe := f_update_strike_label(lbl_itm1_pe, show_itm_pe_candle, pe_itm_c, pe_itm_ticker + " (ITM 1)", color_itm_pe_up)
+    lbl_otm1_ce := f_update_strike_label(lbl_otm1_ce, show_otm_ce_candle, ce_otm_c, ce_otm_ticker + " (OTM 1)", color_otm_ce_up)
+    lbl_otm1_pe := f_update_strike_label(lbl_otm1_pe, show_otm_pe_candle, pe_otm_c, pe_otm_ticker + " (OTM 1)", color_otm_pe_up)
+
+    lbl_itm2_ce := f_update_strike_label(lbl_itm2_ce, show_itm2_ce_candle, ce_itm2_c, ce_itm2_ticker + " (ITM 2)", color_itm2_ce_up)
+    lbl_itm2_pe := f_update_strike_label(lbl_itm2_pe, show_itm2_pe_candle, pe_itm2_c, pe_itm2_ticker + " (ITM 2)", color_itm2_pe_up)
+    lbl_otm2_ce := f_update_strike_label(lbl_otm2_ce, show_otm2_ce_candle, ce_otm2_c, ce_otm2_ticker + " (OTM 2)", color_otm2_ce_up)
+    lbl_otm2_pe := f_update_strike_label(lbl_otm2_pe, show_otm2_pe_candle, pe_otm2_c, pe_otm2_ticker + " (OTM 2)", color_otm2_pe_up)
 
 // ==========================================
 // BUY / SELL SIGNALS & ALERTS LOGIC (BC & BP)
