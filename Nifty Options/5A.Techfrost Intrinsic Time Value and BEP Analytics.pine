@@ -583,10 +583,7 @@ f_draw_option_candle(bool is_enabled, float o, float h, float l, float c, color 
         line.new(bar_index, h, bar_index, l, color=body_col, width=1)
         float top_val = math.max(o, c)
         float bot_val = math.min(o, c)
-        if top_val == bot_val
-            line.new(bar_index - 1, top_val, bar_index, top_val, color=body_col, width=1)
-        else
-            box.new(left=bar_index - 1, top=top_val, right=bar_index, bottom=bot_val, border_color=body_col, bgcolor=body_col)
+        box.new(left=bar_index - 1, top=top_val, right=bar_index, bottom=bot_val, border_color=body_col, bgcolor=body_col)
 
 // ITM 1 CE Candle
 bool is_itm_ce_bull = nz(ce_itm_c) >= nz(ce_itm_o)
