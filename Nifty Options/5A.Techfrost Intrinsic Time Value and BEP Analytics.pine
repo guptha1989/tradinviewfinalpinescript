@@ -93,7 +93,7 @@ color_otm_ce_dn    = input.color(#1DE9B6, "OTM CE Candle Down Color", group="Opt
 
 show_otm_pe_candle = input.bool(true, "Show OTM 1 PE Candle Overlay", group="Option Candle Settings")
 color_otm_pe_up    = input.color(#FF5252, "OTM 1 PE Candle Up Color", group="Option Candle Settings")
-color_otm_pe_dn    = input.color(#E040FB, "OTM 1 PE Candle Down Color", group="Option Candle Settings")
+color_otm_pe_dn    = input.color(#D50000, "OTM 1 PE Candle Down Color", group="Option Candle Settings")
 
 show_itm2_ce_candle = input.bool(true, "Show ITM 2 CE Candle Overlay", group="Option Candle Settings")
 color_itm2_ce_up    = input.color(#00C853, "ITM 2 CE Candle Up Color", group="Option Candle Settings")
@@ -109,7 +109,7 @@ color_otm2_ce_dn    = input.color(#00BFA5, "OTM 2 CE Candle Down Color", group="
 
 show_otm2_pe_candle = input.bool(true, "Show OTM 2 PE Candle Overlay", group="Option Candle Settings")
 color_otm2_pe_up    = input.color(#FF1744, "OTM 2 PE Candle Up Color", group="Option Candle Settings")
-color_otm2_pe_dn    = input.color(#AA00FF, "OTM 2 PE Candle Down Color", group="Option Candle Settings")
+color_otm2_pe_dn    = input.color(#B71C1C, "OTM 2 PE Candle Down Color", group="Option Candle Settings")
 
 show_strike_labels  = input.bool(true, "Show Strike Name Labels on Candles", group="Option Candle Settings")
 
@@ -130,7 +130,7 @@ style_line_itm1_ce_top = input.string("Dashed", "ITM 1 CE Top Style", options=["
 width_line_itm1_ce_top = input.int(1, "ITM 1 CE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
 
 show_line_itm1_pe_top  = input.bool(true, "Show ITM 1 PE Top Line", group="Dynamic Touch Line Settings")
-color_line_itm1_pe_top = input.color(#AA00FF, "ITM 1 PE Top Color", group="Dynamic Touch Line Settings")
+color_line_itm1_pe_top = input.color(#FF5252, "ITM 1 PE Top Color", group="Dynamic Touch Line Settings")
 style_line_itm1_pe_top = input.string("Dashed", "ITM 1 PE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
 width_line_itm1_pe_top = input.int(1, "ITM 1 PE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
 
@@ -160,7 +160,7 @@ style_line_otm2_ce_top = input.string("Dashed", "OTM 2 CE Top Style", options=["
 width_line_otm2_ce_top = input.int(1, "OTM 2 CE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
 
 show_line_otm2_pe_top  = input.bool(true, "Show OTM 2 PE Top Line", group="Dynamic Touch Line Settings")
-color_line_otm2_pe_top = input.color(#3F51B5, "OTM 2 PE Top Color", group="Dynamic Touch Line Settings")
+color_line_otm2_pe_top = input.color(#C62828, "OTM 2 PE Top Color", group="Dynamic Touch Line Settings")
 style_line_otm2_pe_top = input.string("Dashed", "OTM 2 PE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
 width_line_otm2_pe_top = input.int(1, "OTM 2 PE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
 
@@ -600,7 +600,7 @@ plot(showAvg_TV_RT_Input ? otm_avg_tv_rt : na, "OTM Avg Time Value", color=#FFD7
 // --- Static Level Plots (Consolidated to optimize total plot count <= 64 limit) ---
 plot(show5D_Static_CE_IV ? bar_ce_iv_stat : (show5D_Static_CE_TV ? bar_ce_tv_stat : na), "CE Static Line", color=#00E676, style=plot.style_linebr)
 plot(show5D_Static_PE_IV ? (invertPE_IV_Input ? -bar_pe_iv_stat : bar_pe_iv_stat) : (show5D_Static_PE_TV ? (invertPE_IV_Input ? -bar_pe_tv_stat : bar_pe_tv_stat) : na), "PE Static Line", color=#FF5252, style=plot.style_linebr)
-plot(show5D_Static_Avg_IV ? bar_avg_iv_stat : (show5D_Static_Avg_TV ? bar_avg_tv_stat : na), "Avg Static Line", color=#FF00FF, style=plot.style_linebr)
+plot(show5D_Static_Avg_IV ? bar_avg_iv_stat : (show5D_Static_Avg_TV ? bar_avg_tv_stat : na), "Avg Static Line", color=#FF9100, style=plot.style_linebr)
 plot(show5D_Static_BEPInput ? bar_bep_stat : (showPD_CE_CloseInput ? bar_ce_pdc : (showPD_PE_CloseInput ? bar_pe_pdc : na)), "Static BEP / Prev Close Line", color=color.aqua, style=plot.style_linebr)
 
 // ==========================================
