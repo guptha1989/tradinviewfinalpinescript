@@ -1,5 +1,5 @@
 //@version=6
-indicator("5A.Techfrost Intrinsic Time Value and BEP Analytics", shorttitle="TF IVTVBEP", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
+indicator("5A.Techfrost Intrinsic Time Value and BEP Analytics", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
@@ -112,6 +112,57 @@ color_otm2_pe_up    = input.color(#FF1744, "OTM 2 PE Candle Up Color", group="Op
 color_otm2_pe_dn    = input.color(#AA00FF, "OTM 2 PE Candle Down Color", group="Option Candle Settings")
 
 show_strike_labels  = input.bool(true, "Show Strike Name Labels on Candles", group="Option Candle Settings")
+
+// --- Dynamic Touch Line Settings ---
+show_line_atm_pe_top  = input.bool(true, "Show ATM PE Top Line", group="Dynamic Touch Line Settings")
+color_line_atm_pe_top = input.color(#00B0FF, "ATM PE Top Color", group="Dynamic Touch Line Settings")
+style_line_atm_pe_top = input.string("Dashed", "ATM PE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_atm_pe_top = input.int(1, "ATM PE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
+
+show_line_atm_ce_top  = input.bool(true, "Show ATM CE Top Line", group="Dynamic Touch Line Settings")
+color_line_atm_ce_top = input.color(#FF9100, "ATM CE Top Color", group="Dynamic Touch Line Settings")
+style_line_atm_ce_top = input.string("Dashed", "ATM CE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_atm_ce_top = input.int(1, "ATM CE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
+
+show_line_itm1_ce_top  = input.bool(true, "Show ITM 1 CE Top Line", group="Dynamic Touch Line Settings")
+color_line_itm1_ce_top = input.color(#00E676, "ITM 1 CE Top Color", group="Dynamic Touch Line Settings")
+style_line_itm1_ce_top = input.string("Dashed", "ITM 1 CE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_itm1_ce_top = input.int(1, "ITM 1 CE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
+
+show_line_itm1_pe_top  = input.bool(true, "Show ITM 1 PE Top Line", group="Dynamic Touch Line Settings")
+color_line_itm1_pe_top = input.color(#AA00FF, "ITM 1 PE Top Color", group="Dynamic Touch Line Settings")
+style_line_itm1_pe_top = input.string("Dashed", "ITM 1 PE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_itm1_pe_top = input.int(1, "ITM 1 PE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
+
+show_line_itm2_ce_top  = input.bool(true, "Show ITM 2 CE Top Line", group="Dynamic Touch Line Settings")
+color_line_itm2_ce_top = input.color(#00C853, "ITM 2 CE Top Color", group="Dynamic Touch Line Settings")
+style_line_itm2_ce_top = input.string("Dashed", "ITM 2 CE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_itm2_ce_top = input.int(1, "ITM 2 CE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
+
+show_line_itm2_pe_top  = input.bool(true, "Show ITM 2 PE Top Line", group="Dynamic Touch Line Settings")
+color_line_itm2_pe_top = input.color(#D50000, "ITM 2 PE Top Color", group="Dynamic Touch Line Settings")
+style_line_itm2_pe_top = input.string("Dashed", "ITM 2 PE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_itm2_pe_top = input.int(1, "ITM 2 PE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
+
+show_line_otm1_ce_top  = input.bool(true, "Show OTM 1 CE Top Line", group="Dynamic Touch Line Settings")
+color_line_otm1_ce_top = input.color(#FFD700, "OTM 1 CE Top Color", group="Dynamic Touch Line Settings")
+style_line_otm1_ce_top = input.string("Dashed", "OTM 1 CE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_otm1_ce_top = input.int(1, "OTM 1 CE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
+
+show_line_otm1_pe_top  = input.bool(true, "Show OTM 1 PE Top Line", group="Dynamic Touch Line Settings")
+color_line_otm1_pe_top = input.color(#FF1744, "OTM 1 PE Top Color", group="Dynamic Touch Line Settings")
+style_line_otm1_pe_top = input.string("Dashed", "OTM 1 PE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_otm1_pe_top = input.int(1, "OTM 1 PE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
+
+show_line_otm2_ce_top  = input.bool(true, "Show OTM 2 CE Top Line", group="Dynamic Touch Line Settings")
+color_line_otm2_ce_top = input.color(#64DD17, "OTM 2 CE Top Color", group="Dynamic Touch Line Settings")
+style_line_otm2_ce_top = input.string("Dashed", "OTM 2 CE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_otm2_ce_top = input.int(1, "OTM 2 CE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
+
+show_line_otm2_pe_top  = input.bool(true, "Show OTM 2 PE Top Line", group="Dynamic Touch Line Settings")
+color_line_otm2_pe_top = input.color(#3F51B5, "OTM 2 PE Top Color", group="Dynamic Touch Line Settings")
+style_line_otm2_pe_top = input.string("Dashed", "OTM 2 PE Top Style", options=["Solid", "Dashed", "Dotted"], group="Dynamic Touch Line Settings")
+width_line_otm2_pe_top = input.int(1, "OTM 2 PE Top Width", minval=1, maxval=4, group="Dynamic Touch Line Settings")
 
 // --- Dashboard Table Controls ---
 showTableInput = input.bool(true, "Show Analytics Dashboard Table", group="Dashboard Settings")
@@ -477,6 +528,58 @@ float bar_ce_pdc      = request.security(ce_ticker, "D", close[1], lookahead=bar
 float bar_pe_pdc      = request.security(pe_ticker, "D", close[1], lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
 
 // ==========================================
+// DYNAMIC TOUCH LINES CALCULATIONS
+// ==========================================
+
+// 1. ATM PE Top = (ATM PE LTP + ITM 1 CE LTP)/2  [When ATM PE is on top: pe_c > ce_c]
+float line_val_atm_pe_top = pe_c > ce_c ? (pe_c + ce_itm_c) / 2.0 : na
+
+// 2. ATM CE Top = (ATM CE LTP + ITM 1 PE LTP)/2  [When ATM CE is on top: ce_c > pe_c]
+float line_val_atm_ce_top = ce_c > pe_c ? (ce_c + pe_itm_c) / 2.0 : na
+
+// 3. ITM 1 CE Top = (ITM 1 CE LTP + ITM 2 PE LTP)/2  [When ITM 1 CE is on top: ce_itm_c > pe_itm_c]
+float line_val_itm1_ce_top = ce_itm_c > pe_itm_c ? (ce_itm_c + pe_itm2_c) / 2.0 : na
+
+// 4. ITM 1 PE Top = (ITM 1 PE LTP + ITM 2 CE LTP)/2  [When ITM 1 PE is on top: pe_itm_c > ce_itm_c]
+float line_val_itm1_pe_top = pe_itm_c > ce_itm_c ? (pe_itm_c + ce_itm2_c) / 2.0 : na
+
+// 5. ITM 2 CE Top = (ITM 2 CE LTP + ITM 2 PE LTP)/2  [When ITM 2 CE is on top: ce_itm2_c > pe_itm2_c]
+float line_val_itm2_ce_top = ce_itm2_c > pe_itm2_c ? (ce_itm2_c + pe_itm2_c) / 2.0 : na
+
+// 6. ITM 2 PE Top = (ITM 2 PE LTP + ITM 2 CE LTP)/2  [When ITM 2 PE is on top: pe_itm2_c > ce_itm2_c]
+float line_val_itm2_pe_top = pe_itm2_c > ce_itm2_c ? (pe_itm2_c + ce_itm2_c) / 2.0 : na
+
+// 7. OTM 1 CE Top = (OTM 1 CE LTP + ATM PE LTP)/2  [When OTM 1 CE is on top: ce_otm_c > pe_otm_c]
+float line_val_otm1_ce_top = ce_otm_c > pe_otm_c ? (ce_otm_c + pe_c) / 2.0 : na
+
+// 8. OTM 1 PE Top = (OTM 1 PE LTP + ATM CE LTP)/2  [When OTM 1 PE is on top: pe_otm_c > ce_otm_c]
+float line_val_otm1_pe_top = pe_otm_c > ce_otm_c ? (pe_otm_c + ce_c) / 2.0 : na
+
+// 9. OTM 2 CE Top = (OTM 2 CE LTP + OTM 1 PE LTP)/2  [When OTM 2 CE is on top: ce_otm2_c > pe_otm2_c]
+float line_val_otm2_ce_top = ce_otm2_c > pe_otm2_c ? (ce_otm2_c + pe_otm_c) / 2.0 : na
+
+// 10. OTM 2 PE Top = (OTM 2 PE LTP + OTM 1 CE LTP)/2  [When OTM 2 PE is on top: pe_otm2_c > ce_otm2_c]
+float line_val_otm2_pe_top = pe_otm2_c > ce_otm2_c ? (pe_otm2_c + ce_otm_c) / 2.0 : na
+
+// --- Helper Dynamic Line Drawer (Drawn via line.new to preserve total plot count <= 64 limit) ---
+f_draw_dyn_line(bool is_enabled, float val, color line_col, int l_width, string l_style) =>
+    if is_enabled and not na(val) and not na(val[1])
+        string st = str.lower(l_style) == "solid" ? line.style_solid : (str.lower(l_style) == "dotted" ? line.style_dotted : line.style_dashed)
+        line.new(bar_index - 1, val[1], bar_index, val, color=line_col, width=l_width, style=st)
+
+// Draw Only Active & Enabled Dynamic Touch Lines on Chart
+f_draw_dyn_line(show_line_atm_pe_top,  line_val_atm_pe_top,  color_line_atm_pe_top,  width_line_atm_pe_top,  style_line_atm_pe_top)
+f_draw_dyn_line(show_line_atm_ce_top,  line_val_atm_ce_top,  color_line_atm_ce_top,  width_line_atm_ce_top,  style_line_atm_ce_top)
+f_draw_dyn_line(show_line_itm1_ce_top, line_val_itm1_ce_top, color_line_itm1_ce_top, width_line_itm1_ce_top, style_line_itm1_ce_top)
+f_draw_dyn_line(show_line_itm1_pe_top, line_val_itm1_pe_top, color_line_itm1_pe_top, width_line_itm1_pe_top, style_line_itm1_pe_top)
+f_draw_dyn_line(show_line_itm2_ce_top, line_val_itm2_ce_top, color_line_itm2_ce_top, width_line_itm2_ce_top, style_line_itm2_ce_top)
+f_draw_dyn_line(show_line_itm2_pe_top, line_val_itm2_pe_top, color_line_itm2_pe_top, width_line_itm2_pe_top, style_line_itm2_pe_top)
+f_draw_dyn_line(show_line_otm1_ce_top, line_val_otm1_ce_top, color_line_otm1_ce_top, width_line_otm1_ce_top, style_line_otm1_ce_top)
+f_draw_dyn_line(show_line_otm1_pe_top, line_val_otm1_pe_top, color_line_otm1_pe_top, width_line_otm1_pe_top, style_line_otm1_pe_top)
+f_draw_dyn_line(show_line_otm2_ce_top, line_val_otm2_ce_top, color_line_otm2_ce_top, width_line_otm2_ce_top, style_line_otm2_ce_top)
+f_draw_dyn_line(show_line_otm2_pe_top, line_val_otm2_pe_top, color_line_otm2_pe_top, width_line_otm2_pe_top, style_line_otm2_pe_top)
+
+// ==========================================
 // PLOTTING ALL METRICS (BOTTOM PANE OSCILLATOR WITH 0 MIDDLE LINE)
 // ==========================================
 
@@ -494,19 +597,11 @@ plot(showCE_TV_RT_Input ? ce_tv_rt : na, "CE Realtime Time Value", color=#76FF03
 plot(showPE_TV_RT_Input ? (invertPE_IV_Input ? -pe_tv_rt : pe_tv_rt) : na, "PE Realtime Time Value", color=#FF6E40, linewidth=2)
 plot(showAvg_TV_RT_Input ? otm_avg_tv_rt : na, "OTM Avg Time Value", color=#FFD700, linewidth=2)
 
-// --- Static Level Plots ---
-plot(show5D_Static_CE_IV ? bar_ce_iv_stat : na, "CE Static Intrinsic", color=#00E676, style=plot.style_linebr)
-plot(show5D_Static_PE_IV ? (invertPE_IV_Input ? -bar_pe_iv_stat : bar_pe_iv_stat) : na, "PE Static Intrinsic", color=#FF5252, style=plot.style_linebr)
-plot(show5D_Static_Avg_IV ? bar_avg_iv_stat : na, "Avg Static Intrinsic", color=#FF00FF, style=plot.style_linebr)
-
-plot(show5D_Static_CE_TV ? bar_ce_tv_stat : na, "CE Static Time Value", color=#76FF03, style=plot.style_linebr)
-plot(show5D_Static_PE_TV ? (invertPE_IV_Input ? -bar_pe_tv_stat : bar_pe_tv_stat) : na, "PE Static Time Value", color=#FF6E40, style=plot.style_linebr)
-plot(show5D_Static_Avg_TV ? bar_avg_tv_stat : na, "Avg Static Time Value", color=#FFD700, style=plot.style_linebr)
-
-plot(show5D_Static_BEPInput ? bar_bep_stat : na, "Static BEP", color=color.aqua, style=plot.style_linebr)
-
-plot(showPD_CE_CloseInput ? bar_ce_pdc : na, "CE Prev Day Close", color=#00E676, style=plot.style_linebr)
-plot(showPD_PE_CloseInput ? bar_pe_pdc : na, "PE Prev Day Close", color=#FF5252, style=plot.style_linebr)
+// --- Static Level Plots (Consolidated to optimize total plot count <= 64 limit) ---
+plot(show5D_Static_CE_IV ? bar_ce_iv_stat : (show5D_Static_CE_TV ? bar_ce_tv_stat : na), "CE Static Line", color=#00E676, style=plot.style_linebr)
+plot(show5D_Static_PE_IV ? (invertPE_IV_Input ? -bar_pe_iv_stat : bar_pe_iv_stat) : (show5D_Static_PE_TV ? (invertPE_IV_Input ? -bar_pe_tv_stat : bar_pe_tv_stat) : na), "PE Static Line", color=#FF5252, style=plot.style_linebr)
+plot(show5D_Static_Avg_IV ? bar_avg_iv_stat : (show5D_Static_Avg_TV ? bar_avg_tv_stat : na), "Avg Static Line", color=#FF00FF, style=plot.style_linebr)
+plot(show5D_Static_BEPInput ? bar_bep_stat : (showPD_CE_CloseInput ? bar_ce_pdc : (showPD_PE_CloseInput ? bar_pe_pdc : na)), "Static BEP / Prev Close Line", color=color.aqua, style=plot.style_linebr)
 
 // ==========================================
 // OPTION CANDLES OVERLAY PLOTS
@@ -620,43 +715,44 @@ if barstate.islast
 // BUY / SELL SIGNALS & ALERTS LOGIC (BC & BP)
 // ==========================================
 
-// --- 1. OTM Buy CE & Buy PE Conditions ---
-bool otm_ce_above = ce_otm_ltp > otm_avg_tv_rt
-bool otm_pe_below = pe_otm_ltp < otm_avg_tv_rt
+// --- Universal Helper Crossover & Bounce Evaluators ---
+// Bounce Back: Low touches/dips to reference line (l_val <= ref_val) and finishes/closes above reference line (c_val > ref_val) once the candle closes
+f_bounce_back(float l_val, float c_val, float ref_val) =>
+    not na(l_val) and not na(c_val) and not na(ref_val) and (l_val <= ref_val) and (c_val > ref_val)
 
-bool otm_pe_above = pe_otm_ltp > otm_avg_tv_rt
-bool otm_ce_below = ce_otm_ltp < otm_avg_tv_rt
+f_crossover_up(float curr_c, float prev_c, float ref_val) =>
+    not na(curr_c) and not na(ref_val) and (curr_c > ref_val) and (nz(prev_c) <= ref_val)
 
-// 3-4 Candles Window for OTM
-bool otm_pe_was_below = otm_pe_below[0] or otm_pe_below[1] or otm_pe_below[2] or otm_pe_below[3] or otm_pe_below[4]
-bool otm_ce_was_above = otm_ce_above[0] or otm_ce_above[1] or otm_ce_above[2] or otm_ce_above[3] or otm_ce_above[4]
+// Crossover: Candle closes above the opposite candle close
+f_crossover_opp(float my_c, float prev_my_c, float opp_c, float prev_opp_c) =>
+    not na(my_c) and not na(opp_c) and (my_c > opp_c) and (nz(prev_my_c) <= nz(prev_opp_c))
 
-bool otm_ce_was_below = otm_ce_below[0] or otm_ce_below[1] or otm_ce_below[2] or otm_ce_below[3] or otm_ce_below[4]
-bool otm_pe_was_above = otm_pe_above[0] or otm_pe_above[1] or otm_pe_above[2] or otm_pe_above[3] or otm_pe_above[4]
+// --- 1. OTM 1 & OTM 2 Buy CE & Buy PE Conditions (Crossover & Bounce Back) ---
+// OTM 1 CE Triggers: Candle closes above opposite PE candle on crossover OR bounce back candle closes above reference line
+bool otm1_ce_cross_up  = f_crossover_opp(ce_otm_c, ce_otm_c[1], pe_otm_c, pe_otm_c[1]) or (f_crossover_up(ce_otm_c, ce_otm_c[1], otm_avg_tv_rt) and ce_otm_c > pe_otm_c)
+bool otm1_ce_bounce_up = f_bounce_back(ce_otm_l, ce_otm_c, otm_avg_tv_rt)
 
-bool otm_bc_signal = (ta.crossover(ce_otm_ltp, otm_avg_tv_rt) and otm_pe_was_below) or (ta.crossunder(pe_otm_ltp, otm_avg_tv_rt) and otm_ce_was_above) or (otm_ce_above and otm_pe_below and not (otm_ce_above[1] and otm_pe_below[1]))
-bool otm_bp_signal = (ta.crossover(pe_otm_ltp, otm_avg_tv_rt) and otm_ce_was_below) or (ta.crossunder(ce_otm_ltp, otm_avg_tv_rt) and otm_pe_was_above) or (otm_pe_above and otm_ce_below and not (otm_pe_above[1] and otm_ce_below[1]))
+// OTM 1 PE Triggers: Candle closes above opposite CE candle on crossover OR bounce back candle closes above reference line
+bool otm1_pe_cross_up  = f_crossover_opp(pe_otm_c, pe_otm_c[1], ce_otm_c, ce_otm_c[1]) or (f_crossover_up(pe_otm_c, pe_otm_c[1], otm_avg_tv_rt) and pe_otm_c > ce_otm_c)
+bool otm1_pe_bounce_up = f_bounce_back(pe_otm_l, pe_otm_c, otm_avg_tv_rt)
 
-// --- 2. ITM Buy CE & Buy PE Conditions ---
-bool itm_ce_above = (ce_itm_ltp > itm_avg_iv_rt) or (ce_itm_ltp > itm_avg_tv_rt)
-bool itm_pe_below = (pe_itm_ltp < itm_avg_iv_rt) or (pe_itm_ltp < itm_avg_tv_rt) or (pe_itm_ltp < otm_avg_tv_rt)
+// OTM 2 CE Triggers: Candle closes above opposite PE candle on crossover OR bounce back candle closes above reference line
+bool otm2_ce_cross_up  = f_crossover_opp(ce_otm2_c, ce_otm2_c[1], pe_otm2_c, pe_otm2_c[1]) or (f_crossover_up(ce_otm2_c, ce_otm2_c[1], otm_avg_tv_rt) and ce_otm2_c > pe_otm2_c)
+bool otm2_ce_bounce_up = f_bounce_back(ce_otm2_l, ce_otm2_c, otm_avg_tv_rt)
 
-bool itm_pe_above = (pe_itm_ltp > itm_avg_tv_rt) or (pe_itm_ltp > itm_avg_iv_rt)
-bool itm_ce_below = (ce_itm_ltp < itm_avg_iv_rt) or (ce_itm_ltp < itm_avg_tv_rt)
+// OTM 2 PE Triggers: Candle closes above opposite CE candle on crossover OR bounce back candle closes above reference line
+bool otm2_pe_cross_up  = f_crossover_opp(pe_otm2_c, pe_otm2_c[1], ce_otm2_c, ce_otm2_c[1]) or (f_crossover_up(pe_otm2_c, pe_otm2_c[1], otm_avg_tv_rt) and pe_otm2_c > ce_otm2_c)
+bool otm2_pe_bounce_up = f_bounce_back(pe_otm2_l, pe_otm2_c, otm_avg_tv_rt)
 
-// 3-4 Candles Window for ITM
-bool itm_pe_was_below = itm_pe_below[0] or itm_pe_below[1] or itm_pe_below[2] or itm_pe_below[3] or itm_pe_below[4]
-bool itm_ce_was_above = itm_ce_above[0] or itm_ce_above[1] or itm_ce_above[2] or itm_ce_above[3] or itm_ce_above[4]
+// Pure OTM 1 or OTM 2 Buy CE Signal (Green BC)
+bool otm_bc_signal = otm1_ce_cross_up or otm1_ce_bounce_up or otm2_ce_cross_up or otm2_ce_bounce_up
 
-bool itm_ce_was_below = itm_ce_below[0] or itm_ce_below[1] or itm_ce_below[2] or itm_ce_below[3] or itm_ce_below[4]
-bool itm_pe_was_above = itm_pe_above[0] or itm_pe_above[1] or itm_pe_above[2] or itm_pe_above[3] or itm_pe_above[4]
+// Pure OTM 1 or OTM 2 Buy PE Signal (Red BP)
+bool otm_bp_signal = otm1_pe_cross_up or otm1_pe_bounce_up or otm2_pe_cross_up or otm2_pe_bounce_up
 
-bool itm_bc_signal = (ta.crossover(ce_itm_ltp, itm_avg_iv_rt) and itm_pe_was_below) or (ta.crossover(ce_itm_ltp, itm_avg_tv_rt) and itm_pe_was_below) or (itm_ce_above and itm_pe_below and not (itm_ce_above[1] and itm_pe_below[1]))
-bool itm_bp_signal = (ta.crossover(pe_itm_ltp, itm_avg_tv_rt) and itm_ce_was_below) or (ta.crossover(pe_itm_ltp, itm_avg_iv_rt) and itm_ce_was_below) or (itm_pe_above and itm_ce_below and not (itm_pe_above[1] and itm_ce_below[1]))
-
-// --- 3. Combined Signals & Alternating Signal Engine ---
-bool raw_bc_signal = otm_bc_signal or itm_bc_signal
-bool raw_bp_signal = otm_bp_signal or itm_bp_signal
+// --- Combined Signal Engine (STRICTLY OTM 1 & OTM 2 ONLY - No ATM / ITM) ---
+bool raw_bc_signal = otm_bc_signal
+bool raw_bp_signal = otm_bp_signal
 
 bool init_bc_signal = raw_bc_signal and not raw_bc_signal[1]
 bool init_bp_signal = raw_bp_signal and not raw_bp_signal[1]
@@ -685,8 +781,10 @@ plotshape(showSignalPlotsInput and bc_signal, title="Buy CE (BC)", style=shape.l
 plotshape(showSignalPlotsInput and bp_signal, title="Buy PE (BP)", style=shape.labeldown, location=location.abovebar, color=colorSB_PE, textcolor=colorSignalTextColor, size=size.small, text="BP")
 
 // TradingView Alert Conditions
-alertcondition(bc_signal, title="Buy CE (BC) Alert", message="BC ALERT: Buy CE condition (OTM or ITM) triggered on {{ticker}}!")
-alertcondition(bp_signal, title="Buy PE (BP) Alert", message="BP ALERT: Buy PE condition (OTM or ITM) triggered on {{ticker}}!")
+alertcondition(bc_signal, title="Buy CE (BC) Alert", message="BC ALERT: OTM 1 or OTM 2 CE Crossover/Bounce triggered on {{ticker}}!")
+alertcondition(bp_signal, title="Buy PE (BP) Alert", message="BP ALERT: OTM 1 or OTM 2 PE Crossover/Bounce triggered on {{ticker}}!")
+alertcondition(otm_bc_signal, title="OTM CE Crossover / Bounce Alert", message="OTM CE ALERT: OTM 1 or OTM 2 CE candle crossover or bounce triggered on {{ticker}}!")
+alertcondition(otm_bp_signal, title="OTM PE Crossover / Bounce Alert", message="OTM PE ALERT: OTM 1 or OTM 2 PE candle crossover or bounce triggered on {{ticker}}!")
 
 // ==========================================
 // SUMMARY DASHBOARD TABLE
@@ -744,7 +842,7 @@ if barstate.islast
         table.cell(summaryTable, 2, 3, "PE IV: " + str.tostring(pe_itm_iv_rt, "#.##"), bgcolor=color.black, text_color=#FF1744, text_size=sz)
         table.cell(summaryTable, 3, 3, "Avg IV: " + str.tostring(itm_avg_iv_rt, "#.##"), bgcolor=color.black, text_color=color.white, text_size=sz)
         table.cell(summaryTable, 4, 3, "Avg TV: " + str.tostring(itm_avg_tv_rt, "#.##"), bgcolor=color.black, text_color=color.silver, text_size=sz)
-        table.cell(summaryTable, 5, 3, itm_bc_signal ? "ITM BUY CE" : (itm_bp_signal ? "ITM BUY PE" : "NEUTRAL"), bgcolor=itm_bc_signal ? #1B5E20 : (itm_bp_signal ? #880E4F : color.black), text_color=color.white, text_size=sz)
+        table.cell(summaryTable, 5, 3, "NEUTRAL", bgcolor=color.black, text_color=color.white, text_size=sz)
 
         // Row 4: OTM Strike Metrics
         table.cell(summaryTable, 0, 4, "OTM Strike Metrics", bgcolor=#212121, text_color=color.white, text_size=sz)
