@@ -1,5 +1,5 @@
 //@version=6
-indicator("5A.Techfrost Intrinsic Time Value and BEP Analytics", overlay=true, max_labels_count=500, max_lines_count=1000, max_boxes_count=1000, precision=2)
+indicator("5A.Techfrost Intrinsic Time Value and BEP Analytics", overlay=true, max_labels_count=500, max_lines_count=500, max_boxes_count=500, precision=2)
 
 // ==========================================
 // ENUMS & INPUTS
