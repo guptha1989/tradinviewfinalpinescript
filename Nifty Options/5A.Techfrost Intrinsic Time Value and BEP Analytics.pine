@@ -576,15 +576,6 @@ plot(show5D_Static_BEPInput ? bar_bep_stat : (showPD_CE_CloseInput ? bar_ce_pdc 
 // OPTION CANDLES OVERLAY PLOTS & DRAWINGS
 // ==========================================
 
-// Helper for drawing option candles via box/line (0 plot channels used)
-f_draw_option_candle(bool is_enabled, float o, float h, float l, float c, color col_up, color col_dn) =>
-    if is_enabled and not na(o) and not na(h) and not na(l) and not na(c)
-        color body_col = c >= o ? col_up : col_dn
-        line.new(bar_index, h, bar_index, l, color=body_col, width=1)
-        float top_val = math.max(o, c)
-        float bot_val = math.min(o, c)
-        box.new(left=bar_index - 1, top=top_val, right=bar_index, bottom=bot_val, border_color=body_col, bgcolor=body_col)
-
 // ITM 1 CE Candle
 bool is_itm_ce_bull = nz(ce_itm_c) >= nz(ce_itm_o)
 color col_itm_ce    = is_itm_ce_bull ? color_itm_ce_up : color_itm_ce_dn
@@ -592,7 +583,7 @@ plotcandle(show_itm_ce_candle ? ce_itm_o : na,
            show_itm_ce_candle ? ce_itm_h : na,
            show_itm_ce_candle ? ce_itm_l : na,
            show_itm_ce_candle ? ce_itm_c : na,
-           title="ITM CE Candle", color=col_itm_ce)
+           title="ITM 1 CE Candle", color=col_itm_ce)
 
 // ITM 1 PE Candle
 bool is_itm_pe_bull = nz(pe_itm_c) >= nz(pe_itm_o)
@@ -601,7 +592,7 @@ plotcandle(show_itm_pe_candle ? pe_itm_o : na,
            show_itm_pe_candle ? pe_itm_h : na,
            show_itm_pe_candle ? pe_itm_l : na,
            show_itm_pe_candle ? pe_itm_c : na,
-           title="ITM PE Candle", color=col_itm_pe)
+           title="ITM 1 PE Candle", color=col_itm_pe)
 
 // OTM 1 CE Candle
 bool is_otm_ce_bull = nz(ce_otm_c) >= nz(ce_otm_o)
@@ -610,7 +601,7 @@ plotcandle(show_otm_ce_candle ? ce_otm_o : na,
            show_otm_ce_candle ? ce_otm_h : na,
            show_otm_ce_candle ? ce_otm_l : na,
            show_otm_ce_candle ? ce_otm_c : na,
-           title="OTM CE Candle", color=col_otm_ce)
+           title="OTM 1 CE Candle", color=col_otm_ce)
 
 // OTM 1 PE Candle
 bool is_otm_pe_bull = nz(pe_otm_c) >= nz(pe_otm_o)
@@ -621,11 +612,41 @@ plotcandle(show_otm_pe_candle ? pe_otm_o : na,
            show_otm_pe_candle ? pe_otm_c : na,
            title="OTM 1 PE Candle", color=col_otm_pe)
 
-// ITM 2 & OTM 2 Candles (Drawn dynamically via box/line to preserve total plot count <= 64 limit)
-f_draw_option_candle(show_itm2_ce_candle, ce_itm2_o, ce_itm2_h, ce_itm2_l, ce_itm2_c, color_itm2_ce_up, color_itm2_ce_dn)
-f_draw_option_candle(show_itm2_pe_candle, pe_itm2_o, pe_itm2_h, pe_itm2_l, pe_itm2_c, color_itm2_pe_up, color_itm2_pe_dn)
-f_draw_option_candle(show_otm2_ce_candle, ce_otm2_o, ce_otm2_h, ce_otm2_l, ce_otm2_c, color_otm2_ce_up, color_otm2_ce_dn)
-f_draw_option_candle(show_otm2_pe_candle, pe_otm2_o, pe_otm2_h, pe_otm2_l, pe_otm2_c, color_otm2_pe_up, color_otm2_pe_dn)
+// ITM 2 CE Candle
+bool is_itm2_ce_bull = nz(ce_itm2_c) >= nz(ce_itm2_o)
+color col_itm2_ce    = is_itm2_ce_bull ? color_itm2_ce_up : color_itm2_ce_dn
+plotcandle(show_itm2_ce_candle ? ce_itm2_o : na,
+           show_itm2_ce_candle ? ce_itm2_h : na,
+           show_itm2_ce_candle ? ce_itm2_l : na,
+           show_itm2_ce_candle ? ce_itm2_c : na,
+           title="ITM 2 CE Candle", color=col_itm2_ce)
+
+// ITM 2 PE Candle
+bool is_itm2_pe_bull = nz(pe_itm2_c) >= nz(pe_itm2_o)
+color col_itm2_pe    = is_itm2_pe_bull ? color_itm2_pe_up : color_itm2_pe_dn
+plotcandle(show_itm2_pe_candle ? pe_itm2_o : na,
+           show_itm2_pe_candle ? pe_itm2_h : na,
+           show_itm2_pe_candle ? pe_itm2_l : na,
+           show_itm2_pe_candle ? pe_itm2_c : na,
+           title="ITM 2 PE Candle", color=col_itm2_pe)
+
+// OTM 2 CE Candle
+bool is_otm2_ce_bull = nz(ce_otm2_c) >= nz(ce_otm2_o)
+color col_otm2_ce    = is_otm2_ce_bull ? color_otm2_ce_up : color_otm2_ce_dn
+plotcandle(show_otm2_ce_candle ? ce_otm2_o : na,
+           show_otm2_ce_candle ? ce_otm2_h : na,
+           show_otm2_ce_candle ? ce_otm2_l : na,
+           show_otm2_ce_candle ? ce_otm2_c : na,
+           title="OTM 2 CE Candle", color=col_otm2_ce)
+
+// OTM 2 PE Candle
+bool is_otm2_pe_bull = nz(pe_otm2_c) >= nz(pe_otm2_o)
+color col_otm2_pe    = is_otm2_pe_bull ? color_otm2_pe_up : color_otm2_pe_dn
+plotcandle(show_otm2_pe_candle ? pe_otm2_o : na,
+           show_otm2_pe_candle ? pe_otm2_h : na,
+           show_otm2_pe_candle ? pe_otm2_l : na,
+           show_otm2_pe_candle ? pe_otm2_c : na,
+           title="OTM 2 PE Candle", color=col_otm2_pe)
 
 // ==========================================
 // STRIKE NAME LABELS FOR CANDLES
