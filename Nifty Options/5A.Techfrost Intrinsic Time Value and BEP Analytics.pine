@@ -106,22 +106,6 @@ show_otm_pe_candle = input.bool(true, "Show OTM 1 PE Candle Overlay", group="Opt
 color_otm_pe_up    = input.color(#FF5252, "OTM 1 PE Candle Up Color", group="Option Candle Settings")
 color_otm_pe_dn    = input.color(#D50000, "OTM 1 PE Candle Down Color", group="Option Candle Settings")
 
-show_itm2_ce_candle = input.bool(true, "Show ITM 2 CE Candle Overlay", group="Option Candle Settings")
-color_itm2_ce_up    = input.color(#00C853, "ITM 2 CE Candle Up Color", group="Option Candle Settings")
-color_itm2_ce_dn    = input.color(#0091EA, "ITM 2 CE Candle Down Color", group="Option Candle Settings")
-
-show_itm2_pe_candle = input.bool(true, "Show ITM 2 PE Candle Overlay", group="Option Candle Settings")
-color_itm2_pe_up    = input.color(#D50000, "ITM 2 PE Candle Up Color", group="Option Candle Settings")
-color_itm2_pe_dn    = input.color(#FF6D00, "ITM 2 PE Candle Down Color", group="Option Candle Settings")
-
-show_otm2_ce_candle = input.bool(true, "Show OTM 2 CE Candle Overlay", group="Option Candle Settings")
-color_otm2_ce_up    = input.color(#64DD17, "OTM 2 CE Candle Up Color", group="Option Candle Settings")
-color_otm2_ce_dn    = input.color(#00BFA5, "OTM 2 CE Candle Down Color", group="Option Candle Settings")
-
-show_otm2_pe_candle = input.bool(true, "Show OTM 2 PE Candle Overlay", group="Option Candle Settings")
-color_otm2_pe_up    = input.color(#FF1744, "OTM 2 PE Candle Up Color", group="Option Candle Settings")
-color_otm2_pe_dn    = input.color(#B71C1C, "OTM 2 PE Candle Down Color", group="Option Candle Settings")
-
 show_strike_labels  = input.bool(true, "Show Strike Name Labels on Candles", group="Option Candle Settings")
 
 // --- Dynamic Touch Line Settings ---
@@ -573,44 +557,56 @@ plot(show_otm2_avg_tv_stat ? bar_otm2_avg_tv_stat : na, "OTM 2 Static Avg Time V
 plot(show5D_Static_BEPInput ? bar_bep_stat : (showPD_CE_CloseInput ? bar_ce_pdc : (showPD_PE_CloseInput ? bar_pe_pdc : na)), "Static BEP / Prev Close Line", color=color.aqua, style=plot.style_linebr)
 
 // ==========================================
-// OPTION CANDLES OVERLAY PLOTS (DRAWN VIA DRAWING OBJECTS TO STAY WELL WITHIN 64 PLOT LIMIT)
+// OPTION CANDLES OVERLAY PLOTS (NATIVE TICKWISE REALTIME PLOTCANDLE)
 // ==========================================
 
-f_draw_candle_box(bool show_flag, float o, float h, float l, float c, color col_up, color col_dn, int b_width) =>
-    bool ok = show_flag and not na(o) and not na(h) and not na(l) and not na(c) and o > 0 and h > 0 and l > 0 and c > 0 and h >= l and h >= o and h >= c and l <= o and l <= c
-    if ok
-        color candle_col = c >= o ? col_up : col_dn
-        float body_top = math.max(o, c)
-        float body_bot = math.min(o, c)
-        if body_top == body_bot
-            body_top := body_top + 0.05
-            body_bot := body_bot - 0.05
-        line.new(bar_index, h, bar_index, l, xloc=xloc.bar_index, color=candle_col, width=1)
-        box.new(left=bar_index, top=body_top, right=bar_index, bottom=body_bot, xloc=xloc.bar_index, border_color=candle_col, bgcolor=candle_col, border_width=b_width)
+f_valid_candle(float o, float h, float l, float c) =>
+    bool ok = not na(o) and not na(h) and not na(l) and not na(c) and o > 0 and h > 0 and l > 0 and c > 0 and h >= l and h >= o and h >= c and l <= o and l <= c
+    float vo = ok ? o : na
+    float vh = ok ? h : na
+    float vl = ok ? l : na
+    float vc = ok ? c : na
+    [vo, vh, vl, vc]
 
 // ITM 1 CE Candle
-f_draw_candle_box(show_itm_ce_candle, ce_itm_o, ce_itm_h, ce_itm_l, ce_itm_c, color_itm_ce_up, color_itm_ce_dn, 3)
+[itm1_ce_o, itm1_ce_h, itm1_ce_l, itm1_ce_c] = f_valid_candle(ce_itm_o, ce_itm_h, ce_itm_l, ce_itm_c)
+bool is_itm_ce_bull = nz(itm1_ce_c) >= nz(itm1_ce_o)
+color col_itm_ce    = is_itm_ce_bull ? color_itm_ce_up : color_itm_ce_dn
+plotcandle(show_itm_ce_candle ? itm1_ce_o : na,
+           show_itm_ce_candle ? itm1_ce_h : na,
+           show_itm_ce_candle ? itm1_ce_l : na,
+           show_itm_ce_candle ? itm1_ce_c : na,
+           title="ITM 1 CE Candle", color=col_itm_ce)
 
 // ITM 1 PE Candle
-f_draw_candle_box(show_itm_pe_candle, pe_itm_o, pe_itm_h, pe_itm_l, pe_itm_c, color_itm_pe_up, color_itm_pe_dn, 3)
+[itm1_pe_o, itm1_pe_h, itm1_pe_l, itm1_pe_c] = f_valid_candle(pe_itm_o, pe_itm_h, pe_itm_l, pe_itm_c)
+bool is_itm_pe_bull = nz(itm1_pe_c) >= nz(itm1_pe_o)
+color col_itm_pe    = is_itm_pe_bull ? color_itm_pe_up : color_itm_pe_dn
+plotcandle(show_itm_pe_candle ? itm1_pe_o : na,
+           show_itm_pe_candle ? itm1_pe_h : na,
+           show_itm_pe_candle ? itm1_pe_l : na,
+           show_itm_pe_candle ? itm1_pe_c : na,
+           title="ITM 1 PE Candle", color=col_itm_pe)
 
 // OTM 1 CE Candle
-f_draw_candle_box(show_otm_ce_candle, ce_otm_o, ce_otm_h, ce_otm_l, ce_otm_c, color_otm_ce_up, color_otm_ce_dn, 3)
+[otm1_ce_o, otm1_ce_h, otm1_ce_l, otm1_ce_c] = f_valid_candle(ce_otm_o, ce_otm_h, ce_otm_l, ce_otm_c)
+bool is_otm_ce_bull = nz(otm1_ce_c) >= nz(otm1_ce_o)
+color col_otm_ce    = is_otm_ce_bull ? color_otm_ce_up : color_otm_ce_dn
+plotcandle(show_otm_ce_candle ? otm1_ce_o : na,
+           show_otm_ce_candle ? otm1_ce_h : na,
+           show_otm_ce_candle ? otm1_ce_l : na,
+           show_otm_ce_candle ? otm1_ce_c : na,
+           title="OTM 1 CE Candle", color=col_otm_ce)
 
 // OTM 1 PE Candle
-f_draw_candle_box(show_otm_pe_candle, pe_otm_o, pe_otm_h, pe_otm_l, pe_otm_c, color_otm_pe_up, color_otm_pe_dn, 3)
-
-// ITM 2 CE Candle
-f_draw_candle_box(show_itm2_ce_candle, ce_itm2_o, ce_itm2_h, ce_itm2_l, ce_itm2_c, color_itm2_ce_up, color_itm2_ce_dn, 3)
-
-// ITM 2 PE Candle
-f_draw_candle_box(show_itm2_pe_candle, pe_itm2_o, pe_itm2_h, pe_itm2_l, pe_itm2_c, color_itm2_pe_up, color_itm2_pe_dn, 3)
-
-// OTM 2 CE Candle
-f_draw_candle_box(show_otm2_ce_candle, ce_otm2_o, ce_otm2_h, ce_otm2_l, ce_otm2_c, color_otm2_ce_up, color_otm2_ce_dn, 3)
-
-// OTM 2 PE Candle
-f_draw_candle_box(show_otm2_pe_candle, pe_otm2_o, pe_otm2_h, pe_otm2_l, pe_otm2_c, color_otm2_pe_up, color_otm2_pe_dn, 3)
+[otm1_pe_o, otm1_pe_h, otm1_pe_l, otm1_pe_c] = f_valid_candle(pe_otm_o, pe_otm_h, pe_otm_l, pe_otm_c)
+bool is_otm_pe_bull = nz(otm1_pe_c) >= nz(otm1_pe_o)
+color col_otm_pe    = is_otm_pe_bull ? color_otm_pe_up : color_otm_pe_dn
+plotcandle(show_otm_pe_candle ? otm1_pe_o : na,
+           show_otm_pe_candle ? otm1_pe_h : na,
+           show_otm_pe_candle ? otm1_pe_l : na,
+           show_otm_pe_candle ? otm1_pe_c : na,
+           title="OTM 1 PE Candle", color=col_otm_pe)
 
 // ==========================================
 // STRIKE NAME LABELS FOR CANDLES
@@ -619,11 +615,6 @@ var label lbl_itm1_ce = na
 var label lbl_itm1_pe = na
 var label lbl_otm1_ce = na
 var label lbl_otm1_pe = na
-
-var label lbl_itm2_ce = na
-var label lbl_itm2_pe = na
-var label lbl_otm2_ce = na
-var label lbl_otm2_pe = na
 
 f_update_strike_label(label existing_lbl, bool show_flag, float price_val, string label_text, color lbl_col) =>
     if barstate.islast and show_strike_labels and show_flag and not na(price_val)
@@ -638,11 +629,6 @@ if barstate.islast
     lbl_itm1_pe := f_update_strike_label(lbl_itm1_pe, show_itm_pe_candle, pe_itm_c, pe_itm_ticker + " (ITM 1)", color_itm_pe_up)
     lbl_otm1_ce := f_update_strike_label(lbl_otm1_ce, show_otm_ce_candle, ce_otm_c, ce_otm_ticker + " (OTM 1)", color_otm_ce_up)
     lbl_otm1_pe := f_update_strike_label(lbl_otm1_pe, show_otm_pe_candle, pe_otm_c, pe_otm_ticker + " (OTM 1)", color_otm_pe_up)
-
-    lbl_itm2_ce := f_update_strike_label(lbl_itm2_ce, show_itm2_ce_candle, ce_itm2_c, ce_itm2_ticker + " (ITM 2)", color_itm2_ce_up)
-    lbl_itm2_pe := f_update_strike_label(lbl_itm2_pe, show_itm2_pe_candle, pe_itm2_c, pe_itm2_ticker + " (ITM 2)", color_itm2_pe_up)
-    lbl_otm2_ce := f_update_strike_label(lbl_otm2_ce, show_otm2_ce_candle, ce_otm2_c, ce_otm2_ticker + " (OTM 2)", color_otm2_ce_up)
-    lbl_otm2_pe := f_update_strike_label(lbl_otm2_pe, show_otm2_pe_candle, pe_otm2_c, pe_otm2_ticker + " (OTM 2)", color_otm2_pe_up)
 
 // ==========================================
 // BUY / SELL SIGNALS & ALERTS LOGIC (BC & BP)
