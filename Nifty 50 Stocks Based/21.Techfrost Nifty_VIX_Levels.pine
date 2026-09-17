@@ -117,7 +117,7 @@ float s1_val = buy_level + X_val
 float s2_val = s1_val + Y_val
 float s3_val = s2_val + Y_val
 float s4_val = s3_val + Y_val
-float s5_val = s5_val + Y_val
+float s5_val = s4_val + Y_val
 float s6_val = s5_val + Y_val
 
 // Resistance Levels (R1 to R7)
@@ -126,7 +126,7 @@ float r2_val = r1_val - Y_val
 float r3_val = r2_val - Y_val
 float r4_val = r3_val - Y_val
 float r5_val = r4_val - Y_val
-float r6_val = r6_val - Y_val
+float r6_val = r5_val - Y_val
 float r7_val = r6_val - Y_val
 
 // Reset lines on new day start
