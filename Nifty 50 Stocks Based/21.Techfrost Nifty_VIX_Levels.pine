@@ -27,8 +27,8 @@ time_factor_val = input.float(24.0, "Formula Time Factor (Default 24)", group=G_
 spot_calc_ref = input.string("Spot Low", "Spot Price Reference for X", 
   options=["Spot Low", "Spot High", "Spot Close", "Spot Open"], group=G_CALC,
   tooltip="Choose which price reference (Low, High, Close, Open of selected Mode) is used in X formula.")
-sell_ref_mode = input.string("Spot Low - Y", "Sell Level Formula Mode",
-  options=["Spot Low - Y", "Spot High - Y", "Spot High + Y"], group=G_CALC,
+sell_ref_mode = input.string("Spot High - Y", "Sell Level Formula Mode",
+  options=["Spot High - Y", "Spot Low - Y", "Spot High + Y"], group=G_CALC,
   tooltip="Select formula for Sell Level calculation.")
 
 // 3. Line Formatting & Style Settings
@@ -106,9 +106,9 @@ float Y_val = X_val / 4.0
 
 // Buy & Sell Level Calculations
 float buy_level = spot_low_used + Y_val
-float sell_level = spot_low_used - Y_val
-if sell_ref_mode == "Spot High - Y"
-    sell_level := spot_high_used - Y_val
+float sell_level = spot_high_used - Y_val
+if sell_ref_mode == "Spot Low - Y"
+    sell_level := spot_low_used - Y_val
 else if sell_ref_mode == "Spot High + Y"
     sell_level := spot_high_used + Y_val
 
@@ -302,7 +302,7 @@ if show_table and barstate.islast
     table.cell(summary_tbl, 0, 8, "Buy Level (Low + Y)", bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_left)
     table.cell(summary_tbl, 1, 8, str.tostring(buy_level, "#.##"), bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 9, "Sell Level", bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 0, 9, "Sell Level (High - Y)", bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_left)
     table.cell(summary_tbl, 1, 9, str.tostring(sell_level, "#.##"), bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_center)
     
     table.cell(summary_tbl, 0, 10, "Support 1 (Buy + X)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
