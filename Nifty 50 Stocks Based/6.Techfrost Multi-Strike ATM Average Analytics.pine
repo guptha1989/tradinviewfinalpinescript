@@ -724,7 +724,7 @@ f_get_table_text_size(string sz_str) =>
         "Large"  => size.large
         => size.small
 
-var table summaryTable = table.new(f_get_table_pos(tablePosInput), 8, 21, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
+var table summaryTable = table.new(f_get_table_pos(tablePosInput), 8, 25, bgcolor=color.black, border_color=color.gray, border_width=1, force_overlay=true)
 
 string underlyingName = switch actualUnderlying
     UnderlyingAsset.banknifty => "BANKNIFTY"
@@ -783,49 +783,59 @@ if barstate.islast
         table.cell(summaryTable, 4, 0, dayOpenFmt, bgcolor=colorDayATMHighlight, text_color=color.black, text_size=curTextSize)
         table.cell(summaryTable, 5, 0, "Current ATM:", bgcolor=color.new(#1565C0, 0), text_color=color.silver, text_size=curTextSize)
         table.cell(summaryTable, 6, 0, curAtmFmt, bgcolor=colorCurATMHighlight, text_color=color.black, text_size=curTextSize)
-        table.cell(summaryTable, 7, 0, "Rolling BEP: " + rollingBepFmt, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 7, 0, "Rolling BEP: " + rollingBepFmt, bgcolor=color.new(#1565C0, 0), text_color=color.yellow, text_size=curTextSize)
 
-        // Row 1: Day Open Averages (CE & PE)
-        table.cell(summaryTable, 0, 1, "Day Open Basket Avg", bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 1, 1, "CE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 2, 1, str.tostring(ceAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#00E676, text_size=curTextSize)
-        table.cell(summaryTable, 3, 1, "PE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 4, 1, str.tostring(peAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#FF1744, text_size=curTextSize)
-        table.cell(summaryTable, 5, 1, "Basket Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
-        table.cell(summaryTable, 6, 1, str.tostring(basketAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 7, 1, "", bgcolor=color.new(#212121, 0))
+        // Row 1: Rolling BEP Calculation Breakdown with Day ATM Strike & Previous Close Values
+        table.cell(summaryTable, 0, 1, "Rolling BEP Calc", bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 1, 1, "Day ATM Strike:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 2, 1, dayOpenFmt, bgcolor=colorDayATMHighlight, text_color=color.black, text_size=curTextSize)
+        table.cell(summaryTable, 3, 1, "CE Prev Close:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 4, 1, str.tostring(ce_pdc_atm, "#.##"), bgcolor=color.new(#212121, 0), text_color=#00E676, text_size=curTextSize)
+        table.cell(summaryTable, 5, 1, "PE Prev Close:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 6, 1, str.tostring(pe_pdc_atm, "#.##"), bgcolor=color.new(#212121, 0), text_color=#FF1744, text_size=curTextSize)
+        table.cell(summaryTable, 7, 1, "(CE+PE)/2 = " + rollingBepFmt, bgcolor=color.new(#1565C0, 0), text_color=color.yellow, text_size=curTextSize)
 
-        // Row 2: Current Running Averages & Changes
-        table.cell(summaryTable, 0, 2, "Current Running Avg", bgcolor=color.new(#1C1C1C, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 1, 2, "CE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
+        // Row 2: Day Open Averages (CE & PE)
+        table.cell(summaryTable, 0, 2, "Day Open Basket Avg", bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 1, 2, "CE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 2, 2, str.tostring(ceAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#00E676, text_size=curTextSize)
+        table.cell(summaryTable, 3, 2, "PE Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 4, 2, str.tostring(peAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=#FF1744, text_size=curTextSize)
+        table.cell(summaryTable, 5, 2, "Basket Open Avg:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 6, 2, str.tostring(basketAvgOpen, "#.##"), bgcolor=color.new(#212121, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 7, 2, "", bgcolor=color.new(#212121, 0))
+
+        // Row 3: Current Running Averages & Changes
+        table.cell(summaryTable, 0, 3, "Current Running Avg", bgcolor=color.new(#1C1C1C, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 1, 3, "CE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
 
         string ceAvgStr = str.tostring(ceAvgCur, "#.##") + " (" + (ceAvgChg >= 0 ? "+" : "") + str.tostring(ceAvgChg, "#.##") + ")"
         color ceAvgColor = ceAvgChg >= 0 ? #00E676 : #FF5252
-        table.cell(summaryTable, 2, 2, ceAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=ceAvgColor, text_size=curTextSize)
+        table.cell(summaryTable, 2, 3, ceAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=ceAvgColor, text_size=curTextSize)
 
-        table.cell(summaryTable, 3, 2, "PE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 3, 3, "PE Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
         string peAvgStr = str.tostring(peAvgCur, "#.##") + " (" + (peAvgChg >= 0 ? "+" : "") + str.tostring(peAvgChg, "#.##") + ")"
         color peAvgColor = peAvgChg >= 0 ? #00E676 : #FF5252
-        table.cell(summaryTable, 4, 2, peAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=peAvgColor, text_size=curTextSize)
+        table.cell(summaryTable, 4, 3, peAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=peAvgColor, text_size=curTextSize)
 
-        table.cell(summaryTable, 5, 2, "Basket Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 5, 3, "Basket Cur Avg:", bgcolor=color.new(#1C1C1C, 0), text_color=color.silver, text_size=curTextSize)
         string basketAvgStr = str.tostring(basketAvgCur, "#.##") + " (" + (basketAvgChg >= 0 ? "+" : "") + str.tostring(basketAvgChg, "#.##") + ")"
         color basketAvgColor = basketAvgChg >= 0 ? #00E676 : #FF5252
-        table.cell(summaryTable, 6, 2, basketAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=basketAvgColor, text_size=curTextSize)
-        table.cell(summaryTable, 7, 2, "", bgcolor=color.new(#1C1C1C, 0))
+        table.cell(summaryTable, 6, 3, basketAvgStr, bgcolor=color.new(#1C1C1C, 0), text_color=basketAvgColor, text_size=curTextSize)
+        table.cell(summaryTable, 7, 3, "", bgcolor=color.new(#1C1C1C, 0))
 
-        // Row 3: Grid Column Headers
-        table.cell(summaryTable, 0, 3, "Strike",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 1, 3, "CE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 2, 3, "CE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 3, 3, "CE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 4, 3, "PE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 5, 3, "PE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 6, 3, "PE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
-        table.cell(summaryTable, 7, 3, "|CE-PE| Diff", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        // Row 4: Grid Column Headers
+        table.cell(summaryTable, 0, 4, "Strike",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 1, 4, "CE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 2, 4, "CE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 3, 4, "CE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 4, 4, "PE Open",    bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 5, 4, "PE LTP",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 6, 4, "PE Chg",     bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
+        table.cell(summaryTable, 7, 4, "|CE-PE| Diff", bgcolor=color.new(#333333, 0), text_color=color.white, text_size=curTextSize)
 
-        // Rows 4+: Populate active selected strikes grid
-        int rowIdx = 4
+        // Rows 5+: Populate active selected strikes grid
+        int rowIdx = 5
         if numStrikesInput >= 6
             f_fill_grid_row(summaryTable, rowIdx, k_p6, k_p6 == curATMStrike, k_p6 == dayOpenATMStrike, ce_o_p6, ce_c_p6, pe_o_p6, pe_c_p6, curTextSize)
             rowIdx += 1
