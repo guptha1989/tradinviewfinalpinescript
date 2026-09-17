@@ -35,6 +35,8 @@ sell_ref_mode = input.string("Spot High - Y", "Sell Level Formula Mode",
 show_buy_sell_lines = input.bool(true, "Show Buy & Sell Level Lines", group=G_STYLE)
 show_support_lines  = input.bool(true, "Show Support Lines (S1-S6)", group=G_STYLE)
 show_resist_lines   = input.bool(true, "Show Resistance Lines (R1-R7)", group=G_STYLE)
+show_median_lines   = input.bool(true, "Show Median (Midpoint) Lines", group=G_STYLE,
+  tooltip="Bisects space between each adjacent level into equal halves (e.g. Buy/S1, S1/S2, Sell/R1, etc.)")
 
 line_render_mode = input.string("Horizontal Lines (Projected to Right)", "Line Rendering Mode",
   options=["Standard Plots (Style Tab Customizable)", "Horizontal Lines (Projected to Right)"], group=G_STYLE)
@@ -44,13 +46,17 @@ c_buy   = input.color(#00E676, "Buy Level Color", group=G_STYLE)
 c_sell  = input.color(#FF5252, "Sell Level Color", group=G_STYLE)
 c_sup   = input.color(#00B0FF, "Support Lines Color (S1-S6)", group=G_STYLE)
 c_res   = input.color(#FF9100, "Resistance Lines Color (R1-R7)", group=G_STYLE)
+c_med   = input.color(color.new(#E040FB, 20), "Median Lines Color", group=G_STYLE)
 
 // Line Styles & Widths
-line_pattern_str = input.string("Solid", "Line Pattern / Style", options=["Solid", "Dashed", "Dotted"], group=G_STYLE)
-line_width_val   = input.int(2, "Line Width", minval=1, maxval=4, group=G_STYLE)
+line_pattern_str = input.string("Solid", "Main Line Pattern / Style", options=["Solid", "Dashed", "Dotted"], group=G_STYLE)
+med_pattern_str  = input.string("Dashed", "Median Line Pattern / Style", options=["Solid", "Dashed", "Dotted"], group=G_STYLE)
+line_width_val   = input.int(2, "Main Line Width", minval=1, maxval=4, group=G_STYLE)
+med_width_val    = input.int(1, "Median Line Width", minval=1, maxval=4, group=G_STYLE)
 
 // Direct evaluation for plot style to ensure input plot_style type
-p_style = line_pattern_str == "Dotted" ? plot.style_circles : plot.style_line
+p_style     = line_pattern_str == "Dotted" ? plot.style_circles : plot.style_line
+med_p_style = med_pattern_str == "Dotted" ? plot.style_circles : plot.style_line
 
 f_get_line_pattern(string p_str) =>
     p_str == "Dashed" ? line.style_dashed : (p_str == "Dotted" ? line.style_dotted : line.style_solid)
@@ -89,7 +95,7 @@ float spot_low_used  = calc_mode == "Previous Day (VIX Close & Spot High/Low)" ?
 float spot_close_used= calc_mode == "Previous Day (VIX Close & Spot High/Low)" ? spot_pd_close: (calc_mode == "First 30 Minutes (VIX 30m & Spot 30m)" ? spot_30m_close: spot_5m_close)
 
 // =========================================================================
-// FORMULA CALCULATIONS (X, Y, BUY, SELL, S1-S6, R1-R7)
+// FORMULA CALCULATIONS (X, Y, BUY, SELL, S1-S6, R1-R7, MEDIAN LINES)
 // =========================================================================
 // Determine Spot Reference Price for X formula
 float ref_price = spot_low_used
@@ -129,6 +135,24 @@ float r5_val = r4_val - Y_val
 float r6_val = r5_val - Y_val
 float r7_val = r6_val - Y_val
 
+// Median (Midpoint) Levels between Adjacent Lines
+float m_sell_buy = (sell_level + buy_level) / 2.0
+
+float m_buy_s1 = (buy_level + s1_val) / 2.0
+float m_s1_s2  = (s1_val + s2_val) / 2.0
+float m_s2_s3  = (s2_val + s3_val) / 2.0
+float m_s3_s4  = (s3_val + s4_val) / 2.0
+float m_s4_s5  = (s4_val + s5_val) / 2.0
+float m_s5_s6  = (s5_val + s6_val) / 2.0
+
+float m_sell_r1 = (sell_level + r1_val) / 2.0
+float m_r1_r2   = (r1_val + r2_val) / 2.0
+float m_r2_r3   = (r2_val + r3_val) / 2.0
+float m_r3_r4   = (r3_val + r4_val) / 2.0
+float m_r4_r5   = (r4_val + r5_val) / 2.0
+float m_r5_r6   = (r5_val + r6_val) / 2.0
+float m_r6_r7   = (r6_val + r7_val) / 2.0
+
 // Reset lines on new day start
 is_new_day = ta.change(time("D")) != 0
 
@@ -150,10 +174,28 @@ float r5_plot = show_resist_lines ? r5_val : na
 float r6_plot = show_resist_lines ? r6_val : na
 float r7_plot = show_resist_lines ? r7_val : na
 
+float m_sb_plot  = show_median_lines ? m_sell_buy : na
+float m_bs1_plot = show_median_lines and show_support_lines ? m_buy_s1 : na
+float m_s12_plot = show_median_lines and show_support_lines ? m_s1_s2 : na
+float m_s23_plot = show_median_lines and show_support_lines ? m_s2_s3 : na
+float m_s34_plot = show_median_lines and show_support_lines ? m_s3_s4 : na
+float m_s45_plot = show_median_lines and show_support_lines ? m_s4_s5 : na
+float m_s56_plot = show_median_lines and show_support_lines ? m_s5_s6 : na
+
+float m_sr1_plot = show_median_lines and show_resist_lines ? m_sell_r1 : na
+float m_r12_plot = show_median_lines and show_resist_lines ? m_r1_r2 : na
+float m_r23_plot = show_median_lines and show_resist_lines ? m_r2_r3 : na
+float m_r34_plot = show_median_lines and show_resist_lines ? m_r3_r4 : na
+float m_r45_plot = show_median_lines and show_resist_lines ? m_r4_r5 : na
+float m_r56_plot = show_median_lines and show_resist_lines ? m_r5_r6 : na
+float m_r67_plot = show_median_lines and show_resist_lines ? m_r6_r7 : na
+
 if is_new_day
     buy_plot := na, sell_plot := na
     s1_plot := na, s2_plot := na, s3_plot := na, s4_plot := na, s5_plot := na, s6_plot := na
     r1_plot := na, r2_plot := na, r3_plot := na, r4_plot := na, r5_plot := na, r6_plot := na, r7_plot := na
+    m_sb_plot := na, m_bs1_plot := na, m_s12_plot := na, m_s23_plot := na, m_s34_plot := na, m_s45_plot := na, m_s56_plot := na
+    m_sr1_plot := na, m_r12_plot := na, m_r23_plot := na, m_r34_plot := na, m_r45_plot := na, m_r56_plot := na, m_r67_plot := na
 
 // =========================================================================
 // PLOTS AND RENDERINGS (STANDARD PLOTS)
@@ -176,6 +218,23 @@ plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r5_plot : n
 plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r6_plot : na, title="Resistance 6 (R6)", color=c_res, linewidth=line_width_val, style=p_style)
 plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r7_plot : na, title="Resistance 7 (R7)", color=c_res, linewidth=line_width_val, style=p_style)
 
+// Median Line Plots
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_sb_plot : na, title="Median (Sell/Buy)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_bs1_plot : na, title="Median (Buy/S1)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s12_plot : na, title="Median (S1/S2)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s23_plot : na, title="Median (S2/S3)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s34_plot : na, title="Median (S3/S4)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s45_plot : na, title="Median (S4/S5)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s56_plot : na, title="Median (S5/S6)", color=c_med, linewidth=med_width_val, style=med_p_style)
+
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_sr1_plot : na, title="Median (Sell/R1)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r12_plot : na, title="Median (R1/R2)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r23_plot : na, title="Median (R2/R3)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r34_plot : na, title="Median (R3/R4)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r45_plot : na, title="Median (R4/R5)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r56_plot : na, title="Median (R5/R6)", color=c_med, linewidth=med_width_val, style=med_p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r67_plot : na, title="Median (R6/R7)", color=c_med, linewidth=med_width_val, style=med_p_style)
+
 // =========================================================================
 // PROJECTED HORIZONTAL LINES ENGINE
 // =========================================================================
@@ -183,7 +242,12 @@ var line ln_buy = na, var line ln_sell = na
 var line ln_s1 = na, var line ln_s2 = na, var line ln_s3 = na, var line ln_s4 = na, var line ln_s5 = na, var line ln_s6 = na
 var line ln_r1 = na, var line ln_r2 = na, var line ln_r3 = na, var line ln_r4 = na, var line ln_r5 = na, var line ln_r6 = na, var line ln_r7 = na
 
+var line ln_m_sb = na
+var line ln_m_bs1 = na, var line ln_m_s12 = na, var line ln_m_s23 = na, var line ln_m_s34 = na, var line ln_m_s45 = na, var line ln_m_s56 = na
+var line ln_m_sr1 = na, var line ln_m_r12 = na, var line ln_m_r23 = na, var line ln_m_r34 = na, var line ln_m_r45 = na, var line ln_m_r56 = na, var line ln_m_r67 = na
+
 prj_line_style = f_get_line_pattern(line_pattern_str)
+med_prj_style  = f_get_line_pattern(med_pattern_str)
 
 if line_render_mode == "Horizontal Lines (Projected to Right)"
     int target_x2 = barstate.islast ? bar_index + 150 : bar_index
@@ -192,6 +256,10 @@ if line_render_mode == "Horizontal Lines (Projected to Right)"
         line.set_x2(ln_s1, bar_index - 1), line.set_x2(ln_s2, bar_index - 1), line.set_x2(ln_s3, bar_index - 1), line.set_x2(ln_s4, bar_index - 1), line.set_x2(ln_s5, bar_index - 1), line.set_x2(ln_s6, bar_index - 1)
         line.set_x2(ln_r1, bar_index - 1), line.set_x2(ln_r2, bar_index - 1), line.set_x2(ln_r3, bar_index - 1), line.set_x2(ln_r4, bar_index - 1), line.set_x2(ln_r5, bar_index - 1), line.set_x2(ln_r6, bar_index - 1), line.set_x2(ln_r7, bar_index - 1)
         
+        line.set_x2(ln_m_sb, bar_index - 1)
+        line.set_x2(ln_m_bs1, bar_index - 1), line.set_x2(ln_m_s12, bar_index - 1), line.set_x2(ln_m_s23, bar_index - 1), line.set_x2(ln_m_s34, bar_index - 1), line.set_x2(ln_m_s45, bar_index - 1), line.set_x2(ln_m_s56, bar_index - 1)
+        line.set_x2(ln_m_sr1, bar_index - 1), line.set_x2(ln_m_r12, bar_index - 1), line.set_x2(ln_m_r23, bar_index - 1), line.set_x2(ln_m_r34, bar_index - 1), line.set_x2(ln_m_r45, bar_index - 1), line.set_x2(ln_m_r56, bar_index - 1), line.set_x2(ln_m_r67, bar_index - 1)
+
         if show_buy_sell_lines
             ln_buy := line.new(bar_index, buy_level, target_x2, buy_level, color=c_buy, width=line_width_val, style=prj_line_style)
             ln_sell := line.new(bar_index, sell_level, target_x2, sell_level, color=c_sell, width=line_width_val, style=prj_line_style)
@@ -210,6 +278,23 @@ if line_render_mode == "Horizontal Lines (Projected to Right)"
             ln_r5 := line.new(bar_index, r5_val, target_x2, r5_val, color=c_res, width=line_width_val, style=prj_line_style)
             ln_r6 := line.new(bar_index, r6_val, target_x2, r6_val, color=c_res, width=line_width_val, style=prj_line_style)
             ln_r7 := line.new(bar_index, r7_val, target_x2, r7_val, color=c_res, width=line_width_val, style=prj_line_style)
+        if show_median_lines
+            ln_m_sb := line.new(bar_index, m_sell_buy, target_x2, m_sell_buy, color=c_med, width=med_width_val, style=med_prj_style)
+            if show_support_lines
+                ln_m_bs1 := line.new(bar_index, m_buy_s1, target_x2, m_buy_s1, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_s12 := line.new(bar_index, m_s1_s2, target_x2, m_s1_s2, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_s23 := line.new(bar_index, m_s2_s3, target_x2, m_s2_s3, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_s34 := line.new(bar_index, m_s3_s4, target_x2, m_s3_s4, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_s45 := line.new(bar_index, m_s4_s5, target_x2, m_s4_s5, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_s56 := line.new(bar_index, m_s5_s6, target_x2, m_s5_s6, color=c_med, width=med_width_val, style=med_prj_style)
+            if show_resist_lines
+                ln_m_sr1 := line.new(bar_index, m_sell_r1, target_x2, m_sell_r1, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_r12 := line.new(bar_index, m_r1_r2, target_x2, m_r1_r2, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_r23 := line.new(bar_index, m_r2_r3, target_x2, m_r2_r3, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_r34 := line.new(bar_index, m_r3_r4, target_x2, m_r3_r4, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_r45 := line.new(bar_index, m_r4_r5, target_x2, m_r4_r5, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_r56 := line.new(bar_index, m_r5_r6, target_x2, m_r5_r6, color=c_med, width=med_width_val, style=med_prj_style)
+                ln_m_r67 := line.new(bar_index, m_r6_r7, target_x2, m_r6_r7, color=c_med, width=med_width_val, style=med_prj_style)
     else
         if show_buy_sell_lines
             line.set_x2(ln_buy, target_x2), line.set_x2(ln_sell, target_x2)
@@ -217,6 +302,12 @@ if line_render_mode == "Horizontal Lines (Projected to Right)"
             line.set_x2(ln_s1, target_x2), line.set_x2(ln_s2, target_x2), line.set_x2(ln_s3, target_x2), line.set_x2(ln_s4, target_x2), line.set_x2(ln_s5, target_x2), line.set_x2(ln_s6, target_x2)
         if show_resist_lines
             line.set_x2(ln_r1, target_x2), line.set_x2(ln_r2, target_x2), line.set_x2(ln_r3, target_x2), line.set_x2(ln_r4, target_x2), line.set_x2(ln_r5, target_x2), line.set_x2(ln_r6, target_x2), line.set_x2(ln_r7, target_x2)
+        if show_median_lines
+            line.set_x2(ln_m_sb, target_x2)
+            if show_support_lines
+                line.set_x2(ln_m_bs1, target_x2), line.set_x2(ln_m_s12, target_x2), line.set_x2(ln_m_s23, target_x2), line.set_x2(ln_m_s34, target_x2), line.set_x2(ln_m_s45, target_x2), line.set_x2(ln_m_s56, target_x2)
+            if show_resist_lines
+                line.set_x2(ln_m_sr1, target_x2), line.set_x2(ln_m_r12, target_x2), line.set_x2(ln_m_r23, target_x2), line.set_x2(ln_m_r34, target_x2), line.set_x2(ln_m_r45, target_x2), line.set_x2(ln_m_r56, target_x2), line.set_x2(ln_m_r67, target_x2)
 
 // =========================================================================
 // REAL-TIME LABELS AT RIGHT EDGE
@@ -224,6 +315,10 @@ if line_render_mode == "Horizontal Lines (Projected to Right)"
 var label lbl_b = na, var label lbl_s = na
 var label lbl_s1 = na, var label lbl_s2 = na, var label lbl_s3 = na, var label lbl_s4 = na, var label lbl_s5 = na, var label lbl_s6 = na
 var label lbl_r1 = na, var label lbl_r2 = na, var label lbl_r3 = na, var label lbl_r4 = na, var label lbl_r5 = na, var label lbl_r6 = na, var label lbl_r7 = na
+
+var label lbl_m_sb = na
+var label lbl_m_bs1 = na, var label lbl_m_s12 = na, var label lbl_m_s23 = na, var label lbl_m_s34 = na, var label lbl_m_s45 = na, var label lbl_m_s56 = na
+var label lbl_m_sr1 = na, var label lbl_m_r12 = na, var label lbl_m_r23 = na, var label lbl_m_r34 = na, var label lbl_m_r45 = na, var label lbl_m_r56 = na, var label lbl_m_r67 = na
 
 if barstate.islast
     int lbl_x = bar_index + 5
@@ -250,6 +345,28 @@ if barstate.islast
         lbl_r5 := label.new(lbl_x, r5_val, "R5: " + str.tostring(r5_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
         lbl_r6 := label.new(lbl_x, r6_val, "R6: " + str.tostring(r6_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
         lbl_r7 := label.new(lbl_x, r7_val, "R7: " + str.tostring(r7_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
+
+    if show_median_lines
+        label.delete(lbl_m_sb)
+        label.delete(lbl_m_bs1), label.delete(lbl_m_s12), label.delete(lbl_m_s23), label.delete(lbl_m_s34), label.delete(lbl_m_s45), label.delete(lbl_m_s56)
+        label.delete(lbl_m_sr1), label.delete(lbl_m_r12), label.delete(lbl_m_r23), label.delete(lbl_m_r34), label.delete(lbl_m_r45), label.delete(lbl_m_r56), label.delete(lbl_m_r67)
+
+        lbl_m_sb := label.new(lbl_x, m_sell_buy, "M (Sell/Buy): " + str.tostring(m_sell_buy, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+        if show_support_lines
+            lbl_m_bs1 := label.new(lbl_x, m_buy_s1, "M (Buy/S1): " + str.tostring(m_buy_s1, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_s12 := label.new(lbl_x, m_s1_s2, "M (S1/S2): " + str.tostring(m_s1_s2, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_s23 := label.new(lbl_x, m_s2_s3, "M (S2/S3): " + str.tostring(m_s2_s3, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_s34 := label.new(lbl_x, m_s3_s4, "M (S3/S4): " + str.tostring(m_s3_s4, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_s45 := label.new(lbl_x, m_s4_s5, "M (S4/S5): " + str.tostring(m_s4_s5, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_s56 := label.new(lbl_x, m_s5_s6, "M (S5/S6): " + str.tostring(m_s5_s6, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+        if show_resist_lines
+            lbl_m_sr1 := label.new(lbl_x, m_sell_r1, "M (Sell/R1): " + str.tostring(m_sell_r1, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_r12 := label.new(lbl_x, m_r1_r2, "M (R1/R2): " + str.tostring(m_r1_r2, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_r23 := label.new(lbl_x, m_r2_r3, "M (R2/R3): " + str.tostring(m_r2_r3, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_r34 := label.new(lbl_x, m_r3_r4, "M (R3/R4): " + str.tostring(m_r3_r4, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_r45 := label.new(lbl_x, m_r4_r5, "M (R4/R5): " + str.tostring(m_r4_r5, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_r56 := label.new(lbl_x, m_r5_r6, "M (R5/R6): " + str.tostring(m_r5_r6, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            lbl_m_r67 := label.new(lbl_x, m_r6_r7, "M (R6/R7): " + str.tostring(m_r6_r7, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
 
 // =========================================================================
 // SUMMARY DASHBOARD TABLE RENDERING
