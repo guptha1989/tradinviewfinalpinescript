@@ -18,9 +18,9 @@ exchange_input    = input.string("NSE", "Exchange Prefix (if not using chart sym
 underlying_ticker = input.string("NIFTY", "Spot Ticker Symbol (if not using chart symbol)", group=G_SYM)
 
 // 2. Calculation Settings
-calc_mode = input.string("First 5 Minutes (VIX 5m & Spot 1m)", "Calculation Source Mode",
-  options=["Previous Day (VIX Close & Spot High/Low)", "First 5 Minutes (VIX 5m & Spot 1m)", "First 30 Minutes (VIX 30m & Spot 30m)"], group=G_CALC,
-  tooltip="Choose data source: 1) Prev Day VIX Close & Prev Day Spot High/Low, 2) First 5m VIX Close & First 1m Spot High/Low, 3) First 30m VIX & Spot.")
+calc_mode = input.string("First 5 Minutes (VIX 5m & Spot 5m)", "Calculation Source Mode",
+  options=["Previous Day (VIX Close & Spot High/Low)", "First 5 Minutes (VIX 5m & Spot 5m)", "First 30 Minutes (VIX 30m & Spot 30m)"], group=G_CALC,
+  tooltip="Choose data source: 1) Prev Day VIX Close & Prev Day Spot High/Low, 2) First 5m VIX Close & First 5m Spot High/Low, 3) First 30m VIX & Spot.")
 
 time_factor_val = input.float(24.0, "Formula Time Factor (Default 24)", group=G_CALC,
   tooltip="Time factor inside square root in formula: X = Spot * (VIX / 10000) * sqrt(TimeFactor).")
@@ -69,9 +69,9 @@ spot_sym = use_chart_sym ? syminfo.tickerid : (exchange_input + ":" + underlying
 vix_pd_close = request.security(vix_ticker_input, "1D", close[1], lookahead=barmerge.lookahead_on)
 [spot_pd_open, spot_pd_high, spot_pd_low, spot_pd_close] = request.security(spot_sym, "1D", [open[1], high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
 
-// Mode 2: First 5 Mins VIX Close & First 1 Min Spot Values of the Day
+// Mode 2: First 5 Mins VIX Close & First 5 Mins Spot Values of the Day
 vix_5m_close = request.security(vix_ticker_input, "5", ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, close, 0), lookahead=barmerge.lookahead_on)
-[spot_5m_open, spot_5m_high, spot_5m_low, spot_5m_close] = request.security(spot_sym, "1", [ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, high, 0), ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, low, 0), ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, close, 0)], lookahead=barmerge.lookahead_on)
+[spot_5m_open, spot_5m_high, spot_5m_low, spot_5m_close] = request.security(spot_sym, "5", [ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, high, 0), ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, low, 0), ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, close, 0)], lookahead=barmerge.lookahead_on)
 
 // Mode 3: First 30 Mins VIX Close & First 30 Mins Spot Values of the Day
 vix_30m_close = request.security(vix_ticker_input, "30", ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, close, 0), lookahead=barmerge.lookahead_on)
@@ -117,7 +117,7 @@ float s1_val = buy_level + X_val
 float s2_val = s1_val + Y_val
 float s3_val = s2_val + Y_val
 float s4_val = s3_val + Y_val
-float s5_val = s4_val + Y_val
+float s5_val = s5_val + Y_val
 float s6_val = s5_val + Y_val
 
 // Resistance Levels (R1 to R7)
@@ -126,7 +126,7 @@ float r2_val = r1_val - Y_val
 float r3_val = r2_val - Y_val
 float r4_val = r3_val - Y_val
 float r5_val = r4_val - Y_val
-float r6_val = r5_val - Y_val
+float r6_val = r6_val - Y_val
 float r7_val = r6_val - Y_val
 
 // Reset lines on new day start
