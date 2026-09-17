@@ -1,0 +1,299 @@
+//@version=6
+indicator("19.Techfrost Nifty_VIX_Levels", shorttitle="19.Techfrost VIX_Levels", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// =========================================================================
+// INPUTS & USER SETTINGS
+// =========================================================================
+var string G_SYM    = "Symbol & Data Settings"
+var string G_CALC   = "Volatility Formula Settings"
+var string G_STYLE  = "Line Format & Style Settings"
+var string G_DASH   = "Dashboard Table Settings"
+
+// 1. Symbol Settings
+vix_ticker_input  = input.string("NSE:INDIAVIX", "VIX Ticker Symbol", group=G_SYM,
+  tooltip="Ticker symbol for India VIX (e.g. NSE:INDIAVIX or INDIAVIX).")
+exchange_input    = input.string("NSE", "Exchange Prefix for Spot", group=G_SYM)
+underlying_ticker = input.string("NIFTY", "Spot Ticker Symbol", group=G_SYM)
+
+// 2. Calculation Settings
+time_factor_val = input.float(24.0, "Formula Time Factor (Default 24)", group=G_CALC,
+  tooltip="Time factor inside square root in formula: X = Spot * (VIX / 10000) * sqrt(TimeFactor).")
+spot_calc_ref = input.string("Spot 1m Low", "Spot Price Reference for X", 
+  options=["Spot 1m Low", "Spot 1m High", "Spot 1m Close", "Spot Day Open"], group=G_CALC,
+  tooltip="Choose which price reference is used in the formula X = Spot * (VIX %%) * sqrt(24).")
+sell_ref_mode = input.string("Spot Low - Y", "Sell Level Formula Mode",
+  options=["Spot Low - Y", "Spot High - Y", "Spot High + Y"], group=G_CALC,
+  tooltip="Select formula for Sell Level calculation.")
+
+// 3. Line Formatting & Style Settings
+show_buy_sell_lines = input.bool(true, "Show Buy & Sell Level Lines", group=G_STYLE)
+show_support_lines  = input.bool(true, "Show Support Lines (S1-S6)", group=G_STYLE)
+show_resist_lines   = input.bool(true, "Show Resistance Lines (R1-R7)", group=G_STYLE)
+
+line_render_mode = input.string("Horizontal Lines (Projected to Right)", "Line Rendering Mode",
+  options=["Standard Plots (Style Tab Customizable)", "Horizontal Lines (Projected to Right)"], group=G_STYLE)
+
+// Colors
+c_buy   = input.color(#00E676, "Buy Level Color", group=G_STYLE)
+c_sell  = input.color(#FF5252, "Sell Level Color", group=G_STYLE)
+c_sup   = input.color(#00B0FF, "Support Lines Color (S1-S6)", group=G_STYLE)
+c_res   = input.color(#FF9100, "Resistance Lines Color (R1-R7)", group=G_STYLE)
+c_hl    = input.color(color.yellow, "Spot 1m High/Low Color", group=G_STYLE)
+
+// Line Styles & Widths
+f_get_pattern(string p_str) =>
+    p_str == "Dashed" ? plot.style_dashed : (p_str == "Dotted" ? plot.style_circles : plot.style_line)
+
+f_get_line_pattern(string p_str) =>
+    p_str == "Dashed" ? line.style_dashed : (p_str == "Dotted" ? line.style_dotted : line.style_solid)
+
+line_pattern_str = input.string("Solid", "Line Pattern / Style", options=["Solid", "Dashed", "Dotted"], group=G_STYLE)
+line_width_val   = input.int(2, "Line Width", minval=1, maxval=4, group=G_STYLE)
+
+// 4. Dashboard Table Settings
+show_table   = input.bool(true, "Show Levels Summary Table", group=G_DASH)
+table_pos    = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_DASH)
+table_size_in = input.string("Small", "Table Text Size", options=["Tiny", "Small", "Normal", "Large"], group=G_DASH)
+
+// =========================================================================
+// DATA RETRIEVAL (VIX 5m CLOSE & SPOT 1m HIGH/LOW)
+// =========================================================================
+spot_sym = exchange_input + ":" + underlying_ticker
+
+// 1. VIX First 5 Mins Close of the Day
+vix_5m_close = request.security(vix_ticker_input, "5", ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, close, 0), lookahead=barmerge.lookahead_on)
+
+// 2. Spot First Min High, Low, Open, and Close of the Day
+[spot_1m_open, spot_1m_high, spot_1m_low, spot_1m_close] = request.security(spot_sym, "1", [ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, high, 0), ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, low, 0), ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, close, 0)], lookahead=barmerge.lookahead_on)
+
+// =========================================================================
+// FORMULA CALCULATIONS (X, Y, BUY, SELL, S1-S6, R1-R7)
+// =========================================================================
+// Determine Spot Reference Price for X formula
+float ref_price = spot_1m_low
+if spot_calc_ref == "Spot 1m High"
+    ref_price := spot_1m_high
+else if spot_calc_ref == "Spot 1m Close"
+    ref_price := spot_1m_close
+else if spot_calc_ref == "Spot Day Open"
+    ref_price := spot_1m_open
+
+// X = Spot * (VIX_Close / 100 / 100) * sqrt(TimeFactor)
+// Note: VIX in % format (e.g. 12.08) divided by 100 is 0.1208; VIX 0.1208% is 0.001208 (divided by 10000)
+float X_val = ref_price * (nz(vix_5m_close, 12.08) / 10000.0) * math.sqrt(time_factor_val)
+float Y_val = X_val / 4.0
+
+// Buy & Sell Level Calculations
+float buy_level = spot_1m_low + Y_val
+float sell_level = spot_1m_low - Y_val
+if sell_ref_mode == "Spot High - Y"
+    sell_level := spot_1m_high - Y_val
+else if sell_ref_mode == "Spot High + Y"
+    sell_level := spot_1m_high + Y_val
+
+// Support Levels (S1 to S6)
+float s1_val = buy_level + X_val
+float s2_val = s1_val + Y_val
+float s3_val = s2_val + Y_val
+float s4_val = s3_val + Y_val
+float s5_val = s4_val + Y_val
+float s6_val = s5_val + Y_val
+
+// Resistance Levels (R1 to R7)
+float r1_val = sell_level - Y_val
+float r2_val = r1_val - Y_val
+float r3_val = r2_val - Y_val
+float r4_val = r3_val - Y_val
+float r5_val = r4_val - Y_val
+float r6_val = r5_val - Y_val
+float r7_val = r6_val - Y_val
+
+// Reset lines on new day start
+is_new_day = ta.change(time("D")) != 0
+
+float buy_plot  = show_buy_sell_lines ? buy_level : na
+float sell_plot = show_buy_sell_lines ? sell_level : na
+
+float s1_plot = show_support_lines ? s1_val : na
+float s2_plot = show_support_lines ? s2_val : na
+float s3_plot = show_support_lines ? s3_val : na
+float s4_plot = show_support_lines ? s4_val : na
+float s5_plot = show_support_lines ? s5_val : na
+float s6_plot = show_support_lines ? s6_val : na
+
+float r1_plot = show_resist_lines ? r1_val : na
+float r2_plot = show_resist_lines ? r2_val : na
+float r3_plot = show_resist_lines ? r3_val : na
+float r4_plot = show_resist_lines ? r4_val : na
+float r5_plot = show_resist_lines ? r5_val : na
+float r6_plot = show_resist_lines ? r6_val : na
+float r7_plot = show_resist_lines ? r7_val : na
+
+if is_new_day
+    buy_plot := na, sell_plot := na
+    s1_plot := na, s2_plot := na, s3_plot := na, s4_plot := na, s5_plot := na, s6_plot := na
+    r1_plot := na, r2_plot := na, r3_plot := na, r4_plot := na, r5_plot := na, r6_plot := na, r7_plot := na
+
+// =========================================================================
+// PLOTS AND RENDERINGS (STANDARD PLOTS)
+// =========================================================================
+p_style = f_get_pattern(line_pattern_str)
+
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? buy_plot : na, title="Buy Level", color=c_buy, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? sell_plot : na, title="Sell Level", color=c_sell, linewidth=line_width_val, style=p_style)
+
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s1_plot : na, title="Support 1 (S1)", color=c_sup, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s2_plot : na, title="Support 2 (S2)", color=c_sup, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s3_plot : na, title="Support 3 (S3)", color=c_sup, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s4_plot : na, title="Support 4 (S4)", color=c_sup, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s5_plot : na, title="Support 5 (S5)", color=c_sup, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s6_plot : na, title="Support 6 (S6)", color=c_sup, linewidth=line_width_val, style=p_style)
+
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r1_plot : na, title="Resistance 1 (R1)", color=c_res, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r2_plot : na, title="Resistance 2 (R2)", color=c_res, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r3_plot : na, title="Resistance 3 (R3)", color=c_res, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r4_plot : na, title="Resistance 4 (R4)", color=c_res, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r5_plot : na, title="Resistance 5 (R5)", color=c_res, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r6_plot : na, title="Resistance 6 (R6)", color=c_res, linewidth=line_width_val, style=p_style)
+plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r7_plot : na, title="Resistance 7 (R7)", color=c_res, linewidth=line_width_val, style=p_style)
+
+// =========================================================================
+// PROJECTED HORIZONTAL LINES ENGINE
+// =========================================================================
+var line ln_buy = na, var line ln_sell = na
+var line ln_s1 = na, var line ln_s2 = na, var line ln_s3 = na, var line ln_s4 = na, var line ln_s5 = na, var line ln_s6 = na
+var line ln_r1 = na, var line ln_r2 = na, var line ln_r3 = na, var line ln_r4 = na, var line ln_r5 = na, var line ln_r6 = na, var line ln_r7 = na
+
+prj_line_style = f_get_line_pattern(line_pattern_str)
+
+if line_render_mode == "Horizontal Lines (Projected to Right)"
+    int target_x2 = barstate.islast ? bar_index + 150 : bar_index
+    if is_new_day
+        line.set_x2(ln_buy, bar_index - 1), line.set_x2(ln_sell, bar_index - 1)
+        line.set_x2(ln_s1, bar_index - 1), line.set_x2(ln_s2, bar_index - 1), line.set_x2(ln_s3, bar_index - 1), line.set_x2(ln_s4, bar_index - 1), line.set_x2(ln_s5, bar_index - 1), line.set_x2(ln_s6, bar_index - 1)
+        line.set_x2(ln_r1, bar_index - 1), line.set_x2(ln_r2, bar_index - 1), line.set_x2(ln_r3, bar_index - 1), line.set_x2(ln_r4, bar_index - 1), line.set_x2(ln_r5, bar_index - 1), line.set_x2(ln_r6, bar_index - 1), line.set_x2(ln_r7, bar_index - 1)
+        
+        if show_buy_sell_lines
+            ln_buy := line.new(bar_index, buy_level, target_x2, buy_level, color=c_buy, width=line_width_val, style=prj_line_style)
+            ln_sell := line.new(bar_index, sell_level, target_x2, sell_level, color=c_sell, width=line_width_val, style=prj_line_style)
+        if show_support_lines
+            ln_s1 := line.new(bar_index, s1_val, target_x2, s1_val, color=c_sup, width=line_width_val, style=prj_line_style)
+            ln_s2 := line.new(bar_index, s2_val, target_x2, s2_val, color=c_sup, width=line_width_val, style=prj_line_style)
+            ln_s3 := line.new(bar_index, s3_val, target_x2, s3_val, color=c_sup, width=line_width_val, style=prj_line_style)
+            ln_s4 := line.new(bar_index, s4_val, target_x2, s4_val, color=c_sup, width=line_width_val, style=prj_line_style)
+            ln_s5 := line.new(bar_index, s5_val, target_x2, s5_val, color=c_sup, width=line_width_val, style=prj_line_style)
+            ln_s6 := line.new(bar_index, s6_val, target_x2, s6_val, color=c_sup, width=line_width_val, style=prj_line_style)
+        if show_resist_lines
+            ln_r1 := line.new(bar_index, r1_val, target_x2, r1_val, color=c_res, width=line_width_val, style=prj_line_style)
+            ln_r2 := line.new(bar_index, r2_val, target_x2, r2_val, color=c_res, width=line_width_val, style=prj_line_style)
+            ln_r3 := line.new(bar_index, r3_val, target_x2, r3_val, color=c_res, width=line_width_val, style=prj_line_style)
+            ln_r4 := line.new(bar_index, r4_val, target_x2, r4_val, color=c_res, width=line_width_val, style=prj_line_style)
+            ln_r5 := line.new(bar_index, r5_val, target_x2, r5_val, color=c_res, width=line_width_val, style=prj_line_style)
+            ln_r6 := line.new(bar_index, r6_val, target_x2, r6_val, color=c_res, width=line_width_val, style=prj_line_style)
+            ln_r7 := line.new(bar_index, r7_val, target_x2, r7_val, color=c_res, width=line_width_val, style=prj_line_style)
+    else
+        if show_buy_sell_lines
+            line.set_x2(ln_buy, target_x2), line.set_x2(ln_sell, target_x2)
+        if show_support_lines
+            line.set_x2(ln_s1, target_x2), line.set_x2(ln_s2, target_x2), line.set_x2(ln_s3, target_x2), line.set_x2(ln_s4, target_x2), line.set_x2(ln_s5, target_x2), line.set_x2(ln_s6, target_x2)
+        if show_resist_lines
+            line.set_x2(ln_r1, target_x2), line.set_x2(ln_r2, target_x2), line.set_x2(ln_r3, target_x2), line.set_x2(ln_r4, target_x2), line.set_x2(ln_r5, target_x2), line.set_x2(ln_r6, target_x2), line.set_x2(ln_r7, target_x2)
+
+// =========================================================================
+// REAL-TIME LABELS AT RIGHT EDGE
+// =========================================================================
+var label lbl_b = na, var label lbl_s = na
+var label lbl_s1 = na, var label lbl_s2 = na, var label lbl_s3 = na, var label lbl_s4 = na, var label lbl_s5 = na, var label lbl_s6 = na
+var label lbl_r1 = na, var label lbl_r2 = na, var label lbl_r3 = na, var label lbl_r4 = na, var label lbl_r5 = na, var label lbl_r6 = na, var label lbl_r7 = na
+
+if barstate.islast
+    int lbl_x = bar_index + 5
+    if show_buy_sell_lines
+        label.delete(lbl_b), label.delete(lbl_s)
+        lbl_b := label.new(lbl_x, buy_level, "Buy Level: " + str.tostring(buy_level, "#.##"), color=c_buy, textcolor=color.black, style=label.style_label_left, size=size.small)
+        lbl_s := label.new(lbl_x, sell_level, "Sell Level: " + str.tostring(sell_level, "#.##"), color=c_sell, textcolor=color.white, style=label.style_label_left, size=size.small)
+    
+    if show_support_lines
+        label.delete(lbl_s1), label.delete(lbl_s2), label.delete(lbl_s3), label.delete(lbl_s4), label.delete(lbl_s5), label.delete(lbl_s6)
+        lbl_s1 := label.new(lbl_x, s1_val, "S1: " + str.tostring(s1_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s2 := label.new(lbl_x, s2_val, "S2: " + str.tostring(s2_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s3 := label.new(lbl_x, s3_val, "S3: " + str.tostring(s3_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s4 := label.new(lbl_x, s4_val, "S4: " + str.tostring(s4_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s5 := label.new(lbl_x, s5_val, "S5: " + str.tostring(s5_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s6 := label.new(lbl_x, s6_val, "S6: " + str.tostring(s6_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
+        
+    if show_resist_lines
+        label.delete(lbl_r1), label.delete(lbl_r2), label.delete(lbl_r3), label.delete(lbl_r4), label.delete(lbl_r5), label.delete(lbl_r6), label.delete(lbl_r7)
+        lbl_r1 := label.new(lbl_x, r1_val, "R1: " + str.tostring(r1_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r2 := label.new(lbl_x, r2_val, "R2: " + str.tostring(r2_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r3 := label.new(lbl_x, r3_val, "R3: " + str.tostring(r3_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r4 := label.new(lbl_x, r4_val, "R4: " + str.tostring(r4_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r5 := label.new(lbl_x, r5_val, "R5: " + str.tostring(r5_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r6 := label.new(lbl_x, r6_val, "R6: " + str.tostring(r6_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r7 := label.new(lbl_x, r7_val, "R7: " + str.tostring(r7_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
+
+// =========================================================================
+// SUMMARY DASHBOARD TABLE RENDERING
+// =========================================================================
+var string t_pos = position.top_right
+if table_pos == "Top Left"
+    t_pos := position.top_left
+else if table_pos == "Bottom Right"
+    t_pos := position.bottom_right
+else if table_pos == "Bottom Left"
+    t_pos := position.bottom_left
+
+var string t_sz = size.small
+if table_size_in == "Tiny"
+    t_sz := size.tiny
+else if table_size_in == "Normal"
+    t_sz := size.normal
+else if table_size_in == "Large"
+    t_sz := size.large
+
+var table summary_tbl = table.new(t_pos, 2, 18, bgcolor=color.new(color.black, 30), border_color=#2B2E3A, border_width=1)
+
+if show_table and barstate.islast
+    table.clear(summary_tbl, 0, 0, 1, 17)
+    
+    table.cell(summary_tbl, 0, 0, "VIX Volatility Levels Summary", bgcolor=#1E222D, text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    table.merge_cells(summary_tbl, 0, 0, 1, 0)
+    
+    table.cell(summary_tbl, 0, 1, "Metric / Parameter", bgcolor=#1E222D, text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 1, "Value", bgcolor=#1E222D, text_color=color.white, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 2, "VIX First 5m Close", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 2, str.tostring(vix_5m_close, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 3, "Spot 1m High / Low", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 3, "H:" + str.tostring(spot_1m_high, "#.##") + " | L:" + str.tostring(spot_1m_low, "#.##"), text_color=color.white, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 4, "Formula Multiplier X", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 4, str.tostring(X_val, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 5, "Formula Step Y (X/4)", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 5, str.tostring(Y_val, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 6, "Buy Level (Low + Y)", bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 6, str.tostring(buy_level, "#.##"), bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 7, "Sell Level", bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 7, str.tostring(sell_level, "#.##"), bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 8, "Support 1 (Buy + X)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 8, str.tostring(s1_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 9, "Support 2 (S1 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 9, str.tostring(s2_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 10, "Support 3 (S2 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 10, str.tostring(s3_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 11, "Resistance 1 (Sell - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 11, str.tostring(r1_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 12, "Resistance 2 (R1 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 12, str.tostring(r2_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
+    
+    table.cell(summary_tbl, 0, 13, "Resistance 3 (R2 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 13, str.tostring(r3_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
