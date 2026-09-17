@@ -113,7 +113,7 @@ else if sell_ref_mode == "Spot High + Y"
     sell_level := spot_high_used + Y_val
 
 // Support Levels (S1 to S6)
-float s1_val = buy_level + X_val
+float s1_val = buy_level + Y_val
 float s2_val = s1_val + Y_val
 float s3_val = s2_val + Y_val
 float s4_val = s3_val + Y_val
@@ -305,7 +305,7 @@ if show_table and barstate.islast
     table.cell(summary_tbl, 0, 9, "Sell Level (High - Y)", bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_left)
     table.cell(summary_tbl, 1, 9, str.tostring(sell_level, "#.##"), bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 10, "Support 1 (Buy + X)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 0, 10, "Support 1 (Buy + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
     table.cell(summary_tbl, 1, 10, str.tostring(s1_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
     
     table.cell(summary_tbl, 0, 11, "Support 2 (S1 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
