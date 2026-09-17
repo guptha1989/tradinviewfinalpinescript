@@ -35,19 +35,21 @@ sell_ref_mode = input.string("Spot High - Y", "Sell Level Formula Mode",
 days_to_show        = input.int(5, "Number of Days to Plot (Default 5)", minval=1, maxval=30, group=G_STYLE,
   tooltip="Number of historical trading days to plot levels for.")
 show_buy_sell_lines = input.bool(true, "Show Buy & Sell Level Lines", group=G_STYLE)
-show_support_lines  = input.bool(true, "Show Support Lines (S1-S6)", group=G_STYLE)
-show_resist_lines   = input.bool(true, "Show Resistance Lines (R1-R7)", group=G_STYLE)
+show_support_lines  = input.bool(true, "Show Support Lines (S1-S12)", group=G_STYLE)
+num_support_lines   = input.int(12, "Number of Support Lines (1 to 12)", minval=1, maxval=12, group=G_STYLE)
+show_resist_lines   = input.bool(true, "Show Resistance Lines (R1-R12)", group=G_STYLE)
+num_resist_lines    = input.int(12, "Number of Resistance Lines (1 to 12)", minval=1, maxval=12, group=G_STYLE)
 show_median_lines   = input.bool(true, "Show Median (Midpoint) Lines", group=G_STYLE,
-  tooltip="Bisects space between each adjacent level into equal halves (e.g. Buy/S1, S1/S2, Sell/R1, etc.)")
+  tooltip="Bisects space between each adjacent level into equal halves.")
 
 line_render_mode = input.string("Horizontal Lines (Projected to Right)", "Line Rendering Mode",
-  options=["Standard Plots (Style Tab Customizable)", "Horizontal Lines (Projected to Right)"], group=G_STYLE)
+  options=["Horizontal Lines (Projected to Right)", "Session Range Lines (5-Day Window)"], group=G_STYLE)
 
 // Colors
 c_buy   = input.color(#00E676, "Buy Level Color", group=G_STYLE)
 c_sell  = input.color(#FF5252, "Sell Level Color", group=G_STYLE)
-c_sup   = input.color(#00B0FF, "Support Lines Color (S1-S6)", group=G_STYLE)
-c_res   = input.color(#FF9100, "Resistance Lines Color (R1-R7)", group=G_STYLE)
+c_sup   = input.color(#00B0FF, "Support Lines Color (S1-S12)", group=G_STYLE)
+c_res   = input.color(#FF9100, "Resistance Lines Color (R1-R12)", group=G_STYLE)
 c_med   = input.color(color.new(#E040FB, 20), "Median Lines Color", group=G_STYLE)
 
 // Line Styles & Widths
@@ -55,10 +57,6 @@ line_pattern_str = input.string("Solid", "Main Line Pattern / Style", options=["
 med_pattern_str  = input.string("Dashed", "Median Line Pattern / Style", options=["Solid", "Dashed", "Dotted"], group=G_STYLE)
 line_width_val   = input.int(2, "Main Line Width", minval=1, maxval=4, group=G_STYLE)
 med_width_val    = input.int(1, "Median Line Width", minval=1, maxval=4, group=G_STYLE)
-
-// Direct evaluation for plot style to ensure input plot_style type
-p_style     = line_pattern_str == "Dotted" ? plot.style_circles : plot.style_line
-med_p_style = med_pattern_str == "Dotted" ? plot.style_circles : plot.style_line
 
 f_get_line_pattern(string p_str) =>
     p_str == "Dashed" ? line.style_dashed : (p_str == "Dotted" ? line.style_dotted : line.style_solid)
@@ -120,32 +118,49 @@ if sell_ref_mode == "Spot Low - Y"
 else if sell_ref_mode == "Spot High + Y"
     sell_level := spot_high_used + Y_val
 
-// Support Levels (S1 to S6)
-float s1_val = buy_level + Y_val
-float s2_val = s1_val + Y_val
-float s3_val = s2_val + Y_val
-float s4_val = s3_val + Y_val
-float s5_val = s4_val + Y_val
-float s6_val = s5_val + Y_val
+// Support Levels (S1 to S12)
+float s1_val  = buy_level  + Y_val
+float s2_val  = s1_val     + Y_val
+float s3_val  = s2_val     + Y_val
+float s4_val  = s3_val     + Y_val
+float s5_val  = s4_val     + Y_val
+float s6_val  = s5_val     + Y_val
+float s7_val  = s6_val     + Y_val
+float s8_val  = s7_val     + Y_val
+float s9_val  = s8_val     + Y_val
+float s10_val = s9_val     + Y_val
+float s11_val = s10_val    + Y_val
+float s12_val = s11_val    + Y_val
 
-// Resistance Levels (R1 to R7)
-float r1_val = sell_level - Y_val
-float r2_val = r1_val - Y_val
-float r3_val = r2_val - Y_val
-float r4_val = r3_val - Y_val
-float r5_val = r4_val - Y_val
-float r6_val = r5_val - Y_val
-float r7_val = r6_val - Y_val
+// Resistance Levels (R1 to R12)
+float r1_val  = sell_level - Y_val
+float r2_val  = r1_val     - Y_val
+float r3_val  = r2_val     - Y_val
+float r4_val  = r3_val     - Y_val
+float r5_val  = r4_val     - Y_val
+float r6_val  = r5_val     - Y_val
+float r7_val  = r6_val     - Y_val
+float r8_val  = r7_val     - Y_val
+float r9_val  = r8_val     - Y_val
+float r10_val = r9_val    - Y_val
+float r11_val = r10_val   - Y_val
+float r12_val = r11_val   - Y_val
 
 // Median (Midpoint) Levels between Adjacent Lines
 float m_sell_buy = (sell_level + buy_level) / 2.0
 
-float m_buy_s1 = (buy_level + s1_val) / 2.0
-float m_s1_s2  = (s1_val + s2_val) / 2.0
-float m_s2_s3  = (s2_val + s3_val) / 2.0
-float m_s3_s4  = (s3_val + s4_val) / 2.0
-float m_s4_s5  = (s4_val + s5_val) / 2.0
-float m_s5_s6  = (s5_val + s6_val) / 2.0
+float m_buy_s1  = (buy_level + s1_val) / 2.0
+float m_s1_s2   = (s1_val + s2_val) / 2.0
+float m_s2_s3   = (s2_val + s3_val) / 2.0
+float m_s3_s4   = (s3_val + s4_val) / 2.0
+float m_s4_s5   = (s4_val + s5_val) / 2.0
+float m_s5_s6   = (s5_val + s6_val) / 2.0
+float m_s6_s7   = (s6_val + s7_val) / 2.0
+float m_s7_s8   = (s7_val + s8_val) / 2.0
+float m_s8_s9   = (s8_val + s9_val) / 2.0
+float m_s9_s10  = (s9_val + s10_val) / 2.0
+float m_s10_s11 = (s10_val + s11_val) / 2.0
+float m_s11_s12 = (s11_val + s12_val) / 2.0
 
 float m_sell_r1 = (sell_level + r1_val) / 2.0
 float m_r1_r2   = (r1_val + r2_val) / 2.0
@@ -154,6 +169,11 @@ float m_r3_r4   = (r3_val + r4_val) / 2.0
 float m_r4_r5   = (r4_val + r5_val) / 2.0
 float m_r5_r6   = (r5_val + r6_val) / 2.0
 float m_r6_r7   = (r6_val + r7_val) / 2.0
+float m_r7_r8   = (r7_val + r8_val) / 2.0
+float m_r8_r9   = (r8_val + r9_val) / 2.0
+float m_r9_r10  = (r9_val + r10_val) / 2.0
+float m_r10_r11 = (r10_val + r11_val) / 2.0
+float m_r11_r12 = (r11_val + r12_val) / 2.0
 
 // =========================================================================
 // 5-DAY TRADING SESSION WINDOW TRACKER
@@ -176,87 +196,8 @@ else if total_sessions > 0
 
 bool is_in_plot_window = time >= cutoff_time
 
-float buy_plot  = is_in_plot_window and show_buy_sell_lines ? buy_level : na
-float sell_plot = is_in_plot_window and show_buy_sell_lines ? sell_level : na
-
-float s1_plot = is_in_plot_window and show_support_lines ? s1_val : na
-float s2_plot = is_in_plot_window and show_support_lines ? s2_val : na
-float s3_plot = is_in_plot_window and show_support_lines ? s3_val : na
-float s4_plot = is_in_plot_window and show_support_lines ? s4_val : na
-float s5_plot = is_in_plot_window and show_support_lines ? s5_val : na
-float s6_plot = is_in_plot_window and show_support_lines ? s6_val : na
-
-float r1_plot = is_in_plot_window and show_resist_lines ? r1_val : na
-float r2_plot = is_in_plot_window and show_resist_lines ? r2_val : na
-float r3_plot = is_in_plot_window and show_resist_lines ? r3_val : na
-float r4_plot = is_in_plot_window and show_resist_lines ? r4_val : na
-float r5_plot = is_in_plot_window and show_resist_lines ? r5_val : na
-float r6_plot = is_in_plot_window and show_resist_lines ? r6_val : na
-float r7_plot = is_in_plot_window and show_resist_lines ? r7_val : na
-
-float m_sb_plot  = is_in_plot_window and show_median_lines ? m_sell_buy : na
-float m_bs1_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_buy_s1 : na
-float m_s12_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s1_s2 : na
-float m_s23_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s2_s3 : na
-float m_s34_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s3_s4 : na
-float m_s45_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s4_s5 : na
-float m_s56_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s5_s6 : na
-
-float m_sr1_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_sell_r1 : na
-float m_r12_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r1_r2 : na
-float m_r23_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r2_r3 : na
-float m_r34_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r3_r4 : na
-float m_r45_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r4_r5 : na
-float m_r56_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r5_r6 : na
-float m_r67_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r6_r7 : na
-
-if is_new_day
-    buy_plot := na, sell_plot := na
-    s1_plot := na, s2_plot := na, s3_plot := na, s4_plot := na, s5_plot := na, s6_plot := na
-    r1_plot := na, r2_plot := na, r3_plot := na, r4_plot := na, r5_plot := na, r6_plot := na, r7_plot := na
-    m_sb_plot := na, m_bs1_plot := na, m_s12_plot := na, m_s23_plot := na, m_s34_plot := na, m_s45_plot := na, m_s56_plot := na
-    m_sr1_plot := na, m_r12_plot := na, m_r23_plot := na, m_r34_plot := na, m_r45_plot := na, m_r56_plot := na, m_r67_plot := na
-
 // =========================================================================
-// PLOTS AND RENDERINGS (STANDARD PLOTS)
-// =========================================================================
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? buy_plot : na, title="Buy Level", color=c_buy, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? sell_plot : na, title="Sell Level", color=c_sell, linewidth=line_width_val, style=p_style)
-
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s1_plot : na, title="Support 1 (S1)", color=c_sup, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s2_plot : na, title="Support 2 (S2)", color=c_sup, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s3_plot : na, title="Support 3 (S3)", color=c_sup, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s4_plot : na, title="Support 4 (S4)", color=c_sup, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s5_plot : na, title="Support 5 (S5)", color=c_sup, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? s6_plot : na, title="Support 6 (S6)", color=c_sup, linewidth=line_width_val, style=p_style)
-
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r1_plot : na, title="Resistance 1 (R1)", color=c_res, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r2_plot : na, title="Resistance 2 (R2)", color=c_res, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r3_plot : na, title="Resistance 3 (R3)", color=c_res, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r4_plot : na, title="Resistance 4 (R4)", color=c_res, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r5_plot : na, title="Resistance 5 (R5)", color=c_res, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r6_plot : na, title="Resistance 6 (R6)", color=c_res, linewidth=line_width_val, style=p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? r7_plot : na, title="Resistance 7 (R7)", color=c_res, linewidth=line_width_val, style=p_style)
-
-// Median Line Plots
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_sb_plot : na, title="Median (Sell/Buy)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_bs1_plot : na, title="Median (Buy/S1)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s12_plot : na, title="Median (S1/S2)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s23_plot : na, title="Median (S2/S3)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s34_plot : na, title="Median (S3/S4)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s45_plot : na, title="Median (S4/S5)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_s56_plot : na, title="Median (S5/S6)", color=c_med, linewidth=med_width_val, style=med_p_style)
-
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_sr1_plot : na, title="Median (Sell/R1)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r12_plot : na, title="Median (R1/R2)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r23_plot : na, title="Median (R2/R3)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r34_plot : na, title="Median (R3/R4)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r45_plot : na, title="Median (R4/R5)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r56_plot : na, title="Median (R5/R6)", color=c_med, linewidth=med_width_val, style=med_p_style)
-plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r67_plot : na, title="Median (R6/R7)", color=c_med, linewidth=med_width_val, style=med_p_style)
-
-// =========================================================================
-// PROJECTED HORIZONTAL LINES ENGINE (5-DAY HISTORY POOL)
+// DYNAMIC HORIZONTAL & SESSION LINE RENDERING ENGINE (Bypasses 64 Plot Limit)
 // =========================================================================
 var line[] line_history = array.new_line(0)
 var int[] line_time_history = array.new_int(0)
@@ -270,15 +211,18 @@ f_add_line(int x1, float y, int x2, color c, int w, string s, int day_t) =>
 prj_line_style = f_get_line_pattern(line_pattern_str)
 med_prj_style  = f_get_line_pattern(med_pattern_str)
 
-if line_render_mode == "Horizontal Lines (Projected to Right)"
-    int target_x2 = barstate.islast ? bar_index + 150 : bar_index
+bool is_projected = line_render_mode == "Horizontal Lines (Projected to Right)"
+
+if is_in_plot_window
+    int target_x2 = is_projected ? (barstate.islast ? bar_index + 150 : bar_index) : bar_index
     
     if is_new_day
-        // Finalize end point x2 for all previous lines
+        // Finalize end point x2 for all previous day lines if in projected mode
         if array.size(line_history) > 0
             for i = 0 to array.size(line_history) - 1
                 line ln_item = array.get(line_history, i)
-                if line.get_x2(ln_item) > bar_index - 1
+                int l_time = array.get(line_time_history, i)
+                if is_projected and l_time < time and line.get_x2(ln_item) > bar_index - 1
                     line.set_x2(ln_item, bar_index - 1)
 
         // Prune lines older than cutoff_time
@@ -293,105 +237,247 @@ if line_render_mode == "Horizontal Lines (Projected to Right)"
         if show_buy_sell_lines
             f_add_line(bar_index, buy_level, target_x2, c_buy, line_width_val, prj_line_style, time)
             f_add_line(bar_index, sell_level, target_x2, c_sell, line_width_val, prj_line_style, time)
+            
         if show_support_lines
-            f_add_line(bar_index, s1_val, target_x2, c_sup, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, s2_val, target_x2, c_sup, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, s3_val, target_x2, c_sup, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, s4_val, target_x2, c_sup, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, s5_val, target_x2, c_sup, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, s6_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 1
+                f_add_line(bar_index, s1_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 2
+                f_add_line(bar_index, s2_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 3
+                f_add_line(bar_index, s3_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 4
+                f_add_line(bar_index, s4_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 5
+                f_add_line(bar_index, s5_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 6
+                f_add_line(bar_index, s6_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 7
+                f_add_line(bar_index, s7_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 8
+                f_add_line(bar_index, s8_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 9
+                f_add_line(bar_index, s9_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 10
+                f_add_line(bar_index, s10_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 11
+                f_add_line(bar_index, s11_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            if num_support_lines >= 12
+                f_add_line(bar_index, s12_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+                
         if show_resist_lines
-            f_add_line(bar_index, r1_val, target_x2, c_res, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, r2_val, target_x2, c_res, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, r3_val, target_x2, c_res, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, r4_val, target_x2, c_res, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, r5_val, target_x2, c_res, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, r6_val, target_x2, c_res, line_width_val, prj_line_style, time)
-            f_add_line(bar_index, r7_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 1
+                f_add_line(bar_index, r1_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 2
+                f_add_line(bar_index, r2_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 3
+                f_add_line(bar_index, r3_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 4
+                f_add_line(bar_index, r4_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 5
+                f_add_line(bar_index, r5_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 6
+                f_add_line(bar_index, r6_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 7
+                f_add_line(bar_index, r7_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 8
+                f_add_line(bar_index, r8_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 9
+                f_add_line(bar_index, r9_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 10
+                f_add_line(bar_index, r10_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 11
+                f_add_line(bar_index, r11_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            if num_resist_lines >= 12
+                f_add_line(bar_index, r12_val, target_x2, c_res, line_width_val, prj_line_style, time)
+                
         if show_median_lines
             f_add_line(bar_index, m_sell_buy, target_x2, c_med, med_width_val, med_prj_style, time)
             if show_support_lines
-                f_add_line(bar_index, m_buy_s1, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_s1_s2, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_s2_s3, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_s3_s4, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_s4_s5, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_s5_s6, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 1
+                    f_add_line(bar_index, m_buy_s1, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 2
+                    f_add_line(bar_index, m_s1_s2, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 3
+                    f_add_line(bar_index, m_s2_s3, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 4
+                    f_add_line(bar_index, m_s3_s4, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 5
+                    f_add_line(bar_index, m_s4_s5, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 6
+                    f_add_line(bar_index, m_s5_s6, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 7
+                    f_add_line(bar_index, m_s6_s7, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 8
+                    f_add_line(bar_index, m_s7_s8, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 9
+                    f_add_line(bar_index, m_s8_s9, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 10
+                    f_add_line(bar_index, m_s9_s10, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 11
+                    f_add_line(bar_index, m_s10_s11, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_support_lines >= 12
+                    f_add_line(bar_index, m_s11_s12, target_x2, c_med, med_width_val, med_prj_style, time)
+
             if show_resist_lines
-                f_add_line(bar_index, m_sell_r1, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_r1_r2, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_r2_r3, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_r3_r4, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_r4_r5, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_r5_r6, target_x2, c_med, med_width_val, med_prj_style, time)
-                f_add_line(bar_index, m_r6_r7, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 1
+                    f_add_line(bar_index, m_sell_r1, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 2
+                    f_add_line(bar_index, m_r1_r2, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 3
+                    f_add_line(bar_index, m_r2_r3, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 4
+                    f_add_line(bar_index, m_r3_r4, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 5
+                    f_add_line(bar_index, m_r4_r5, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 6
+                    f_add_line(bar_index, m_r5_r6, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 7
+                    f_add_line(bar_index, m_r6_r7, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 8
+                    f_add_line(bar_index, m_r7_r8, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 9
+                    f_add_line(bar_index, m_r8_r9, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 10
+                    f_add_line(bar_index, m_r9_r10, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 11
+                    f_add_line(bar_index, m_r10_r11, target_x2, c_med, med_width_val, med_prj_style, time)
+                if num_resist_lines >= 12
+                    f_add_line(bar_index, m_r11_r12, target_x2, c_med, med_width_val, med_prj_style, time)
     else
-        // Extend today's active lines to right
+        // Extend active lines of the current day
         if array.size(line_history) > 0
             for i = 0 to array.size(line_history) - 1
                 line ln_item = array.get(line_history, i)
                 int l_time = array.get(line_time_history, i)
-                if l_time >= time - 86400000 // Only extend active lines of the current day
+                if l_time >= time - 86400000
                     line.set_x2(ln_item, target_x2)
 
 // =========================================================================
 // REAL-TIME LABELS AT RIGHT EDGE
 // =========================================================================
-var label lbl_b = na, var label lbl_s = na
-var label lbl_s1 = na, var label lbl_s2 = na, var label lbl_s3 = na, var label lbl_s4 = na, var label lbl_s5 = na, var label lbl_s6 = na
-var label lbl_r1 = na, var label lbl_r2 = na, var label lbl_r3 = na, var label lbl_r4 = na, var label lbl_r5 = na, var label lbl_r6 = na, var label lbl_r7 = na
+var label[] label_history = array.new_label(0)
 
-var label lbl_m_sb = na
-var label lbl_m_bs1 = na, var label lbl_m_s12 = na, var label lbl_m_s23 = na, var label lbl_m_s34 = na, var label lbl_m_s45 = na, var label lbl_m_s56 = na
-var label lbl_m_sr1 = na, var label lbl_m_r12 = na, var label lbl_m_r23 = na, var label lbl_m_r34 = na, var label lbl_m_r45 = na, var label lbl_m_r56 = na, var label lbl_m_r67 = na
+f_add_label(int x, float y, string txt, color bg_c, color txt_c, string st, string sz) =>
+    label lbl = label.new(x, y, txt, color=bg_c, textcolor=txt_c, style=st, size=sz)
+    array.push(label_history, lbl)
+    lbl
 
 if barstate.islast
     int lbl_x = bar_index + 5
+    if array.size(label_history) > 0
+        for i = 0 to array.size(label_history) - 1
+            label.delete(array.get(label_history, i))
+        array.clear(label_history)
+
     if show_buy_sell_lines
-        label.delete(lbl_b), label.delete(lbl_s)
-        lbl_b := label.new(lbl_x, buy_level, "Buy Level: " + str.tostring(buy_level, "#.##"), color=c_buy, textcolor=color.black, style=label.style_label_left, size=size.small)
-        lbl_s := label.new(lbl_x, sell_level, "Sell Level: " + str.tostring(sell_level, "#.##"), color=c_sell, textcolor=color.white, style=label.style_label_left, size=size.small)
+        f_add_label(lbl_x, buy_level, "Buy Level: " + str.tostring(buy_level, "#.##"), c_buy, color.black, label.style_label_left, size.small)
+        f_add_label(lbl_x, sell_level, "Sell Level: " + str.tostring(sell_level, "#.##"), c_sell, color.white, label.style_label_left, size.small)
     
     if show_support_lines
-        label.delete(lbl_s1), label.delete(lbl_s2), label.delete(lbl_s3), label.delete(lbl_s4), label.delete(lbl_s5), label.delete(lbl_s6)
-        lbl_s1 := label.new(lbl_x, s1_val, "S1: " + str.tostring(s1_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s2 := label.new(lbl_x, s2_val, "S2: " + str.tostring(s2_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s3 := label.new(lbl_x, s3_val, "S3: " + str.tostring(s3_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s4 := label.new(lbl_x, s4_val, "S4: " + str.tostring(s4_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s5 := label.new(lbl_x, s5_val, "S5: " + str.tostring(s5_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s6 := label.new(lbl_x, s6_val, "S6: " + str.tostring(s6_val, "#.##"), color=c_sup, textcolor=color.white, style=label.style_label_left, size=size.small)
-        
+        if num_support_lines >= 1
+            f_add_label(lbl_x, s1_val, "S1: " + str.tostring(s1_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 2
+            f_add_label(lbl_x, s2_val, "S2: " + str.tostring(s2_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 3
+            f_add_label(lbl_x, s3_val, "S3: " + str.tostring(s3_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 4
+            f_add_label(lbl_x, s4_val, "S4: " + str.tostring(s4_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 5
+            f_add_label(lbl_x, s5_val, "S5: " + str.tostring(s5_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 6
+            f_add_label(lbl_x, s6_val, "S6: " + str.tostring(s6_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 7
+            f_add_label(lbl_x, s7_val, "S7: " + str.tostring(s7_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 8
+            f_add_label(lbl_x, s8_val, "S8: " + str.tostring(s8_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 9
+            f_add_label(lbl_x, s9_val, "S9: " + str.tostring(s9_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 10
+            f_add_label(lbl_x, s10_val, "S10: " + str.tostring(s10_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 11
+            f_add_label(lbl_x, s11_val, "S11: " + str.tostring(s11_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+        if num_support_lines >= 12
+            f_add_label(lbl_x, s12_val, "S12: " + str.tostring(s12_val, "#.##"), c_sup, color.white, label.style_label_left, size.small)
+
     if show_resist_lines
-        label.delete(lbl_r1), label.delete(lbl_r2), label.delete(lbl_r3), label.delete(lbl_r4), label.delete(lbl_r5), label.delete(lbl_r6), label.delete(lbl_r7)
-        lbl_r1 := label.new(lbl_x, r1_val, "R1: " + str.tostring(r1_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r2 := label.new(lbl_x, r2_val, "R2: " + str.tostring(r2_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r3 := label.new(lbl_x, r3_val, "R3: " + str.tostring(r3_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r4 := label.new(lbl_x, r4_val, "R4: " + str.tostring(r4_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r5 := label.new(lbl_x, r5_val, "R5: " + str.tostring(r5_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r6 := label.new(lbl_x, r6_val, "R6: " + str.tostring(r6_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r7 := label.new(lbl_x, r7_val, "R7: " + str.tostring(r7_val, "#.##"), color=c_res, textcolor=color.white, style=label.style_label_left, size=size.small)
+        if num_resist_lines >= 1
+            f_add_label(lbl_x, r1_val, "R1: " + str.tostring(r1_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 2
+            f_add_label(lbl_x, r2_val, "R2: " + str.tostring(r2_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 3
+            f_add_label(lbl_x, r3_val, "R3: " + str.tostring(r3_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 4
+            f_add_label(lbl_x, r4_val, "R4: " + str.tostring(r4_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 5
+            f_add_label(lbl_x, r5_val, "R5: " + str.tostring(r5_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 6
+            f_add_label(lbl_x, r6_val, "R6: " + str.tostring(r6_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 7
+            f_add_label(lbl_x, r7_val, "R7: " + str.tostring(r7_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 8
+            f_add_label(lbl_x, r8_val, "R8: " + str.tostring(r8_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 9
+            f_add_label(lbl_x, r9_val, "R9: " + str.tostring(r9_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 10
+            f_add_label(lbl_x, r10_val, "R10: " + str.tostring(r10_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 11
+            f_add_label(lbl_x, r11_val, "R11: " + str.tostring(r11_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
+        if num_resist_lines >= 12
+            f_add_label(lbl_x, r12_val, "R12: " + str.tostring(r12_val, "#.##"), c_res, color.white, label.style_label_left, size.small)
 
     if show_median_lines
-        label.delete(lbl_m_sb)
-        label.delete(lbl_m_bs1), label.delete(lbl_m_s12), label.delete(lbl_m_s23), label.delete(lbl_m_s34), label.delete(lbl_m_s45), label.delete(lbl_m_s56)
-        label.delete(lbl_m_sr1), label.delete(lbl_m_r12), label.delete(lbl_m_r23), label.delete(lbl_m_r34), label.delete(lbl_m_r45), label.delete(lbl_m_r56), label.delete(lbl_m_r67)
-
-        lbl_m_sb := label.new(lbl_x, m_sell_buy, "M (Sell/Buy): " + str.tostring(m_sell_buy, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+        f_add_label(lbl_x, m_sell_buy, "M (Sell/Buy): " + str.tostring(m_sell_buy, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
         if show_support_lines
-            lbl_m_bs1 := label.new(lbl_x, m_buy_s1, "M (Buy/S1): " + str.tostring(m_buy_s1, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_s12 := label.new(lbl_x, m_s1_s2, "M (S1/S2): " + str.tostring(m_s1_s2, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_s23 := label.new(lbl_x, m_s2_s3, "M (S2/S3): " + str.tostring(m_s2_s3, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_s34 := label.new(lbl_x, m_s3_s4, "M (S3/S4): " + str.tostring(m_s3_s4, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_s45 := label.new(lbl_x, m_s4_s5, "M (S4/S5): " + str.tostring(m_s4_s5, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_s56 := label.new(lbl_x, m_s5_s6, "M (S5/S6): " + str.tostring(m_s5_s6, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            if num_support_lines >= 1
+                f_add_label(lbl_x, m_buy_s1, "M (Buy/S1): " + str.tostring(m_buy_s1, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 2
+                f_add_label(lbl_x, m_s1_s2, "M (S1/S2): " + str.tostring(m_s1_s2, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 3
+                f_add_label(lbl_x, m_s2_s3, "M (S2/S3): " + str.tostring(m_s2_s3, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 4
+                f_add_label(lbl_x, m_s3_s4, "M (S3/S4): " + str.tostring(m_s3_s4, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 5
+                f_add_label(lbl_x, m_s4_s5, "M (S4/S5): " + str.tostring(m_s4_s5, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 6
+                f_add_label(lbl_x, m_s5_s6, "M (S5/S6): " + str.tostring(m_s5_s6, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 7
+                f_add_label(lbl_x, m_s6_s7, "M (S6/S7): " + str.tostring(m_s6_s7, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 8
+                f_add_label(lbl_x, m_s7_s8, "M (S7/S8): " + str.tostring(m_s7_s8, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 9
+                f_add_label(lbl_x, m_s8_s9, "M (S8/S9): " + str.tostring(m_s8_s9, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 10
+                f_add_label(lbl_x, m_s9_s10, "M (S9/S10): " + str.tostring(m_s9_s10, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 11
+                f_add_label(lbl_x, m_s10_s11, "M (S10/S11): " + str.tostring(m_s10_s11, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_support_lines >= 12
+                f_add_label(lbl_x, m_s11_s12, "M (S11/S12): " + str.tostring(m_s11_s12, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+
         if show_resist_lines
-            lbl_m_sr1 := label.new(lbl_x, m_sell_r1, "M (Sell/R1): " + str.tostring(m_sell_r1, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_r12 := label.new(lbl_x, m_r1_r2, "M (R1/R2): " + str.tostring(m_r1_r2, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_r23 := label.new(lbl_x, m_r2_r3, "M (R2/R3): " + str.tostring(m_r2_r3, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_r34 := label.new(lbl_x, m_r3_r4, "M (R3/R4): " + str.tostring(m_r3_r4, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_r45 := label.new(lbl_x, m_r4_r5, "M (R4/R5): " + str.tostring(m_r4_r5, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_r56 := label.new(lbl_x, m_r5_r6, "M (R5/R6): " + str.tostring(m_r5_r6, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
-            lbl_m_r67 := label.new(lbl_x, m_r6_r7, "M (R6/R7): " + str.tostring(m_r6_r7, "#.##"), color=c_med, textcolor=color.white, style=label.style_label_left, size=size.tiny)
+            if num_resist_lines >= 1
+                f_add_label(lbl_x, m_sell_r1, "M (Sell/R1): " + str.tostring(m_sell_r1, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 2
+                f_add_label(lbl_x, m_r1_r2, "M (R1/R2): " + str.tostring(m_r1_r2, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 3
+                f_add_label(lbl_x, m_r2_r3, "M (R2/R3): " + str.tostring(m_r2_r3, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 4
+                f_add_label(lbl_x, m_r3_r4, "M (R3/R4): " + str.tostring(m_r3_r4, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 5
+                f_add_label(lbl_x, m_r4_r5, "M (R4/R5): " + str.tostring(m_r4_r5, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 6
+                f_add_label(lbl_x, m_r5_r6, "M (R5/R6): " + str.tostring(m_r5_r6, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 7
+                f_add_label(lbl_x, m_r6_r7, "M (R6/R7): " + str.tostring(m_r6_r7, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 8
+                f_add_label(lbl_x, m_r7_r8, "M (R7/R8): " + str.tostring(m_r7_r8, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 9
+                f_add_label(lbl_x, m_r8_r9, "M (R8/R9): " + str.tostring(m_r8_r9, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 10
+                f_add_label(lbl_x, m_r9_r10, "M (R9/R10): " + str.tostring(m_r9_r10, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 11
+                f_add_label(lbl_x, m_r10_r11, "M (R10/R11): " + str.tostring(m_r10_r11, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+            if num_resist_lines >= 12
+                f_add_label(lbl_x, m_r11_r12, "M (R11/R12): " + str.tostring(m_r11_r12, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
 
 // =========================================================================
 // SUMMARY DASHBOARD TABLE RENDERING
@@ -412,10 +498,10 @@ else if table_size_in == "Normal"
 else if table_size_in == "Large"
     t_sz := size.large
 
-var table summary_tbl = table.new(t_pos, 2, 25, bgcolor=color.new(color.black, 30), border_color=#2B2E3A, border_width=1)
+var table summary_tbl = table.new(t_pos, 2, 45, bgcolor=color.new(color.black, 30), border_color=#2B2E3A, border_width=1)
 
 if show_table and barstate.islast
-    table.clear(summary_tbl, 0, 0, 1, 24)
+    table.clear(summary_tbl, 0, 0, 1, 44)
     
     table.cell(summary_tbl, 0, 0, "VIX Volatility Levels Summary", bgcolor=#1E222D, text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
     table.merge_cells(summary_tbl, 0, 0, 1, 0)
@@ -456,20 +542,55 @@ if show_table and barstate.islast
     table.cell(summary_tbl, 0, 11, "Sell Level (High - Y)", bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_left)
     table.cell(summary_tbl, 1, 11, str.tostring(sell_level, "#.##"), bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 12, "Support 1 (Buy + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 12, str.tostring(s1_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
-    
-    table.cell(summary_tbl, 0, 13, "Support 2 (S1 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 13, str.tostring(s2_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
-    
-    table.cell(summary_tbl, 0, 14, "Support 3 (S2 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 14, str.tostring(s3_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
-    
-    table.cell(summary_tbl, 0, 15, "Resistance 1 (Sell - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 15, str.tostring(r1_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
-    
-    table.cell(summary_tbl, 0, 16, "Resistance 2 (R1 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 16, str.tostring(r2_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
-    
-    table.cell(summary_tbl, 0, 17, "Resistance 3 (R2 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 17, str.tostring(r3_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
+    int t_row = 12
+    if show_support_lines
+        if num_support_lines >= 1
+            table.cell(summary_tbl, 0, t_row, "Support 1 (S1)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s1_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 2
+            table.cell(summary_tbl, 0, t_row, "Support 2 (S2)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s2_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 3
+            table.cell(summary_tbl, 0, t_row, "Support 3 (S3)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s3_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 4
+            table.cell(summary_tbl, 0, t_row, "Support 4 (S4)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s4_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 5
+            table.cell(summary_tbl, 0, t_row, "Support 5 (S5)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s5_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 6
+            table.cell(summary_tbl, 0, t_row, "Support 6 (S6)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s6_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 7
+            table.cell(summary_tbl, 0, t_row, "Support 7 (S7)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s7_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 8
+            table.cell(summary_tbl, 0, t_row, "Support 8 (S8)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s8_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 9
+            table.cell(summary_tbl, 0, t_row, "Support 9 (S9)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s9_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 10
+            table.cell(summary_tbl, 0, t_row, "Support 10 (S10)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s10_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 11
+            table.cell(summary_tbl, 0, t_row, "Support 11 (S11)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s11_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_support_lines >= 12
+            table.cell(summary_tbl, 0, t_row, "Support 12 (S12)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(s12_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center), t_row += 1
+
+    if show_resist_lines
+        if num_resist_lines >= 1
+            table.cell(summary_tbl, 0, t_row, "Resistance 1 (R1)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r1_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 2
+            table.cell(summary_tbl, 0, t_row, "Resistance 2 (R2)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r2_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 3
+            table.cell(summary_tbl, 0, t_row, "Resistance 3 (R3)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r3_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 4
+            table.cell(summary_tbl, 0, t_row, "Resistance 4 (R4)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r4_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 5
+            table.cell(summary_tbl, 0, t_row, "Resistance 5 (R5)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r5_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 6
+            table.cell(summary_tbl, 0, t_row, "Resistance 6 (R6)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r6_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 7
+            table.cell(summary_tbl, 0, t_row, "Resistance 7 (R7)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r7_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 8
+            table.cell(summary_tbl, 0, t_row, "Resistance 8 (R8)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r8_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 9
+            table.cell(summary_tbl, 0, t_row, "Resistance 9 (R9)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r9_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 10
+            table.cell(summary_tbl, 0, t_row, "Resistance 10 (R10)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r10_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 11
+            table.cell(summary_tbl, 0, t_row, "Resistance 11 (R11)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r11_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1
+        if num_resist_lines >= 12
+            table.cell(summary_tbl, 0, t_row, "Resistance 12 (R12)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left), table.cell(summary_tbl, 1, t_row, str.tostring(r12_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center), t_row += 1

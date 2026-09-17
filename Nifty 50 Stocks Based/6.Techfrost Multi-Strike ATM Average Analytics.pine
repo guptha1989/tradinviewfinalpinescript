@@ -70,7 +70,7 @@ biasBadgePosInput    = input.string("Bottom Left", "Bias Badge Position", option
   tooltip="Position of the Bullish / Bearish Bias badge in the sub-window indicator pane.")
 
 showRollingBEPInput  = input.bool(true, "Show Rolling BEP Line", group="Display Controls",
-  tooltip="Marks the current day ATM BEP line calculated based on Previous Day Close (Day ATM Strike + CE Prev Close + PE Prev Close).")
+  tooltip="Marks the current day ATM BEP line: (Day ATM CE Prev Close + Day ATM PE Prev Close) / 2.")
 
 // --- Styling & Colors ---
 colorCEAvgCur        = input.color(#00E676, "CE Current Basket Avg Line Color", group="Styling & Colors")
@@ -463,11 +463,7 @@ else if dayOpenATMStrike == k_m5
 else if dayOpenATMStrike == k_m6
     ce_pdc_atm := ce_pdc_m6, pe_pdc_atm := pe_pdc_m6
 
-float atm_straddle_pdc  = nz(ce_pdc_atm) + nz(pe_pdc_atm)
-float rolling_bep_upper = dayOpenATMStrike + atm_straddle_pdc
-float rolling_bep_lower = dayOpenATMStrike - atm_straddle_pdc
-
-float rolling_bep_chart = isPut ? rolling_bep_lower : rolling_bep_upper
+float rolling_bep_val = (nz(ce_pdc_atm) + nz(pe_pdc_atm)) / 2.0
 
 // ==========================================
 // BASKET AVERAGE CALCULATIONS (BASED ON numStrikesInput)
@@ -627,41 +623,24 @@ alertcondition(ce_trend_cont_signal, title="CE Continued Strong Trend from Yeste
 alertcondition(pe_trend_cont_signal, title="PE Continued Strong Trend from Yesterday", message="PE Continued Strong Trend from Yesterday Active at Market Open on {{ticker}}!")
 
 // ==========================================
-// ON-CHART ROLLING BEP PROJECTED LINES ENGINE
+// ON-CHART ROLLING BEP PROJECTED LINE ENGINE
 // ==========================================
 
-var line ln_rolling_bep_upper = na
-var line ln_rolling_bep_lower = na
-var label lbl_rolling_bep_upper = na
-var label lbl_rolling_bep_lower = na
+var line ln_rolling_bep = na
+var label lbl_rolling_bep = na
 
 if showRollingBEPInput
     int target_x2 = barstate.islast ? bar_index + 150 : bar_index
     if isNewDaySession
-        line.set_x2(ln_rolling_bep_upper, bar_index - 1)
-        line.set_x2(ln_rolling_bep_lower, bar_index - 1)
-        if isPut
-            ln_rolling_bep_lower := line.new(bar_index, rolling_bep_lower, target_x2, rolling_bep_lower, color=colorRollingBEP, width=rollingBEPLineWidth, style=line.style_solid, force_overlay=true)
-        else if isCall
-            ln_rolling_bep_upper := line.new(bar_index, rolling_bep_upper, target_x2, rolling_bep_upper, color=colorRollingBEP, width=rollingBEPLineWidth, style=line.style_solid, force_overlay=true)
-        else
-            ln_rolling_bep_upper := line.new(bar_index, rolling_bep_upper, target_x2, rolling_bep_upper, color=colorRollingBEP, width=rollingBEPLineWidth, style=line.style_solid, force_overlay=true)
-            ln_rolling_bep_lower := line.new(bar_index, rolling_bep_lower, target_x2, rolling_bep_lower, color=colorRollingBEP, width=rollingBEPLineWidth, style=line.style_dashed, force_overlay=true)
+        line.set_x2(ln_rolling_bep, bar_index - 1)
+        ln_rolling_bep := line.new(bar_index, rolling_bep_val, target_x2, rolling_bep_val, color=colorRollingBEP, width=rollingBEPLineWidth, style=line.style_solid, force_overlay=true)
     else
-        line.set_x2(ln_rolling_bep_upper, target_x2)
-        line.set_x2(ln_rolling_bep_lower, target_x2)
+        line.set_x2(ln_rolling_bep, target_x2)
 
     if barstate.islast
-        label.delete(lbl_rolling_bep_upper)
-        label.delete(lbl_rolling_bep_lower)
+        label.delete(lbl_rolling_bep)
         int lbl_x = bar_index + 5
-        if isPut
-            lbl_rolling_bep_lower := label.new(lbl_x, rolling_bep_lower, "Rolling BEP: " + str.tostring(rolling_bep_lower, "#.##"), color=colorRollingBEP, textcolor=color.black, style=label.style_label_left, size=size.small, force_overlay=true)
-        else if isCall
-            lbl_rolling_bep_upper := label.new(lbl_x, rolling_bep_upper, "Rolling BEP: " + str.tostring(rolling_bep_upper, "#.##"), color=colorRollingBEP, textcolor=color.black, style=label.style_label_left, size=size.small, force_overlay=true)
-        else
-            lbl_rolling_bep_upper := label.new(lbl_x, rolling_bep_upper, "Rolling BEP Upper: " + str.tostring(rolling_bep_upper, "#.##"), color=colorRollingBEP, textcolor=color.black, style=label.style_label_left, size=size.small, force_overlay=true)
-            lbl_rolling_bep_lower := label.new(lbl_x, rolling_bep_lower, "Rolling BEP Lower: " + str.tostring(rolling_bep_lower, "#.##"), color=colorRollingBEP, textcolor=color.black, style=label.style_label_left, size=size.small, force_overlay=true)
+        lbl_rolling_bep := label.new(lbl_x, rolling_bep_val, "Rolling BEP: " + str.tostring(rolling_bep_val, "#.##"), color=colorRollingBEP, textcolor=color.black, style=label.style_label_left, size=size.small, force_overlay=true)
 
 // ==========================================
 // AVERAGE PLOTS (SUB-WINDOW BOTTOM INDICATOR)
@@ -794,7 +773,7 @@ if barstate.islast
         string stepFmt = stepVal == math.floor(stepVal) ? str.tostring(int(stepVal)) : str.tostring(stepVal, "#.##")
         string dayOpenFmt = dayOpenATMStrike == math.floor(dayOpenATMStrike) ? str.tostring(int(dayOpenATMStrike)) : str.tostring(dayOpenATMStrike, "#.##")
         string curAtmFmt = curATMStrike == math.floor(curATMStrike) ? str.tostring(int(curATMStrike)) : str.tostring(curATMStrike, "#.##")
-        string rollingBepFmt = str.tostring(rolling_bep_chart, "#.##")
+        string rollingBepFmt = str.tostring(rolling_bep_val, "#.##")
 
         // Row 0: Top Header Banner
         table.cell(summaryTable, 0, 0, "Asset: " + underlyingName, bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
