@@ -23,7 +23,7 @@ calc_mode = input.string("First 5 Minutes (VIX 5m & Spot 5m)", "Calculation Sour
   tooltip="Choose data source: 1) Prev Day VIX Close & Prev Day Spot High/Low, 2) First 5m VIX Close & First 5m Spot High/Low, 3) First 30m VIX & Spot.")
 
 time_factor_val = input.float(24.0, "Formula Time Factor (Default 24)", group=G_CALC,
-  tooltip="Time factor inside square root in formula: X = Spot * (VIX / 10000) * sqrt(TimeFactor).")
+  tooltip="Time factor inside square root in formula: X = Spot * (VIX / 100) * sqrt(TimeFactor).")
 spot_calc_ref = input.string("Spot Low", "Spot Price Reference for X", 
   options=["Spot Low", "Spot High", "Spot Close", "Spot Open"], group=G_CALC,
   tooltip="Choose which price reference (Low, High, Close, Open of selected Mode) is used in X formula.")
@@ -32,6 +32,8 @@ sell_ref_mode = input.string("Spot High - Y", "Sell Level Formula Mode",
   tooltip="Select formula for Sell Level calculation.")
 
 // 3. Line Formatting & Style Settings
+days_to_show        = input.int(5, "Number of Days to Plot (Default 5)", minval=1, maxval=30, group=G_STYLE,
+  tooltip="Number of historical trading days to plot levels for.")
 show_buy_sell_lines = input.bool(true, "Show Buy & Sell Level Lines", group=G_STYLE)
 show_support_lines  = input.bool(true, "Show Support Lines (S1-S6)", group=G_STYLE)
 show_resist_lines   = input.bool(true, "Show Resistance Lines (R1-R7)", group=G_STYLE)
@@ -106,8 +108,8 @@ else if spot_calc_ref == "Spot Close"
 else if spot_calc_ref == "Spot Open"
     ref_price := spot_open_used
 
-// X = Spot * (VIX_Close / 100 / 100) * sqrt(TimeFactor)
-float X_val = ref_price * (vix_clean / 10000.0) * math.sqrt(time_factor_val)
+// X = Spot * (VIX_Close / 100) * sqrt(TimeFactor)
+float X_val = ref_price * (vix_clean / 100.0) * math.sqrt(time_factor_val)
 float Y_val = X_val / 4.0
 
 // Buy & Sell Level Calculations
@@ -153,42 +155,60 @@ float m_r4_r5   = (r4_val + r5_val) / 2.0
 float m_r5_r6   = (r5_val + r6_val) / 2.0
 float m_r6_r7   = (r6_val + r7_val) / 2.0
 
-// Reset lines on new day start
+// =========================================================================
+// 5-DAY TRADING SESSION WINDOW TRACKER
+// =========================================================================
 is_new_day = ta.change(time("D")) != 0
 
-float buy_plot  = show_buy_sell_lines ? buy_level : na
-float sell_plot = show_buy_sell_lines ? sell_level : na
+var int[] session_start_times = array.new_int(0)
+if is_new_day or bar_index == 0
+    if array.size(session_start_times) == 0 or time != array.get(session_start_times, array.size(session_start_times) - 1)
+        array.push(session_start_times, time)
+        if array.size(session_start_times) > 100
+            array.shift(session_start_times)
 
-float s1_plot = show_support_lines ? s1_val : na
-float s2_plot = show_support_lines ? s2_val : na
-float s3_plot = show_support_lines ? s3_val : na
-float s4_plot = show_support_lines ? s4_val : na
-float s5_plot = show_support_lines ? s5_val : na
-float s6_plot = show_support_lines ? s6_val : na
+int cutoff_time = 0
+int total_sessions = array.size(session_start_times)
+if total_sessions >= days_to_show
+    cutoff_time := array.get(session_start_times, total_sessions - days_to_show)
+else if total_sessions > 0
+    cutoff_time := array.get(session_start_times, 0)
 
-float r1_plot = show_resist_lines ? r1_val : na
-float r2_plot = show_resist_lines ? r2_val : na
-float r3_plot = show_resist_lines ? r3_val : na
-float r4_plot = show_resist_lines ? r4_val : na
-float r5_plot = show_resist_lines ? r5_val : na
-float r6_plot = show_resist_lines ? r6_val : na
-float r7_plot = show_resist_lines ? r7_val : na
+bool is_in_plot_window = time >= cutoff_time
 
-float m_sb_plot  = show_median_lines ? m_sell_buy : na
-float m_bs1_plot = show_median_lines and show_support_lines ? m_buy_s1 : na
-float m_s12_plot = show_median_lines and show_support_lines ? m_s1_s2 : na
-float m_s23_plot = show_median_lines and show_support_lines ? m_s2_s3 : na
-float m_s34_plot = show_median_lines and show_support_lines ? m_s3_s4 : na
-float m_s45_plot = show_median_lines and show_support_lines ? m_s4_s5 : na
-float m_s56_plot = show_median_lines and show_support_lines ? m_s5_s6 : na
+float buy_plot  = is_in_plot_window and show_buy_sell_lines ? buy_level : na
+float sell_plot = is_in_plot_window and show_buy_sell_lines ? sell_level : na
 
-float m_sr1_plot = show_median_lines and show_resist_lines ? m_sell_r1 : na
-float m_r12_plot = show_median_lines and show_resist_lines ? m_r1_r2 : na
-float m_r23_plot = show_median_lines and show_resist_lines ? m_r2_r3 : na
-float m_r34_plot = show_median_lines and show_resist_lines ? m_r3_r4 : na
-float m_r45_plot = show_median_lines and show_resist_lines ? m_r4_r5 : na
-float m_r56_plot = show_median_lines and show_resist_lines ? m_r5_r6 : na
-float m_r67_plot = show_median_lines and show_resist_lines ? m_r6_r7 : na
+float s1_plot = is_in_plot_window and show_support_lines ? s1_val : na
+float s2_plot = is_in_plot_window and show_support_lines ? s2_val : na
+float s3_plot = is_in_plot_window and show_support_lines ? s3_val : na
+float s4_plot = is_in_plot_window and show_support_lines ? s4_val : na
+float s5_plot = is_in_plot_window and show_support_lines ? s5_val : na
+float s6_plot = is_in_plot_window and show_support_lines ? s6_val : na
+
+float r1_plot = is_in_plot_window and show_resist_lines ? r1_val : na
+float r2_plot = is_in_plot_window and show_resist_lines ? r2_val : na
+float r3_plot = is_in_plot_window and show_resist_lines ? r3_val : na
+float r4_plot = is_in_plot_window and show_resist_lines ? r4_val : na
+float r5_plot = is_in_plot_window and show_resist_lines ? r5_val : na
+float r6_plot = is_in_plot_window and show_resist_lines ? r6_val : na
+float r7_plot = is_in_plot_window and show_resist_lines ? r7_val : na
+
+float m_sb_plot  = is_in_plot_window and show_median_lines ? m_sell_buy : na
+float m_bs1_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_buy_s1 : na
+float m_s12_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s1_s2 : na
+float m_s23_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s2_s3 : na
+float m_s34_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s3_s4 : na
+float m_s45_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s4_s5 : na
+float m_s56_plot = is_in_plot_window and show_median_lines and show_support_lines ? m_s5_s6 : na
+
+float m_sr1_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_sell_r1 : na
+float m_r12_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r1_r2 : na
+float m_r23_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r2_r3 : na
+float m_r34_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r3_r4 : na
+float m_r45_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r4_r5 : na
+float m_r56_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r5_r6 : na
+float m_r67_plot = is_in_plot_window and show_median_lines and show_resist_lines ? m_r6_r7 : na
 
 if is_new_day
     buy_plot := na, sell_plot := na
@@ -236,78 +256,83 @@ plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r56_plot 
 plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? m_r67_plot : na, title="Median (R6/R7)", color=c_med, linewidth=med_width_val, style=med_p_style)
 
 // =========================================================================
-// PROJECTED HORIZONTAL LINES ENGINE
+// PROJECTED HORIZONTAL LINES ENGINE (5-DAY HISTORY POOL)
 // =========================================================================
-var line ln_buy = na, var line ln_sell = na
-var line ln_s1 = na, var line ln_s2 = na, var line ln_s3 = na, var line ln_s4 = na, var line ln_s5 = na, var line ln_s6 = na
-var line ln_r1 = na, var line ln_r2 = na, var line ln_r3 = na, var line ln_r4 = na, var line ln_r5 = na, var line ln_r6 = na, var line ln_r7 = na
+var line[] line_history = array.new_line(0)
+var int[] line_time_history = array.new_int(0)
 
-var line ln_m_sb = na
-var line ln_m_bs1 = na, var line ln_m_s12 = na, var line ln_m_s23 = na, var line ln_m_s34 = na, var line ln_m_s45 = na, var line ln_m_s56 = na
-var line ln_m_sr1 = na, var line ln_m_r12 = na, var line ln_m_r23 = na, var line ln_m_r34 = na, var line ln_m_r45 = na, var line ln_m_r56 = na, var line ln_m_r67 = na
+f_add_line(int x1, float y, int x2, color c, int w, string s, int day_t) =>
+    line ln = line.new(x1, y, x2, y, color=c, width=w, style=s)
+    array.push(line_history, ln)
+    array.push(line_time_history, day_t)
+    ln
 
 prj_line_style = f_get_line_pattern(line_pattern_str)
 med_prj_style  = f_get_line_pattern(med_pattern_str)
 
 if line_render_mode == "Horizontal Lines (Projected to Right)"
     int target_x2 = barstate.islast ? bar_index + 150 : bar_index
+    
     if is_new_day
-        line.set_x2(ln_buy, bar_index - 1), line.set_x2(ln_sell, bar_index - 1)
-        line.set_x2(ln_s1, bar_index - 1), line.set_x2(ln_s2, bar_index - 1), line.set_x2(ln_s3, bar_index - 1), line.set_x2(ln_s4, bar_index - 1), line.set_x2(ln_s5, bar_index - 1), line.set_x2(ln_s6, bar_index - 1)
-        line.set_x2(ln_r1, bar_index - 1), line.set_x2(ln_r2, bar_index - 1), line.set_x2(ln_r3, bar_index - 1), line.set_x2(ln_r4, bar_index - 1), line.set_x2(ln_r5, bar_index - 1), line.set_x2(ln_r6, bar_index - 1), line.set_x2(ln_r7, bar_index - 1)
-        
-        line.set_x2(ln_m_sb, bar_index - 1)
-        line.set_x2(ln_m_bs1, bar_index - 1), line.set_x2(ln_m_s12, bar_index - 1), line.set_x2(ln_m_s23, bar_index - 1), line.set_x2(ln_m_s34, bar_index - 1), line.set_x2(ln_m_s45, bar_index - 1), line.set_x2(ln_m_s56, bar_index - 1)
-        line.set_x2(ln_m_sr1, bar_index - 1), line.set_x2(ln_m_r12, bar_index - 1), line.set_x2(ln_m_r23, bar_index - 1), line.set_x2(ln_m_r34, bar_index - 1), line.set_x2(ln_m_r45, bar_index - 1), line.set_x2(ln_m_r56, bar_index - 1), line.set_x2(ln_m_r67, bar_index - 1)
+        // Finalize end point x2 for all previous lines
+        if array.size(line_history) > 0
+            for i = 0 to array.size(line_history) - 1
+                line ln_item = array.get(line_history, i)
+                if line.get_x2(ln_item) > bar_index - 1
+                    line.set_x2(ln_item, bar_index - 1)
+
+        // Prune lines older than cutoff_time
+        if array.size(line_history) > 0
+            for i = array.size(line_history) - 1 to 0 by 1
+                int l_time = array.get(line_time_history, i)
+                if l_time < cutoff_time
+                    line.delete(array.get(line_history, i))
+                    array.remove(line_history, i)
+                    array.remove(line_time_history, i)
 
         if show_buy_sell_lines
-            ln_buy := line.new(bar_index, buy_level, target_x2, buy_level, color=c_buy, width=line_width_val, style=prj_line_style)
-            ln_sell := line.new(bar_index, sell_level, target_x2, sell_level, color=c_sell, width=line_width_val, style=prj_line_style)
+            f_add_line(bar_index, buy_level, target_x2, c_buy, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, sell_level, target_x2, c_sell, line_width_val, prj_line_style, time)
         if show_support_lines
-            ln_s1 := line.new(bar_index, s1_val, target_x2, s1_val, color=c_sup, width=line_width_val, style=prj_line_style)
-            ln_s2 := line.new(bar_index, s2_val, target_x2, s2_val, color=c_sup, width=line_width_val, style=prj_line_style)
-            ln_s3 := line.new(bar_index, s3_val, target_x2, s3_val, color=c_sup, width=line_width_val, style=prj_line_style)
-            ln_s4 := line.new(bar_index, s4_val, target_x2, s4_val, color=c_sup, width=line_width_val, style=prj_line_style)
-            ln_s5 := line.new(bar_index, s5_val, target_x2, s5_val, color=c_sup, width=line_width_val, style=prj_line_style)
-            ln_s6 := line.new(bar_index, s6_val, target_x2, s6_val, color=c_sup, width=line_width_val, style=prj_line_style)
+            f_add_line(bar_index, s1_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, s2_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, s3_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, s4_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, s5_val, target_x2, c_sup, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, s6_val, target_x2, c_sup, line_width_val, prj_line_style, time)
         if show_resist_lines
-            ln_r1 := line.new(bar_index, r1_val, target_x2, r1_val, color=c_res, width=line_width_val, style=prj_line_style)
-            ln_r2 := line.new(bar_index, r2_val, target_x2, r2_val, color=c_res, width=line_width_val, style=prj_line_style)
-            ln_r3 := line.new(bar_index, r3_val, target_x2, r3_val, color=c_res, width=line_width_val, style=prj_line_style)
-            ln_r4 := line.new(bar_index, r4_val, target_x2, r4_val, color=c_res, width=line_width_val, style=prj_line_style)
-            ln_r5 := line.new(bar_index, r5_val, target_x2, r5_val, color=c_res, width=line_width_val, style=prj_line_style)
-            ln_r6 := line.new(bar_index, r6_val, target_x2, r6_val, color=c_res, width=line_width_val, style=prj_line_style)
-            ln_r7 := line.new(bar_index, r7_val, target_x2, r7_val, color=c_res, width=line_width_val, style=prj_line_style)
+            f_add_line(bar_index, r1_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, r2_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, r3_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, r4_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, r5_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, r6_val, target_x2, c_res, line_width_val, prj_line_style, time)
+            f_add_line(bar_index, r7_val, target_x2, c_res, line_width_val, prj_line_style, time)
         if show_median_lines
-            ln_m_sb := line.new(bar_index, m_sell_buy, target_x2, m_sell_buy, color=c_med, width=med_width_val, style=med_prj_style)
+            f_add_line(bar_index, m_sell_buy, target_x2, c_med, med_width_val, med_prj_style, time)
             if show_support_lines
-                ln_m_bs1 := line.new(bar_index, m_buy_s1, target_x2, m_buy_s1, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_s12 := line.new(bar_index, m_s1_s2, target_x2, m_s1_s2, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_s23 := line.new(bar_index, m_s2_s3, target_x2, m_s2_s3, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_s34 := line.new(bar_index, m_s3_s4, target_x2, m_s3_s4, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_s45 := line.new(bar_index, m_s4_s5, target_x2, m_s4_s5, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_s56 := line.new(bar_index, m_s5_s6, target_x2, m_s5_s6, color=c_med, width=med_width_val, style=med_prj_style)
+                f_add_line(bar_index, m_buy_s1, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_s1_s2, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_s2_s3, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_s3_s4, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_s4_s5, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_s5_s6, target_x2, c_med, med_width_val, med_prj_style, time)
             if show_resist_lines
-                ln_m_sr1 := line.new(bar_index, m_sell_r1, target_x2, m_sell_r1, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_r12 := line.new(bar_index, m_r1_r2, target_x2, m_r1_r2, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_r23 := line.new(bar_index, m_r2_r3, target_x2, m_r2_r3, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_r34 := line.new(bar_index, m_r3_r4, target_x2, m_r3_r4, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_r45 := line.new(bar_index, m_r4_r5, target_x2, m_r4_r5, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_r56 := line.new(bar_index, m_r5_r6, target_x2, m_r5_r6, color=c_med, width=med_width_val, style=med_prj_style)
-                ln_m_r67 := line.new(bar_index, m_r6_r7, target_x2, m_r6_r7, color=c_med, width=med_width_val, style=med_prj_style)
+                f_add_line(bar_index, m_sell_r1, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_r1_r2, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_r2_r3, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_r3_r4, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_r4_r5, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_r5_r6, target_x2, c_med, med_width_val, med_prj_style, time)
+                f_add_line(bar_index, m_r6_r7, target_x2, c_med, med_width_val, med_prj_style, time)
     else
-        if show_buy_sell_lines
-            line.set_x2(ln_buy, target_x2), line.set_x2(ln_sell, target_x2)
-        if show_support_lines
-            line.set_x2(ln_s1, target_x2), line.set_x2(ln_s2, target_x2), line.set_x2(ln_s3, target_x2), line.set_x2(ln_s4, target_x2), line.set_x2(ln_s5, target_x2), line.set_x2(ln_s6, target_x2)
-        if show_resist_lines
-            line.set_x2(ln_r1, target_x2), line.set_x2(ln_r2, target_x2), line.set_x2(ln_r3, target_x2), line.set_x2(ln_r4, target_x2), line.set_x2(ln_r5, target_x2), line.set_x2(ln_r6, target_x2), line.set_x2(ln_r7, target_x2)
-        if show_median_lines
-            line.set_x2(ln_m_sb, target_x2)
-            if show_support_lines
-                line.set_x2(ln_m_bs1, target_x2), line.set_x2(ln_m_s12, target_x2), line.set_x2(ln_m_s23, target_x2), line.set_x2(ln_m_s34, target_x2), line.set_x2(ln_m_s45, target_x2), line.set_x2(ln_m_s56, target_x2)
-            if show_resist_lines
-                line.set_x2(ln_m_sr1, target_x2), line.set_x2(ln_m_r12, target_x2), line.set_x2(ln_m_r23, target_x2), line.set_x2(ln_m_r34, target_x2), line.set_x2(ln_m_r45, target_x2), line.set_x2(ln_m_r56, target_x2), line.set_x2(ln_m_r67, target_x2)
+        // Extend today's active lines to right
+        if array.size(line_history) > 0
+            for i = 0 to array.size(line_history) - 1
+                line ln_item = array.get(line_history, i)
+                int l_time = array.get(line_time_history, i)
+                if l_time >= time - 86400000 // Only extend active lines of the current day
+                    line.set_x2(ln_item, target_x2)
 
 // =========================================================================
 // REAL-TIME LABELS AT RIGHT EDGE
