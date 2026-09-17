@@ -46,14 +46,14 @@ c_sup   = input.color(#00B0FF, "Support Lines Color (S1-S6)", group=G_STYLE)
 c_res   = input.color(#FF9100, "Resistance Lines Color (R1-R7)", group=G_STYLE)
 
 // Line Styles & Widths
-f_get_pattern(string p_str) =>
-    p_str == "Dashed" ? plot.style_line : (p_str == "Dotted" ? plot.style_circles : plot.style_line)
+line_pattern_str = input.string("Solid", "Line Pattern / Style", options=["Solid", "Dashed", "Dotted"], group=G_STYLE)
+line_width_val   = input.int(2, "Line Width", minval=1, maxval=4, group=G_STYLE)
+
+// Direct evaluation for plot style to ensure input plot_style type
+p_style = line_pattern_str == "Dotted" ? plot.style_circles : plot.style_line
 
 f_get_line_pattern(string p_str) =>
     p_str == "Dashed" ? line.style_dashed : (p_str == "Dotted" ? line.style_dotted : line.style_solid)
-
-line_pattern_str = input.string("Solid", "Line Pattern / Style", options=["Solid", "Dashed", "Dotted"], group=G_STYLE)
-line_width_val   = input.int(2, "Line Width", minval=1, maxval=4, group=G_STYLE)
 
 // 4. Dashboard Table Settings
 show_table   = input.bool(true, "Show Levels Summary Table", group=G_DASH)
@@ -158,8 +158,6 @@ if is_new_day
 // =========================================================================
 // PLOTS AND RENDERINGS (STANDARD PLOTS)
 // =========================================================================
-p_style = f_get_pattern(line_pattern_str)
-
 plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? buy_plot : na, title="Buy Level", color=c_buy, linewidth=line_width_val, style=p_style)
 plot(line_render_mode == "Standard Plots (Style Tab Customizable)" ? sell_plot : na, title="Sell Level", color=c_sell, linewidth=line_width_val, style=p_style)
 
