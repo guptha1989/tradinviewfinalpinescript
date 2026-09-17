@@ -22,8 +22,8 @@ expiry_input = input.string("260804", "Expiry String (YYMMDD/Code)", group=G_PAR
 
 atm_select_mode = input.string("Automatic", "ATM Strike Selection Mode", options=["Automatic", "Manual"], group=G_PARSER,
   tooltip="Choose whether ATM Strike is calculated automatically from Day Open price or set manually.")
-manual_strike_val = input.int(24150, "Selected Strike (Manual)", group=G_PARSER,
-  tooltip="Specified strike price used when ATM Strike Selection Mode is set to Manual.")
+manual_strike_val = input.int(23200, "Center Strike Price", group=G_PARSER,
+  tooltip="Center strike price around which 7 strikes (3 below, 3 above) are loaded.")
 selected_opt_type = input.string("CE", "Option Type", options=["CE", "PE"], group=G_PARSER,
   tooltip="Option contract type (CE or PE).")
 
@@ -130,8 +130,8 @@ manual_sl_bars_back = input.int(10, "Manual Swing Low Bars Back", minval=0, grou
 // 5. Advanced Dashboard Table Settings
 show_table = input.bool(true, "Show Option Chain Table", group=G_DASHBOARD,
   tooltip="Toggle the rendering of the dashboard option chain table.")
-num_strikes_display = input.int(5, "Number of Strikes to Display (N)", minval=1, maxval=5, group=G_DASHBOARD,
-  tooltip="Displays the selected strike plus N strikes above and N strikes below. Max is 5 (total 11 strikes).")
+num_strikes_display = input.int(3, "Number of Strikes to Display (N)", minval=1, maxval=3, group=G_DASHBOARD,
+  tooltip="Displays the selected strike plus N strikes above and N strikes below. Max is 3 (total 7 strikes).")
 table_size = input.string("Small", "Table Text Size", options=["Tiny", "Small", "Normal", "Large"], group=G_DASHBOARD)
 table_pos_str = input.string("Top Right", "Table Position", 
   options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=G_DASHBOARD)
@@ -191,18 +191,11 @@ final_type = is_option ? opt_type : (selected_opt_type == "CE" or selected_opt_t
 
 // Data Retrieval for Underlying Spot
 spot_sym = exchange + ":" + final_root
-[spot_open, spot_prev_close, spot_close_today] = request.security(spot_sym, "1D", [open, close, close], lookahead=barmerge.lookahead_on)
-[pd_high_val, pd_low_val] = request.security(spot_sym, "1D", [high[1], low[1]], lookahead=barmerge.lookahead_on)
+[spot_open, spot_prev_close, spot_close_today, pd_high_val, pd_low_val] = request.security(spot_sym, "1D", [open, close[1], close, high[1], low[1]], lookahead=barmerge.lookahead_on)
 spot_rt = request.security(spot_sym, timeframe.period, close)
 
-// To prevent exceeding TradingView's 40 unique request.security limit across historical bars,
-// base_center_strike is fixed across historical execution so loop symbols remain constant.
-var int base_center_strike = na
-if barstate.isfirst or na(base_center_strike)
-    int calc_strike = (atm_select_mode == "Manual") ? manual_strike_val : (is_option ? strike_val : int(math.round(nz(spot_open, spot_close_today) / strike_step) * strike_step))
-    if calc_strike <= 0
-        calc_strike := 24150
-    base_center_strike := calc_strike
+// Constant Center Strike calculation across all bars to ensure total unique request.security calls remain under TradingView limit of 40
+int base_center_strike = (atm_select_mode == "Manual") ? manual_strike_val : manual_strike_val
 
 final_strike = base_center_strike
 
@@ -216,88 +209,86 @@ spot_base = calc_basis == "Day Open Price" ? spot_open : spot_prev_close
 // Resolve levels timeframe
 tf_to_use = sig_tf_str == "Chart Timeframe" ? timeframe.period : (sig_tf_str == "1 Min" ? "1" : (sig_tf_str == "3 Min" ? "3" : (sig_tf_str == "5 Min" ? "5" : (sig_tf_str == "10 Min" ? "10" : (sig_tf_str == "15 Min" ? "15" : "30")))))
 
-// Arrays to hold data for 11 strikes centered around the selected strike (index 5)
-var float[] ce_opens = array.new_float(11)
-var float[] ce_prevs = array.new_float(11)
-var float[] ce_ltps  = array.new_float(11)
-var float[] ce_highs = array.new_float(11, na)
-var float[] ce_lows  = array.new_float(11, na)
-var float[] ce_vols  = array.new_float(11, na)
-var float[] ce_vwaps = array.new_float(11, na)
+// Arrays to hold data for 7 strikes centered around the selected strike (index 3)
+var float[] ce_opens = array.new_float(7)
+var float[] ce_prevs = array.new_float(7)
+var float[] ce_ltps  = array.new_float(7)
+var float[] ce_highs = array.new_float(7, na)
+var float[] ce_lows  = array.new_float(7, na)
+var float[] ce_vols  = array.new_float(7, na)
+var float[] ce_vwaps = array.new_float(7, na)
 
-var float[] pe_opens = array.new_float(11)
-var float[] pe_prevs = array.new_float(11)
-var float[] pe_ltps  = array.new_float(11)
-var float[] pe_highs = array.new_float(11, na)
-var float[] pe_lows  = array.new_float(11, na)
-var float[] pe_vols  = array.new_float(11, na)
-var float[] pe_vwaps = array.new_float(11, na)
+var float[] pe_opens = array.new_float(7)
+var float[] pe_prevs = array.new_float(7)
+var float[] pe_ltps  = array.new_float(7)
+var float[] pe_highs = array.new_float(7, na)
+var float[] pe_lows  = array.new_float(7, na)
+var float[] pe_vols  = array.new_float(7, na)
+var float[] pe_vwaps = array.new_float(7, na)
 
-var int[] strikes = array.new_int(11)
-
-// Helper function to extract Day Open, Previous Day Close, and real-time tick-by-tick LTP
-f_get_contract_tuple() =>
-    var float day_open = na
-    var float prev_close = na
-    if ta.change(time("D")) != 0
-        prev_close := close[1]
-        day_open := open
-    [nz(day_open, open), nz(prev_close, close[1]), close]
+var int[] strikes = array.new_int(7)
 
 // Populating arrays. Security calls in loop are resolved using constant iteration boundaries
-for i = 0 to 10
-    int strike = base_center_strike + (i - 5) * strike_step
+for i = 0 to 6
+    int strike = base_center_strike + (i - 3) * strike_step
     array.set(strikes, i, strike)
     
     string ce_contract = exchange + ":" + final_root + final_expiry + "C" + str.tostring(strike)
     string pe_contract = exchange + ":" + final_root + final_expiry + "P" + str.tostring(strike)
     
-    // Real-time tick-by-tick query on chart timeframe (timeframe.period)
-    // Returns [Day Open, Previous Day Close, Real-time LTP] on every tick
-    [ce_o, ce_p, ce_c] = request.security(ce_contract, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
-    [pe_o, pe_p, pe_c] = request.security(pe_contract, timeframe.period, f_get_contract_tuple(), ignore_invalid_symbol=true)
+    [ce_o, ce_p, ce_c, ce_h, ce_l, ce_v, ce_vw] = request.security(ce_contract, tf_to_use, [ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0, close[1], 0), close, high, low, volume, ta.vwap], ignore_invalid_symbol=true)
+    [pe_o, pe_p, pe_c, pe_h, pe_l, pe_v, pe_vw] = request.security(pe_contract, tf_to_use, [ta.valuewhen(ta.change(time("D")) != 0 or bar_index == 0, open, 0), ta.valuewhen(ta.change(time("D")) != 0, close[1], 0), close, high, low, volume, ta.vwap], ignore_invalid_symbol=true)
     
     array.set(ce_opens, i, ce_o)
     array.set(ce_prevs, i, ce_p)
     array.set(ce_ltps,  i, ce_c)
+    array.set(ce_highs, i, ce_h)
+    array.set(ce_lows,  i, ce_l)
+    array.set(ce_vols,  i, ce_v)
+    array.set(ce_vwaps, i, ce_vw)
     
     array.set(pe_opens, i, pe_o)
     array.set(pe_prevs, i, pe_p)
     array.set(pe_ltps,  i, pe_c)
+    array.set(pe_highs, i, pe_h)
+    array.set(pe_lows,  i, pe_l)
+    array.set(pe_vols,  i, pe_v)
+    array.set(pe_vwaps, i, pe_vw)
 
 // =========================================================================
-// INTRADAY CVD / VOLUME QUERIES (Explicit calls for ATM-1, ATM, ATM+1 only)
-// Kept outside loop to prevent Pine from counting loop-body calls × 11 iterations.
-// This costs only 6 unique request.security calls (3 strikes × CE+PE).
+// ATM STRIKE CALCULATION (LOCKED 9:15 DAY OPEN vs REAL-TIME LTP)
 // =========================================================================
-string cvd_ce4 = exchange + ":" + final_root + final_expiry + "C" + str.tostring(final_strike - 1 * strike_step)
-string cvd_pe4 = exchange + ":" + final_root + final_expiry + "P" + str.tostring(final_strike - 1 * strike_step)
-string cvd_ce5 = exchange + ":" + final_root + final_expiry + "C" + str.tostring(final_strike)
-string cvd_pe5 = exchange + ":" + final_root + final_expiry + "P" + str.tostring(final_strike)
-string cvd_ce6 = exchange + ":" + final_root + final_expiry + "C" + str.tostring(final_strike + 1 * strike_step)
-string cvd_pe6 = exchange + ":" + final_root + final_expiry + "P" + str.tostring(final_strike + 1 * strike_step)
+int atm_strike_base = base_center_strike
+int atm_idx_base = 3
 
-[cvd4_ce_h, cvd4_ce_l, cvd4_ce_v, cvd4_ce_vw] = request.security(cvd_ce4, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd4_pe_h, cvd4_pe_l, cvd4_pe_v, cvd4_pe_vw] = request.security(cvd_pe4, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd5_ce_h, cvd5_ce_l, cvd5_ce_v, cvd5_ce_vw] = request.security(cvd_ce5, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd5_pe_h, cvd5_pe_l, cvd5_pe_v, cvd5_pe_vw] = request.security(cvd_pe5, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd6_ce_h, cvd6_ce_l, cvd6_ce_v, cvd6_ce_vw] = request.security(cvd_ce6, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
-[cvd6_pe_h, cvd6_pe_l, cvd6_pe_v, cvd6_pe_vw] = request.security(cvd_pe6, tf_to_use, [high, low, volume, ta.vwap], ignore_invalid_symbol=true)
+if atm_select_mode == "Automatic"
+    float min_diff_base = 1e9
+    for i = 0 to 6
+        float ce_o_val = calc_basis == "Day Open Price" ? array.get(ce_opens, i) : array.get(ce_prevs, i)
+        float pe_o_val = calc_basis == "Day Open Price" ? array.get(pe_opens, i) : array.get(pe_prevs, i)
+        int strike = array.get(strikes, i)
+        
+        if not na(ce_o_val) and not na(pe_o_val)
+            float diff = math.abs(ce_o_val - pe_o_val)
+            if diff < min_diff_base
+                min_diff_base := diff
+                atm_strike_base := strike
+                atm_idx_base := i
+else
+    atm_strike_base := manual_strike_val
+    for i = 0 to 6
+        if array.get(strikes, i) == manual_strike_val
+            atm_idx_base := i
+            break
 
-// Populate the arrays at indices 4, 5, 6
-array.set(ce_highs, 4, cvd4_ce_h), array.set(ce_lows, 4, cvd4_ce_l), array.set(ce_vols, 4, cvd4_ce_v), array.set(ce_vwaps, 4, cvd4_ce_vw)
-array.set(pe_highs, 4, cvd4_pe_h), array.set(pe_lows, 4, cvd4_pe_l), array.set(pe_vols, 4, cvd4_pe_v), array.set(pe_vwaps, 4, cvd4_pe_vw)
-array.set(ce_highs, 5, cvd5_ce_h), array.set(ce_lows, 5, cvd5_ce_l), array.set(ce_vols, 5, cvd5_ce_v), array.set(ce_vwaps, 5, cvd5_ce_vw)
-array.set(pe_highs, 5, cvd5_pe_h), array.set(pe_lows, 5, cvd5_pe_l), array.set(pe_vols, 5, cvd5_pe_v), array.set(pe_vwaps, 5, cvd5_pe_vw)
-array.set(ce_highs, 6, cvd6_ce_h), array.set(ce_lows, 6, cvd6_ce_l), array.set(ce_vols, 6, cvd6_ce_v), array.set(ce_vwaps, 6, cvd6_ce_vw)
-array.set(pe_highs, 6, cvd6_pe_h), array.set(pe_lows, 6, cvd6_pe_l), array.set(pe_vols, 6, cvd6_pe_v), array.set(pe_vwaps, 6, cvd6_pe_vw)
+final_strike := atm_strike_base
 
 // =========================================================================
 // INTRINSIC & EXTRINSIC VALUE CALCULATIONS
 // =========================================================================
-// Extract selected strike's CE and PE base premiums from arrays (Index 5)
-ce_premium_sel = calc_basis == "Day Open Price" ? array.get(ce_opens, 5) : array.get(ce_prevs, 5)
-pe_premium_sel = calc_basis == "Day Open Price" ? array.get(pe_opens, 5) : array.get(pe_prevs, 5)
+// Extract selected strike's CE and PE base premiums from arrays
+ce_premium_sel = calc_basis == "Day Open Price" ? array.get(ce_opens, atm_idx_base) : array.get(ce_prevs, atm_idx_base)
+pe_premium_sel = calc_basis == "Day Open Price" ? array.get(pe_opens, atm_idx_base) : array.get(pe_prevs, atm_idx_base)
 
 // Intrinsic Value (Calculated based on Base Spot Price)
 ce_intrinsic = math.max(0.0, spot_base - final_strike)
@@ -350,33 +341,7 @@ f_orb_range() =>
         orb_low := low
     [orb_high, orb_low]
 
-// =========================================================================
-// ATM STRIKE CALCULATION (LOCKED 9:15 DAY OPEN vs REAL-TIME LTP)
-// =========================================================================
-// 1. Base ATM Strike (Locked at 9:15 AM / Day Open Price)
-int atm_strike_base = base_center_strike
-int atm_idx_base = 5
 
-if atm_select_mode == "Automatic"
-    float min_diff_base = 1e9
-    for i = 0 to 10
-        float ce_o_val = calc_basis == "Day Open Price" ? array.get(ce_opens, i) : array.get(ce_prevs, i)
-        float pe_o_val = calc_basis == "Day Open Price" ? array.get(pe_opens, i) : array.get(pe_prevs, i)
-        int strike = array.get(strikes, i)
-        
-        if not na(ce_o_val) and not na(pe_o_val)
-            float diff = math.abs(ce_o_val - pe_o_val)
-            if diff < min_diff_base
-                min_diff_base := diff
-                atm_strike_base := strike
-                atm_idx_base := i
-else
-    // Manual mode: lock to manual_strike_val directly
-    atm_strike_base := manual_strike_val
-    for i = 0 to 10
-        if array.get(strikes, i) == manual_strike_val
-            atm_idx_base := i
-            break
 
 // Base ATM premiums (9:15 Day Open locked)
 float ce_atm_base = calc_basis == "Day Open Price" ? array.get(ce_opens, atm_idx_base) : array.get(ce_prevs, atm_idx_base)
@@ -391,16 +356,16 @@ if not na(ce_atm_base) and not na(pe_atm_base)
         Spot_Pivot := atm_strike_base - (pe_atm_base - ce_atm_base)
 
 // Spot R1-R4 Option Base Premiums (9:15 Day Open locked)
-float r1_ce_base = calc_basis == "Day Open Price" ? array.get(ce_opens, math.min(10, atm_idx_base + 1)) : array.get(ce_prevs, math.min(10, atm_idx_base + 1))
-float r2_ce_base = calc_basis == "Day Open Price" ? array.get(ce_opens, math.min(10, atm_idx_base + 2)) : array.get(ce_prevs, math.min(10, atm_idx_base + 2))
-float r3_ce_base = calc_basis == "Day Open Price" ? array.get(ce_opens, math.min(10, atm_idx_base + 3)) : array.get(ce_prevs, math.min(10, atm_idx_base + 3))
-float r4_ce_base = calc_basis == "Day Open Price" ? array.get(ce_opens, math.min(10, atm_idx_base + 4)) : array.get(ce_prevs, math.min(10, atm_idx_base + 4))
+float r1_ce_base = calc_basis == "Day Open Price" ? array.get(ce_opens, math.min(6, atm_idx_base + 1)) : array.get(ce_prevs, math.min(6, atm_idx_base + 1))
+float r2_ce_base = calc_basis == "Day Open Price" ? array.get(ce_opens, math.min(6, atm_idx_base + 2)) : array.get(ce_prevs, math.min(6, atm_idx_base + 2))
+float r3_ce_base = calc_basis == "Day Open Price" ? array.get(ce_opens, math.min(6, atm_idx_base + 3)) : array.get(ce_prevs, math.min(6, atm_idx_base + 3))
+float r4_ce_base = calc_basis == "Day Open Price" ? array.get(ce_opens, math.min(6, atm_idx_base + 3)) : array.get(ce_prevs, math.min(6, atm_idx_base + 3))
 
 // Spot S1-S4 Option Base Premiums (9:15 Day Open locked)
 float s1_pe_base = calc_basis == "Day Open Price" ? array.get(pe_opens, math.max(0, atm_idx_base - 1)) : array.get(pe_prevs, math.max(0, atm_idx_base - 1))
 float s2_pe_base = calc_basis == "Day Open Price" ? array.get(pe_opens, math.max(0, atm_idx_base - 2)) : array.get(pe_prevs, math.max(0, atm_idx_base - 2))
 float s3_pe_base = calc_basis == "Day Open Price" ? array.get(pe_opens, math.max(0, atm_idx_base - 3)) : array.get(pe_prevs, math.max(0, atm_idx_base - 3))
-float s4_pe_base = calc_basis == "Day Open Price" ? array.get(pe_opens, math.max(0, atm_idx_base - 4)) : array.get(pe_prevs, math.max(0, atm_idx_base - 4))
+float s4_pe_base = calc_basis == "Day Open Price" ? array.get(pe_opens, math.max(0, atm_idx_base - 3)) : array.get(pe_prevs, math.max(0, atm_idx_base - 3))
 
 // Compute locked spot level projections (stationary across trading day)
 // R1: ATM Strike + ATM CE 9:15 open value; R2 to R5: ATM+1 to ATM+4 CE levels
@@ -420,9 +385,9 @@ float Spot_S5 = (atm_strike_base - 4 * strike_step) - s4_pe_base
 // 2. Real-Time ATM Strike Calculation (LTP Premium Difference based)
 float min_diff_rt = 1e9
 int atm_strike_rt = final_strike
-int atm_idx_rt = 5
+int atm_idx_rt = 3
 
-for i = 0 to 10
+for i = 0 to 6
     float ce_l_val = array.get(ce_ltps, i)
     float pe_l_val = array.get(pe_ltps, i)
     int strike = array.get(strikes, i)
@@ -441,25 +406,25 @@ float pe_atm_rt_ltp = array.get(pe_ltps, atm_idx_rt)
 int atm_strike = atm_strike_base
 int atm_idx = atm_idx_base
 
-// Get base premiums for selected strike (index 5)
-ce_base_sel = f_get_base_premium(5, calc_basis, ce_opens, ce_prevs)
-pe_base_sel = f_get_base_premium(5, calc_basis, pe_opens, pe_prevs)
+// Get base premiums for selected strike
+ce_base_sel = f_get_base_premium(atm_idx_base, calc_basis, ce_opens, ce_prevs)
+pe_base_sel = f_get_base_premium(atm_idx_base, calc_basis, pe_opens, pe_prevs)
 
 // Pivot / BEP of Selected Strike
 pivot_val = (ce_base_sel + pe_base_sel) / 2.0
 
 // R1-R5 and S1-S5 calculations (based on base premiums)
 r1_val = ce_base_sel
-r2_val = (f_get_base_premium(4, calc_basis, ce_opens, ce_prevs) + f_get_base_premium(6, calc_basis, pe_opens, pe_prevs)) / 2.0
-r3_val = (f_get_base_premium(3, calc_basis, ce_opens, ce_prevs) + f_get_base_premium(7, calc_basis, pe_opens, pe_prevs)) / 2.0
-r4_val = (f_get_base_premium(2, calc_basis, ce_opens, ce_prevs) + f_get_base_premium(8, calc_basis, pe_opens, pe_prevs)) / 2.0
-r5_val = (f_get_base_premium(1, calc_basis, ce_opens, ce_prevs) + f_get_base_premium(9, calc_basis, pe_opens, pe_prevs)) / 2.0
+r2_val = (f_get_base_premium(math.max(0, atm_idx_base - 1), calc_basis, ce_opens, ce_prevs) + f_get_base_premium(math.min(6, atm_idx_base + 1), calc_basis, pe_opens, pe_prevs)) / 2.0
+r3_val = (f_get_base_premium(math.max(0, atm_idx_base - 2), calc_basis, ce_opens, ce_prevs) + f_get_base_premium(math.min(6, atm_idx_base + 2), calc_basis, pe_opens, pe_prevs)) / 2.0
+r4_val = (f_get_base_premium(math.max(0, atm_idx_base - 3), calc_basis, ce_opens, ce_prevs) + f_get_base_premium(math.min(6, atm_idx_base + 3), calc_basis, pe_opens, pe_prevs)) / 2.0
+r5_val = r4_val
 
 s1_val = pe_base_sel
-s2_val = (f_get_base_premium(6, calc_basis, ce_opens, ce_prevs) + f_get_base_premium(4, calc_basis, pe_opens, pe_prevs)) / 2.0
-s3_val = (f_get_base_premium(7, calc_basis, ce_opens, ce_prevs) + f_get_base_premium(3, calc_basis, pe_opens, pe_prevs)) / 2.0
-s4_val = (f_get_base_premium(8, calc_basis, ce_opens, ce_prevs) + f_get_base_premium(2, calc_basis, pe_opens, pe_prevs)) / 2.0
-s5_val = (f_get_base_premium(9, calc_basis, ce_opens, ce_prevs) + f_get_base_premium(1, calc_basis, pe_opens, pe_prevs)) / 2.0
+s2_val = (f_get_base_premium(math.min(6, atm_idx_base + 1), calc_basis, ce_opens, ce_prevs) + f_get_base_premium(math.max(0, atm_idx_base - 1), calc_basis, pe_opens, pe_prevs)) / 2.0
+s3_val = (f_get_base_premium(math.min(6, atm_idx_base + 2), calc_basis, ce_opens, ce_prevs) + f_get_base_premium(math.max(0, atm_idx_base - 2), calc_basis, pe_opens, pe_prevs)) / 2.0
+s4_val = (f_get_base_premium(math.min(6, atm_idx_base + 3), calc_basis, ce_opens, ce_prevs) + f_get_base_premium(math.max(0, atm_idx_base - 3), calc_basis, pe_opens, pe_prevs)) / 2.0
+s5_val = s4_val
 
 // Adapt S/R levels for plotting on Spot vs Option chart
 float p_plot = na
@@ -552,8 +517,8 @@ if is_new_day
     orb_low_plot := na
 
 // Calculate Running BEP for the selected strike
-ce_ltp_sel = array.get(ce_ltps, 5)
-pe_ltp_sel = array.get(pe_ltps, 5)
+ce_ltp_sel = array.get(ce_ltps, 3)
+pe_ltp_sel = array.get(pe_ltps, 3)
 
 float running_bep_val = na
 if is_option
@@ -565,19 +530,18 @@ float running_bep_plot = show_running_bep ? running_bep_val : na
 if is_new_day
     running_bep_plot := na
 
-// Extract CVD strike values from arrays (only indices 4, 5, 6 — data was fetched for these only)
-// Indices 3 and 7 are aliased to neighbours (4 and 6) so helper functions remain functional.
-c3_h = array.get(ce_highs, 4), c3_l = array.get(ce_lows, 4), c3_c = array.get(ce_ltps, 4), c3_v = array.get(ce_vols, 4)
-c4_h = array.get(ce_highs, 4), c4_l = array.get(ce_lows, 4), c4_c = array.get(ce_ltps, 4), c4_v = array.get(ce_vols, 4)
-c5_h = array.get(ce_highs, 5), c5_l = array.get(ce_lows, 5), c5_c = array.get(ce_ltps, 5), c5_v = array.get(ce_vols, 5)
-c6_h = array.get(ce_highs, 6), c6_l = array.get(ce_lows, 6), c6_c = array.get(ce_ltps, 6), c6_v = array.get(ce_vols, 6)
-c7_h = array.get(ce_highs, 6), c7_l = array.get(ce_lows, 6), c7_c = array.get(ce_ltps, 6), c7_v = array.get(ce_vols, 6)
+// Extract CVD strike values from arrays centered at index 3 (range 1 to 5)
+c3_h = array.get(ce_highs, 1), c3_l = array.get(ce_lows, 1), c3_c = array.get(ce_ltps, 1), c3_v = array.get(ce_vols, 1)
+c4_h = array.get(ce_highs, 2), c4_l = array.get(ce_lows, 2), c4_c = array.get(ce_ltps, 2), c4_v = array.get(ce_vols, 2)
+c5_h = array.get(ce_highs, 3), c5_l = array.get(ce_lows, 3), c5_c = array.get(ce_ltps, 3), c5_v = array.get(ce_vols, 3)
+c6_h = array.get(ce_highs, 4), c6_l = array.get(ce_lows, 4), c6_c = array.get(ce_ltps, 4), c6_v = array.get(ce_vols, 4)
+c7_h = array.get(ce_highs, 5), c7_l = array.get(ce_lows, 5), c7_c = array.get(ce_ltps, 5), c7_v = array.get(ce_vols, 5)
 
-p3_h = array.get(pe_highs, 4), p3_l = array.get(pe_lows, 4), p3_c = array.get(pe_ltps, 4), p3_v = array.get(pe_vols, 4)
-p4_h = array.get(pe_highs, 4), p4_l = array.get(pe_lows, 4), p4_c = array.get(pe_ltps, 4), p4_v = array.get(pe_vols, 4)
-p5_h = array.get(pe_highs, 5), p5_l = array.get(pe_lows, 5), p5_c = array.get(pe_ltps, 5), p5_v = array.get(pe_vols, 5)
-p6_h = array.get(pe_highs, 6), p6_l = array.get(pe_lows, 6), p6_c = array.get(pe_ltps, 6), p6_v = array.get(pe_vols, 6)
-p7_h = array.get(pe_highs, 6), p7_l = array.get(pe_lows, 6), p7_c = array.get(pe_ltps, 6), p7_v = array.get(pe_vols, 6)
+p3_h = array.get(pe_highs, 1), p3_l = array.get(pe_lows, 1), p3_c = array.get(pe_ltps, 1), p3_v = array.get(pe_vols, 1)
+p4_h = array.get(pe_highs, 2), p4_l = array.get(pe_lows, 2), p4_c = array.get(pe_ltps, 2), p4_v = array.get(pe_vols, 2)
+p5_h = array.get(pe_highs, 3), p5_l = array.get(pe_lows, 3), p5_c = array.get(pe_ltps, 3), p5_v = array.get(pe_vols, 3)
+p6_h = array.get(pe_highs, 4), p6_l = array.get(pe_lows, 4), p6_c = array.get(pe_ltps, 4), p6_v = array.get(pe_vols, 4)
+p7_h = array.get(pe_highs, 5), p7_l = array.get(pe_lows, 5), p7_c = array.get(pe_ltps, 5), p7_v = array.get(pe_vols, 5)
 
 f_calc_buy_sell(float h, float l, float c, float v) =>
     buy_v = nz(v) * (nz(c) - nz(l)) / math.max(nz(h) - nz(l), 0.001)
@@ -596,7 +560,7 @@ f_calc_buy_sell(float h, float l, float c, float v) =>
 [p6_buy, p6_sell] = f_calc_buy_sell(p6_h, p6_l, p6_c, p6_v)
 [p7_buy, p7_sell] = f_calc_buy_sell(p7_h, p7_l, p7_c, p7_v)
 
-// Extract ATM values (index 5)
+// Extract ATM values (index 3)
 ce_buy_vol = c5_buy
 ce_sell_vol = c5_sell
 ce_v = nz(c5_v)
@@ -612,8 +576,8 @@ pe_tot_vol = pe_buy_vol + pe_sell_vol
 float pe_buy_pct = pe_tot_vol > 0 ? (pe_buy_vol * 100.0 / pe_tot_vol) : 50.0
 
 // Fetch VWAP for selected contracts (read from loaded arrays to save security calls)
-ce_vwap_val = array.get(ce_vwaps, 5)
-pe_vwap_val = array.get(pe_vwaps, 5)
+ce_vwap_val = array.get(ce_vwaps, 3)
+pe_vwap_val = array.get(pe_vwaps, 3)
 
 // Cumulative Volume Delta (CVD) tracking for ATM strike
 var float ce_cvd = 0.0
@@ -651,19 +615,19 @@ f_get_vol_suffix(int c_idx, int p_idx) =>
     
     if is_option
         int idx = final_type == "C" ? c_idx : p_idx
-        if idx == 5
+        if idx == 3
             buy_v := final_type == "C" ? c5_buy : p5_buy
             sell_v := final_type == "C" ? c5_sell : p5_sell
-        else if idx == 4
+        else if idx == 2
             buy_v := final_type == "C" ? c4_buy : p6_buy
             sell_v := final_type == "C" ? c4_sell : p6_sell
-        else if idx == 6
+        else if idx == 4
             buy_v := final_type == "C" ? c6_buy : p4_buy
             sell_v := final_type == "C" ? c6_sell : p4_sell
-        else if idx == 3 or idx == 2 or idx == 1
+        else if idx == 1 or idx == 0
             buy_v := final_type == "C" ? c3_buy : p7_buy
             sell_v := final_type == "C" ? c3_sell : p7_sell
-        else if idx == 7 or idx == 8 or idx == 9
+        else if idx == 5 or idx == 6
             buy_v := final_type == "C" ? c7_buy : p3_buy
             sell_v := final_type == "C" ? c7_sell : p3_sell
             
@@ -674,26 +638,26 @@ f_get_vol_suffix(int c_idx, int p_idx) =>
         float cb = na, float cs = na
         float pb = na, float ps = na
         
-        if c_idx == 5
+        if c_idx == 3
             cb := c5_buy, cs := c5_sell
-        else if c_idx == 4
+        else if c_idx == 2
             cb := c4_buy, cs := c4_sell
-        else if c_idx == 6
+        else if c_idx == 4
             cb := c6_buy, cs := c6_sell
-        else if c_idx == 3 or c_idx == 2 or c_idx == 1
+        else if c_idx == 1 or c_idx == 0
             cb := c3_buy, cs := c3_sell
-        else if c_idx == 7 or c_idx == 8 or c_idx == 9
+        else if c_idx == 5 or c_idx == 6
             cb := c7_buy, cs := c7_sell
             
-        if p_idx == 5
+        if p_idx == 3
             pb := p5_buy, ps := p5_sell
-        else if p_idx == 4
+        else if p_idx == 2
             pb := p4_buy, ps := p4_sell
-        else if p_idx == 6
+        else if p_idx == 4
             pb := p6_buy, ps := p6_sell
-        else if p_idx == 3 or p_idx == 2 or p_idx == 1
+        else if p_idx == 1 or p_idx == 0
             pb := p3_buy, ps := p3_sell
-        else if p_idx == 7 or p_idx == 8 or p_idx == 9
+        else if p_idx == 5 or p_idx == 6
             pb := p7_buy, ps := p7_sell
             
         float ce_delta_v = nz(cb) - nz(cs)
@@ -711,44 +675,44 @@ f_get_sr_probability(int c_idx, int p_idx, bool is_resistance) =>
     
     if is_option
         int idx = final_type == "C" ? c_idx : p_idx
-        if idx == 5
+        if idx == 3
             buy_v := final_type == "C" ? c5_buy : p5_buy
             sell_v := final_type == "C" ? c5_sell : p5_sell
-        else if idx == 4
+        else if idx == 2
             buy_v := final_type == "C" ? c4_buy : p6_buy
             sell_v := final_type == "C" ? c4_sell : p6_sell
-        else if idx == 6
+        else if idx == 4
             buy_v := final_type == "C" ? c6_buy : p4_buy
             sell_v := final_type == "C" ? c6_sell : p4_sell
-        else if idx == 3 or idx == 2 or idx == 1
+        else if idx == 1 or idx == 0
             buy_v := final_type == "C" ? c3_buy : p7_buy
             sell_v := final_type == "C" ? c3_sell : p7_sell
-        else if idx == 7 or idx == 8 or idx == 9
+        else if idx == 5 or idx == 6
             buy_v := final_type == "C" ? c7_buy : p3_buy
             sell_v := final_type == "C" ? c7_sell : p3_sell
     else
         float cb = na, float cs = na
         float pb = na, float ps = na
-        if c_idx == 5
+        if c_idx == 3
             cb := c5_buy, cs := c5_sell
-        else if c_idx == 4
+        else if c_idx == 2
             cb := c4_buy, cs := c4_sell
-        else if c_idx == 6
+        else if c_idx == 4
             cb := c6_buy, cs := c6_sell
-        else if c_idx == 3 or c_idx == 2 or c_idx == 1
+        else if c_idx == 1 or c_idx == 0
             cb := c3_buy, cs := c3_sell
-        else if c_idx == 7 or c_idx == 8 or c_idx == 9
+        else if c_idx == 5 or c_idx == 6
             cb := c7_buy, cs := c7_sell
             
-        if p_idx == 5
+        if p_idx == 3
             pb := p5_buy, ps := p5_sell
-        else if p_idx == 4
+        else if p_idx == 2
             pb := p4_buy, ps := p4_sell
-        else if p_idx == 6
+        else if p_idx == 4
             pb := p6_buy, ps := p6_sell
-        else if p_idx == 3 or p_idx == 2 or p_idx == 1
+        else if p_idx == 1 or p_idx == 0
             pb := p3_buy, ps := p3_sell
-        else if p_idx == 7 or p_idx == 8 or p_idx == 9
+        else if p_idx == 5 or p_idx == 6
             pb := p7_buy, ps := p7_sell
             
         buy_v := nz(cb) + nz(ps)
@@ -825,43 +789,43 @@ plot(show_intrinsic_plots ? avg_ext_plot : na, title="Average Extrinsic Value", 
 
 f_get_level_color(int c_idx, int p_idx) =>
     float cb = na, float cs = na, float pb = na, float ps = na
-    if c_idx == 5
+    if c_idx == 3
         cb := c5_buy, cs := c5_sell
-    else if c_idx == 4
+    else if c_idx == 2
         cb := c4_buy, cs := c4_sell
-    else if c_idx == 6
+    else if c_idx == 4
         cb := c6_buy, cs := c6_sell
-    else if c_idx == 3 or c_idx == 2 or c_idx == 1
+    else if c_idx == 1 or c_idx == 0
         cb := c3_buy, cs := c3_sell
-    else if c_idx == 7 or c_idx == 8 or c_idx == 9
+    else if c_idx == 5 or c_idx == 6
         cb := c7_buy, cs := c7_sell
         
-    if p_idx == 5
+    if p_idx == 3
         pb := p5_buy, ps := p5_sell
-    else if p_idx == 4
+    else if p_idx == 2
         pb := p4_buy, ps := p4_sell
-    else if p_idx == 6
+    else if p_idx == 4
         pb := p6_buy, ps := p6_sell
-    else if p_idx == 3 or p_idx == 2 or p_idx == 1
+    else if p_idx == 1 or p_idx == 0
         pb := p3_buy, ps := p3_sell
-    else if p_idx == 7 or p_idx == 8 or p_idx == 9
+    else if p_idx == 5 or p_idx == 6
         pb := p7_buy, ps := p7_sell
         
     float ce_delta_v = nz(cb) - nz(cs)
     float pe_delta_v = nz(pb) - nz(ps)
     (ce_delta_v + pe_delta_v >= 0) ? #26A69A : #EF5350
 
-col_p  = use_dynamic_colors ? f_get_level_color(5, 5) : c_p_in
-col_r1 = use_dynamic_colors ? f_get_level_color(5, 5) : c_r1_in
-col_r2 = use_dynamic_colors ? f_get_level_color(4, 6) : c_r2_in
-col_r3 = use_dynamic_colors ? f_get_level_color(3, 7) : c_r3_in
-col_r4 = use_dynamic_colors ? f_get_level_color(2, 8) : c_r4_in
-col_r5 = use_dynamic_colors ? f_get_level_color(1, 9) : c_r5_in
-col_s1 = use_dynamic_colors ? f_get_level_color(5, 5) : c_s1_in
-col_s2 = use_dynamic_colors ? f_get_level_color(6, 4) : c_s2_in
-col_s3 = use_dynamic_colors ? f_get_level_color(7, 3) : c_s3_in
-col_s4 = use_dynamic_colors ? f_get_level_color(8, 2) : c_s4_in
-col_s5 = use_dynamic_colors ? f_get_level_color(9, 1) : c_s5_in
+col_p  = use_dynamic_colors ? f_get_level_color(3, 3) : c_p_in
+col_r1 = use_dynamic_colors ? f_get_level_color(3, 3) : c_r1_in
+col_r2 = use_dynamic_colors ? f_get_level_color(2, 4) : c_r2_in
+col_r3 = use_dynamic_colors ? f_get_level_color(1, 5) : c_r3_in
+col_r4 = use_dynamic_colors ? f_get_level_color(0, 6) : c_r4_in
+col_r5 = col_r4
+col_s1 = use_dynamic_colors ? f_get_level_color(3, 3) : c_s1_in
+col_s2 = use_dynamic_colors ? f_get_level_color(4, 2) : c_s2_in
+col_s3 = use_dynamic_colors ? f_get_level_color(5, 1) : c_s3_in
+col_s4 = use_dynamic_colors ? f_get_level_color(6, 0) : c_s4_in
+col_s5 = col_s4
 
 p_style = sr_plot_style == "Circles (Dotted Pattern)" ? plot.style_circles : (sr_plot_style == "Stepline" ? plot.style_stepline : (sr_plot_style == "Line with Breaks" ? plot.style_linebr : (sr_plot_style == "Crosses" ? plot.style_cross : plot.style_line)))
 
@@ -1007,14 +971,14 @@ var table chain_table = table.new(t_pos, 4, 17, bgcolor=color.new(color.black, 1
 if show_table and barstate.islast
     table.clear(chain_table, 0, 0, 3, 16)
     
-    int atm_table_idx = 5
-    for idx = 0 to 10
+    int atm_table_idx = 3
+    for idx = 0 to 6
         if array.get(strikes, idx) == atm_strike_rt
             atm_table_idx := idx
             break
             
     int N = num_strikes_display
-    int start_idx = math.max(0, math.min(10 - 2 * N, atm_table_idx - N))
+    int start_idx = math.max(0, math.min(6 - 2 * N, atm_table_idx - N))
     int end_idx = start_idx + 2 * N
     
     string status_text = "Spot: " + str.tostring(spot_rt, "#.##") + " | " + final_root + " | Expiry: " + final_expiry + " | Basis: " + calc_basis
@@ -1068,7 +1032,7 @@ if show_table and barstate.islast
         string ce_text = na(t_ce_c) ? "-" : str.tostring(t_ce_c, "#.##") + " (" + ce_chg_str + ")"
         string pe_text = na(t_pe_c) ? "-" : str.tostring(t_pe_c, "#.##") + " (" + pe_chg_str + ")"
         
-        if idx == 5
+        if idx == 3
             ce_text := ce_text + " [B:" + str.tostring(ce_buy_pct, "0") + "%]"
             pe_text := pe_text + " [B:" + str.tostring(pe_buy_pct, "0") + "%]"
         
@@ -1179,17 +1143,17 @@ if barstate.islast
         label.delete(lbl_s1), label.delete(lbl_s2), label.delete(lbl_s3), label.delete(lbl_s4), label.delete(lbl_s5)
         
         int label_x = bar_index + 5
-        lbl_p  := label.new(label_x, p_plot,  "Pivot: " + str.tostring(p_plot, "#.##") + f_get_vol_suffix(5, 5) + f_get_pivot_probability(),  color=color.yellow, textcolor=color.black, style=label.style_label_left, size=size.small)
-        lbl_r1 := label.new(label_x, r1_plot, "R1: " + str.tostring(r1_plot, "#.##") + f_get_vol_suffix(5, 5) + f_get_sr_probability(5, 5, true), color=color.new(color.red, 30), textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r2 := label.new(label_x, r2_plot, "R2: " + str.tostring(r2_plot, "#.##") + f_get_vol_suffix(4, 6) + f_get_sr_probability(4, 6, true), color=color.new(color.red, 40), textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r3 := label.new(label_x, r3_plot, "R3: " + str.tostring(r3_plot, "#.##") + f_get_vol_suffix(3, 7) + f_get_sr_probability(3, 7, true), color=color.new(color.red, 50), textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r4 := label.new(label_x, r4_plot, "R4: " + str.tostring(r4_plot, "#.##") + f_get_vol_suffix(2, 8) + f_get_sr_probability(2, 8, true), color=color.new(color.red, 60), textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_r5 := label.new(label_x, r5_plot, "R5: " + str.tostring(r5_plot, "#.##") + f_get_vol_suffix(1, 9) + f_get_sr_probability(1, 9, true), color=color.new(color.red, 70), textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s1 := label.new(label_x, s1_plot, "S1: " + str.tostring(s1_plot, "#.##") + f_get_vol_suffix(5, 5) + f_get_sr_probability(5, 5, false), color=color.new(color.green, 30), textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s2 := label.new(label_x, s2_plot, "S2: " + str.tostring(s2_plot, "#.##") + f_get_vol_suffix(6, 4) + f_get_sr_probability(6, 4, false), color=color.new(color.green, 40), textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s3 := label.new(label_x, s3_plot, "S3: " + str.tostring(s3_plot, "#.##") + f_get_vol_suffix(7, 3) + f_get_sr_probability(7, 3, false), color=color.new(color.green, 50), textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s4 := label.new(label_x, s4_plot, "S4: " + str.tostring(s4_plot, "#.##") + f_get_vol_suffix(8, 2) + f_get_sr_probability(8, 2, false), color=color.new(color.green, 60), textcolor=color.white, style=label.style_label_left, size=size.small)
-        lbl_s5 := label.new(label_x, s5_plot, "S5: " + str.tostring(s5_plot, "#.##") + f_get_vol_suffix(9, 1) + f_get_sr_probability(9, 1, false), color=color.new(color.green, 70), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_p  := label.new(label_x, p_plot,  "Pivot: " + str.tostring(p_plot, "#.##") + f_get_vol_suffix(3, 3) + f_get_pivot_probability(),  color=color.yellow, textcolor=color.black, style=label.style_label_left, size=size.small)
+        lbl_r1 := label.new(label_x, r1_plot, "R1: " + str.tostring(r1_plot, "#.##") + f_get_vol_suffix(3, 3) + f_get_sr_probability(3, 3, true), color=color.new(color.red, 30), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r2 := label.new(label_x, r2_plot, "R2: " + str.tostring(r2_plot, "#.##") + f_get_vol_suffix(2, 4) + f_get_sr_probability(2, 4, true), color=color.new(color.red, 40), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r3 := label.new(label_x, r3_plot, "R3: " + str.tostring(r3_plot, "#.##") + f_get_vol_suffix(1, 5) + f_get_sr_probability(1, 5, true), color=color.new(color.red, 50), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r4 := label.new(label_x, r4_plot, "R4: " + str.tostring(r4_plot, "#.##") + f_get_vol_suffix(0, 6) + f_get_sr_probability(0, 6, true), color=color.new(color.red, 60), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_r5 := label.new(label_x, r5_plot, "R5: " + str.tostring(r5_plot, "#.##") + f_get_vol_suffix(0, 6) + f_get_sr_probability(0, 6, true), color=color.new(color.red, 70), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s1 := label.new(label_x, s1_plot, "S1: " + str.tostring(s1_plot, "#.##") + f_get_vol_suffix(3, 3) + f_get_sr_probability(3, 3, false), color=color.new(color.green, 30), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s2 := label.new(label_x, s2_plot, "S2: " + str.tostring(s2_plot, "#.##") + f_get_vol_suffix(4, 2) + f_get_sr_probability(4, 2, false), color=color.new(color.green, 40), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s3 := label.new(label_x, s3_plot, "S3: " + str.tostring(s3_plot, "#.##") + f_get_vol_suffix(5, 1) + f_get_sr_probability(5, 1, false), color=color.new(color.green, 50), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s4 := label.new(label_x, s4_plot, "S4: " + str.tostring(s4_plot, "#.##") + f_get_vol_suffix(6, 0) + f_get_sr_probability(6, 0, false), color=color.new(color.green, 60), textcolor=color.white, style=label.style_label_left, size=size.small)
+        lbl_s5 := label.new(label_x, s5_plot, "S5: " + str.tostring(s5_plot, "#.##") + f_get_vol_suffix(6, 0) + f_get_sr_probability(6, 0, false), color=color.new(color.green, 70), textcolor=color.white, style=label.style_label_left, size=size.small)
 
     if show_intrinsic_plots
         label.delete(lbl_ce_int), label.delete(lbl_pe_int), label.delete(lbl_avg_int)
