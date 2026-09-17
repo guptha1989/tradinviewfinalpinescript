@@ -412,10 +412,10 @@ else if table_size_in == "Normal"
 else if table_size_in == "Large"
     t_sz := size.large
 
-var table summary_tbl = table.new(t_pos, 2, 20, bgcolor=color.new(color.black, 30), border_color=#2B2E3A, border_width=1)
+var table summary_tbl = table.new(t_pos, 2, 25, bgcolor=color.new(color.black, 30), border_color=#2B2E3A, border_width=1)
 
 if show_table and barstate.islast
-    table.clear(summary_tbl, 0, 0, 1, 19)
+    table.clear(summary_tbl, 0, 0, 1, 24)
     
     table.cell(summary_tbl, 0, 0, "VIX Volatility Levels Summary", bgcolor=#1E222D, text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
     table.merge_cells(summary_tbl, 0, 0, 1, 0)
@@ -429,38 +429,47 @@ if show_table and barstate.islast
     table.cell(summary_tbl, 0, 3, "Calculation Mode", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
     table.cell(summary_tbl, 1, 3, calc_mode, text_color=color.aqua, text_size=t_sz, text_halign=text.align_center)
 
-    table.cell(summary_tbl, 0, 4, "VIX Value Used", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 4, str.tostring(vix_clean, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 4, "Spot Price Ref Used for X", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 4, spot_calc_ref + " (" + str.tostring(ref_price, "#.##") + ")", text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+
+    table.cell(summary_tbl, 0, 5, "VIX Value Used", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 5, str.tostring(vix_clean, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+
+    float vix_pct_val = vix_clean / 10000.0
+    float sqrt_tf_val = math.sqrt(time_factor_val)
     
-    table.cell(summary_tbl, 0, 5, "Spot High / Low Used", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 5, "H:" + str.tostring(spot_high_used, "#.##") + " | L:" + str.tostring(spot_low_used, "#.##"), text_color=color.white, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 6, "VIX % Factor [(VIX/100)%]", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 6, str.tostring(vix_pct_val, "#.######"), text_color=color.white, text_size=t_sz, text_halign=text.align_center)
+
+    table.cell(summary_tbl, 0, 7, "Sqrt(TimeFactor) [sqrt(" + str.tostring(time_factor_val, "#") + ")]", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 7, str.tostring(sqrt_tf_val, "#.##"), text_color=color.white, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 6, "Formula Multiplier X", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 6, str.tostring(X_val, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 8, "Formula Multiplier X", bgcolor=#1A237E, text_color=color.yellow, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 8, str.tostring(X_val, "#.##"), bgcolor=#1A237E, text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 7, "Formula Step Y (X/4)", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 7, str.tostring(Y_val, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 9, "Formula Step Y (X/4)", bgcolor=#1A237E, text_color=color.yellow, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 9, str.tostring(Y_val, "#.##"), bgcolor=#1A237E, text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 8, "Buy Level (Low + Y)", bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 8, str.tostring(buy_level, "#.##"), bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 10, "Buy Level (Low + Y)", bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 10, str.tostring(buy_level, "#.##"), bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 9, "Sell Level (High - Y)", bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 9, str.tostring(sell_level, "#.##"), bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 11, "Sell Level (High - Y)", bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 11, str.tostring(sell_level, "#.##"), bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 10, "Support 1 (Buy + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 10, str.tostring(s1_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 12, "Support 1 (Buy + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 12, str.tostring(s1_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 11, "Support 2 (S1 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 11, str.tostring(s2_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 13, "Support 2 (S1 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 13, str.tostring(s2_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 12, "Support 3 (S2 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 12, str.tostring(s3_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 14, "Support 3 (S2 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 14, str.tostring(s3_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 13, "Resistance 1 (Sell - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 13, str.tostring(r1_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 15, "Resistance 1 (Sell - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 15, str.tostring(r1_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 14, "Resistance 2 (R1 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 14, str.tostring(r2_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 16, "Resistance 2 (R1 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 16, str.tostring(r2_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 15, "Resistance 3 (R2 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 15, str.tostring(r3_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 17, "Resistance 3 (R2 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 17, str.tostring(r3_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
