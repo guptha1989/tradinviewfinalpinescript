@@ -70,7 +70,7 @@ biasBadgePosInput    = input.string("Bottom Left", "Bias Badge Position", option
   tooltip="Position of the Bullish / Bearish Bias badge in the sub-window indicator pane.")
 
 showRollingBEPInput  = input.bool(true, "Show Rolling BEP Line", group="Display Controls",
-  tooltip="Marks the current day ATM BEP line: (Day ATM CE Prev Close + Day ATM PE Prev Close) / 2.")
+  tooltip="Marks the current day ATM BEP line: (Day ATM CE Prev Settlement + Day ATM PE Prev Settlement) / 2.")
 
 // --- Styling & Colors ---
 colorCEAvgCur        = input.color(#00E676, "CE Current Basket Avg Line Color", group="Styling & Colors")
@@ -291,7 +291,7 @@ float k_m6 = baseStrike - 6.0 * stepVal
 f_get_strike_open_close_pdc() =>
     bool is_new_day = ta.change(time("D")) != 0 or bar_index == 0
     float d_op = ta.valuewhen(is_new_day, open, 0)
-    float d_pdc = ta.valuewhen(is_new_day, close[1], 0)
+    float d_pdc = ta.valuewhen(is_new_day, nz(settlement[1], close[1]), 0)
     [d_op, close, d_pdc]
 
 [ce_o_p6, ce_c_p6, ce_pdc_p6] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p6), timeframe.period, f_get_strike_open_close_pdc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
@@ -785,13 +785,13 @@ if barstate.islast
         table.cell(summaryTable, 6, 0, curAtmFmt, bgcolor=colorCurATMHighlight, text_color=color.black, text_size=curTextSize)
         table.cell(summaryTable, 7, 0, "Rolling BEP: " + rollingBepFmt, bgcolor=color.new(#1565C0, 0), text_color=color.yellow, text_size=curTextSize)
 
-        // Row 1: Rolling BEP Calculation Breakdown with Day ATM Strike & Previous Close Values
+        // Row 1: Rolling BEP Calculation Breakdown with Day ATM Strike & Previous Settlement Values
         table.cell(summaryTable, 0, 1, "Rolling BEP Calc", bgcolor=color.new(#1565C0, 0), text_color=color.white, text_size=curTextSize)
         table.cell(summaryTable, 1, 1, "Day ATM Strike:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
         table.cell(summaryTable, 2, 1, dayOpenFmt, bgcolor=colorDayATMHighlight, text_color=color.black, text_size=curTextSize)
-        table.cell(summaryTable, 3, 1, "CE Prev Close:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 3, 1, "CE Prev Settle:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
         table.cell(summaryTable, 4, 1, str.tostring(ce_pdc_atm, "#.##"), bgcolor=color.new(#212121, 0), text_color=#00E676, text_size=curTextSize)
-        table.cell(summaryTable, 5, 1, "PE Prev Close:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
+        table.cell(summaryTable, 5, 1, "PE Prev Settle:", bgcolor=color.new(#212121, 0), text_color=color.silver, text_size=curTextSize)
         table.cell(summaryTable, 6, 1, str.tostring(pe_pdc_atm, "#.##"), bgcolor=color.new(#212121, 0), text_color=#FF1744, text_size=curTextSize)
         table.cell(summaryTable, 7, 1, "(CE+PE)/2 = " + rollingBepFmt, bgcolor=color.new(#1565C0, 0), text_color=color.yellow, text_size=curTextSize)
 
