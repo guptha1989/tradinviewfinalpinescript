@@ -291,7 +291,7 @@ float k_m6 = baseStrike - 6.0 * stepVal
 f_get_strike_open_close_pdc() =>
     bool is_new_day = ta.change(time("D")) != 0 or bar_index == 0
     float d_op = ta.valuewhen(is_new_day, open, 0)
-    float d_pdc = ta.valuewhen(is_new_day, nz(settlement[1], close[1]), 0)
+    float d_pdc = ta.valuewhen(is_new_day, close[1], 0)
     [d_op, close, d_pdc]
 
 [ce_o_p6, ce_c_p6, ce_pdc_p6] = request.security(syminfo.prefix + ":" + f_build_ce_ticker(k_p6), timeframe.period, f_get_strike_open_close_pdc(), lookahead=barmerge.lookahead_on, ignore_invalid_symbol=true)
