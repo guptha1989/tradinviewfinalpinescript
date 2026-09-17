@@ -23,10 +23,10 @@ calc_mode = input.string("First 5 Minutes (VIX 5m & Spot 5m)", "Calculation Sour
   tooltip="Choose data source: 1) Prev Day VIX Close & Prev Day Spot High/Low, 2) First 5m VIX Close & First 5m Spot High/Low, 3) First 30m VIX & Spot.")
 
 time_factor_val = input.float(24.0, "Formula Time Factor (Default 24)", group=G_CALC,
-  tooltip="Time factor inside square root in formula: X = Spot * (VIX / 100) * sqrt(TimeFactor).")
-spot_calc_ref = input.string("Spot Low", "Spot Price Reference for X", 
-  options=["Spot Low", "Spot High", "Spot Close", "Spot Open"], group=G_CALC,
-  tooltip="Choose which price reference (Low, High, Close, Open of selected Mode) is used in X formula.")
+  tooltip="Time factor inside square root in formula: X = Spot * (VIX / 100)% * sqrt(TimeFactor).")
+spot_calc_ref = input.string("Spot Close", "Spot Price Reference for X", 
+  options=["Spot Close", "Spot Low", "Spot High", "Spot Open"], group=G_CALC,
+  tooltip="Choose which price reference (Close, Low, High, Open of selected Mode) is used in X formula.")
 sell_ref_mode = input.string("Spot High - Y", "Sell Level Formula Mode",
   options=["Spot High - Y", "Spot Low - Y", "Spot High + Y"], group=G_CALC,
   tooltip="Select formula for Sell Level calculation.")
@@ -100,16 +100,16 @@ float spot_close_used= calc_mode == "Previous Day (VIX Close & Spot High/Low)" ?
 // FORMULA CALCULATIONS (X, Y, BUY, SELL, S1-S6, R1-R7, MEDIAN LINES)
 // =========================================================================
 // Determine Spot Reference Price for X formula
-float ref_price = spot_low_used
-if spot_calc_ref == "Spot High"
+float ref_price = spot_close_used
+if spot_calc_ref == "Spot Low"
+    ref_price := spot_low_used
+else if spot_calc_ref == "Spot High"
     ref_price := spot_high_used
-else if spot_calc_ref == "Spot Close"
-    ref_price := spot_close_used
 else if spot_calc_ref == "Spot Open"
     ref_price := spot_open_used
 
-// X = Spot * (VIX_Close / 100) * sqrt(TimeFactor)
-float X_val = ref_price * (vix_clean / 100.0) * math.sqrt(time_factor_val)
+// X = SpotClose * (VIX_Close / 100.0)% * sqrt(TimeFactor)
+float X_val = ref_price * (vix_clean / 10000.0) * math.sqrt(time_factor_val)
 float Y_val = X_val / 4.0
 
 // Buy & Sell Level Calculations
