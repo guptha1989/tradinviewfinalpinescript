@@ -1,5 +1,5 @@
 //@version=6
-indicator("19.Techfrost Nifty_VIX_Levels", shorttitle="19.Techfrost VIX_Levels", overlay=true, max_labels_count=500, max_lines_count=500)
+indicator("21.Techfrost Nifty_VIX_Levels", shorttitle="21.Techfrost VIX_Levels", overlay=true, max_labels_count=500, max_lines_count=500)
 
 // =========================================================================
 // INPUTS & USER SETTINGS
@@ -10,10 +10,12 @@ var string G_STYLE  = "Line Format & Style Settings"
 var string G_DASH   = "Dashboard Table Settings"
 
 // 1. Symbol Settings
+use_chart_sym     = input.bool(true, "Use Current Chart Symbol for Calculation", group=G_SYM,
+  tooltip="Enable to calculate levels automatically for ANY chart instrument (MCX Crudeoil, Nifty, Banknifty, Sensex, Stocks, Futures & Options).")
 vix_ticker_input  = input.string("NSE:INDIAVIX", "VIX Ticker Symbol", group=G_SYM,
-  tooltip="Ticker symbol for India VIX (e.g. NSE:INDIAVIX or INDIAVIX).")
-exchange_input    = input.string("NSE", "Exchange Prefix for Spot", group=G_SYM)
-underlying_ticker = input.string("NIFTY", "Spot Ticker Symbol", group=G_SYM)
+  tooltip="Ticker symbol for VIX (e.g. NSE:INDIAVIX). Defaults to 15.0 if unavailable.")
+exchange_input    = input.string("NSE", "Exchange Prefix (if not using chart symbol)", group=G_SYM)
+underlying_ticker = input.string("NIFTY", "Spot Ticker Symbol (if not using chart symbol)", group=G_SYM)
 
 // 2. Calculation Settings
 calc_mode = input.string("First 5 Minutes (VIX 5m & Spot 1m)", "Calculation Source Mode",
@@ -45,7 +47,7 @@ c_res   = input.color(#FF9100, "Resistance Lines Color (R1-R7)", group=G_STYLE)
 
 // Line Styles & Widths
 f_get_pattern(string p_str) =>
-    p_str == "Dashed" ? plot.style_dashed : (p_str == "Dotted" ? plot.style_circles : plot.style_line)
+    p_str == "Dashed" ? plot.style_line : (p_str == "Dotted" ? plot.style_circles : plot.style_line)
 
 f_get_line_pattern(string p_str) =>
     p_str == "Dashed" ? line.style_dashed : (p_str == "Dotted" ? line.style_dotted : line.style_solid)
@@ -61,7 +63,7 @@ table_size_in = input.string("Small", "Table Text Size", options=["Tiny", "Small
 // =========================================================================
 // DATA RETRIEVAL (PREV DAY, FIRST 5M, FIRST 30M)
 // =========================================================================
-spot_sym = exchange_input + ":" + underlying_ticker
+spot_sym = use_chart_sym ? syminfo.tickerid : (exchange_input + ":" + underlying_ticker)
 
 // Mode 1: Previous Day VIX Close & Previous Day Spot Values
 vix_pd_close = request.security(vix_ticker_input, "1D", close[1], lookahead=barmerge.lookahead_on)
@@ -77,6 +79,10 @@ vix_30m_close = request.security(vix_ticker_input, "30", ta.valuewhen(ta.change(
 
 // Select Reference Values based on chosen Calculation Mode
 float vix_used       = calc_mode == "Previous Day (VIX Close & Spot High/Low)" ? vix_pd_close : (calc_mode == "First 30 Minutes (VIX 30m & Spot 30m)" ? vix_30m_close : vix_5m_close)
+float vix_clean      = nz(vix_used, 15.0)
+if vix_clean <= 0
+    vix_clean := 15.0
+
 float spot_open_used = calc_mode == "Previous Day (VIX Close & Spot High/Low)" ? spot_pd_open : (calc_mode == "First 30 Minutes (VIX 30m & Spot 30m)" ? spot_30m_open : spot_5m_open)
 float spot_high_used = calc_mode == "Previous Day (VIX Close & Spot High/Low)" ? spot_pd_high : (calc_mode == "First 30 Minutes (VIX 30m & Spot 30m)" ? spot_30m_high : spot_5m_high)
 float spot_low_used  = calc_mode == "Previous Day (VIX Close & Spot High/Low)" ? spot_pd_low  : (calc_mode == "First 30 Minutes (VIX 30m & Spot 30m)" ? spot_30m_low  : spot_5m_low)
@@ -95,7 +101,7 @@ else if spot_calc_ref == "Spot Open"
     ref_price := spot_open_used
 
 // X = Spot * (VIX_Close / 100 / 100) * sqrt(TimeFactor)
-float X_val = ref_price * (nz(vix_used, 12.08) / 10000.0) * math.sqrt(time_factor_val)
+float X_val = ref_price * (vix_clean / 10000.0) * math.sqrt(time_factor_val)
 float Y_val = X_val / 4.0
 
 // Buy & Sell Level Calculations
@@ -266,10 +272,10 @@ else if table_size_in == "Normal"
 else if table_size_in == "Large"
     t_sz := size.large
 
-var table summary_tbl = table.new(t_pos, 2, 19, bgcolor=color.new(color.black, 30), border_color=#2B2E3A, border_width=1)
+var table summary_tbl = table.new(t_pos, 2, 20, bgcolor=color.new(color.black, 30), border_color=#2B2E3A, border_width=1)
 
 if show_table and barstate.islast
-    table.clear(summary_tbl, 0, 0, 1, 18)
+    table.clear(summary_tbl, 0, 0, 1, 19)
     
     table.cell(summary_tbl, 0, 0, "VIX Volatility Levels Summary", bgcolor=#1E222D, text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
     table.merge_cells(summary_tbl, 0, 0, 1, 0)
@@ -277,41 +283,44 @@ if show_table and barstate.islast
     table.cell(summary_tbl, 0, 1, "Metric / Parameter", bgcolor=#1E222D, text_color=color.white, text_size=t_sz, text_halign=text.align_left)
     table.cell(summary_tbl, 1, 1, "Value", bgcolor=#1E222D, text_color=color.white, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 2, "Calculation Mode", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 2, calc_mode, text_color=color.aqua, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 2, "Instrument Symbol", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 2, spot_sym, text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
 
-    table.cell(summary_tbl, 0, 3, "VIX Value Used", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 3, str.tostring(vix_used, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 3, "Calculation Mode", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 3, calc_mode, text_color=color.aqua, text_size=t_sz, text_halign=text.align_center)
+
+    table.cell(summary_tbl, 0, 4, "VIX Value Used", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 4, str.tostring(vix_clean, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 4, "Spot High / Low Used", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 4, "H:" + str.tostring(spot_high_used, "#.##") + " | L:" + str.tostring(spot_low_used, "#.##"), text_color=color.white, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 5, "Spot High / Low Used", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 5, "H:" + str.tostring(spot_high_used, "#.##") + " | L:" + str.tostring(spot_low_used, "#.##"), text_color=color.white, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 5, "Formula Multiplier X", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 5, str.tostring(X_val, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 6, "Formula Multiplier X", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 6, str.tostring(X_val, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 6, "Formula Step Y (X/4)", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 6, str.tostring(Y_val, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 7, "Formula Step Y (X/4)", text_color=color.white, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 7, str.tostring(Y_val, "#.##"), text_color=color.yellow, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 7, "Buy Level (Low + Y)", bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 7, str.tostring(buy_level, "#.##"), bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 8, "Buy Level (Low + Y)", bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 8, str.tostring(buy_level, "#.##"), bgcolor=#131722, text_color=#00E676, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 8, "Sell Level", bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 8, str.tostring(sell_level, "#.##"), bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 9, "Sell Level", bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 9, str.tostring(sell_level, "#.##"), bgcolor=#1C2030, text_color=#FF5252, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 9, "Support 1 (Buy + X)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 9, str.tostring(s1_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 10, "Support 1 (Buy + X)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 10, str.tostring(s1_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 10, "Support 2 (S1 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 10, str.tostring(s2_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 11, "Support 2 (S1 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 11, str.tostring(s2_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 11, "Support 3 (S2 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 11, str.tostring(s3_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 12, "Support 3 (S2 + Y)", text_color=#00B0FF, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 12, str.tostring(s3_val, "#.##"), text_color=#00B0FF, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 12, "Resistance 1 (Sell - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 12, str.tostring(r1_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 13, "Resistance 1 (Sell - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 13, str.tostring(r1_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 13, "Resistance 2 (R1 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 13, str.tostring(r2_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 14, "Resistance 2 (R1 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 14, str.tostring(r2_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
     
-    table.cell(summary_tbl, 0, 14, "Resistance 3 (R2 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
-    table.cell(summary_tbl, 1, 14, str.tostring(r3_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
+    table.cell(summary_tbl, 0, 15, "Resistance 3 (R2 - Y)", text_color=#FF9100, text_size=t_sz, text_halign=text.align_left)
+    table.cell(summary_tbl, 1, 15, str.tostring(r3_val, "#.##"), text_color=#FF9100, text_size=t_sz, text_halign=text.align_center)
