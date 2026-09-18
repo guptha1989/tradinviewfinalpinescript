@@ -118,8 +118,8 @@ if sell_ref_mode == "Spot Low - Y"
 else if sell_ref_mode == "Spot High + Y"
     sell_level := spot_high_used + Y_val
 
-// Support Levels (S1 to S12) - Decrementing downwards below Buy Level
-float s1_val  = buy_level  - Y_val
+// Support Levels (S1 to S12) - Lower levels calculated by subtracting Y_val below Sell Level
+float s1_val  = sell_level - Y_val
 float s2_val  = s1_val     - Y_val
 float s3_val  = s2_val     - Y_val
 float s4_val  = s3_val     - Y_val
@@ -132,8 +132,8 @@ float s10_val = s9_val     - Y_val
 float s11_val = s10_val    - Y_val
 float s12_val = s11_val    - Y_val
 
-// Resistance Levels (R1 to R12) - Incrementing upwards above Sell Level
-float r1_val  = sell_level + Y_val
+// Resistance Levels (R1 to R12) - Upper levels calculated by adding Y_val above Buy Level
+float r1_val  = buy_level  + Y_val
 float r2_val  = r1_val     + Y_val
 float r3_val  = r2_val     + Y_val
 float r4_val  = r3_val     + Y_val
@@ -149,7 +149,7 @@ float r12_val = r11_val   + Y_val
 // Median (Midpoint) Levels between Adjacent Lines
 float m_sell_buy = (sell_level + buy_level) / 2.0
 
-float m_buy_s1  = (buy_level + s1_val) / 2.0
+float m_sell_s1 = (sell_level + s1_val) / 2.0
 float m_s1_s2   = (s1_val + s2_val) / 2.0
 float m_s2_s3   = (s2_val + s3_val) / 2.0
 float m_s3_s4   = (s3_val + s4_val) / 2.0
@@ -162,7 +162,7 @@ float m_s9_s10  = (s9_val + s10_val) / 2.0
 float m_s10_s11 = (s10_val + s11_val) / 2.0
 float m_s11_s12 = (s11_val + s12_val) / 2.0
 
-float m_sell_r1 = (sell_level + r1_val) / 2.0
+float m_buy_r1  = (buy_level + r1_val) / 2.0
 float m_r1_r2   = (r1_val + r2_val) / 2.0
 float m_r2_r3   = (r2_val + r3_val) / 2.0
 float m_r3_r4   = (r3_val + r4_val) / 2.0
@@ -294,7 +294,7 @@ if is_in_plot_window
             f_add_line(bar_index, m_sell_buy, target_x2, c_med, med_width_val, med_prj_style, time)
             if show_support_lines
                 if num_support_lines >= 1
-                    f_add_line(bar_index, m_buy_s1, target_x2, c_med, med_width_val, med_prj_style, time)
+                    f_add_line(bar_index, m_sell_s1, target_x2, c_med, med_width_val, med_prj_style, time)
                 if num_support_lines >= 2
                     f_add_line(bar_index, m_s1_s2, target_x2, c_med, med_width_val, med_prj_style, time)
                 if num_support_lines >= 3
@@ -320,7 +320,7 @@ if is_in_plot_window
 
             if show_resist_lines
                 if num_resist_lines >= 1
-                    f_add_line(bar_index, m_sell_r1, target_x2, c_med, med_width_val, med_prj_style, time)
+                    f_add_line(bar_index, m_buy_r1, target_x2, c_med, med_width_val, med_prj_style, time)
                 if num_resist_lines >= 2
                     f_add_line(bar_index, m_r1_r2, target_x2, c_med, med_width_val, med_prj_style, time)
                 if num_resist_lines >= 3
@@ -429,7 +429,7 @@ if barstate.islast
         f_add_label(lbl_x, m_sell_buy, "M (Sell/Buy): " + str.tostring(m_sell_buy, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
         if show_support_lines
             if num_support_lines >= 1
-                f_add_label(lbl_x, m_buy_s1, "M (Buy/S1): " + str.tostring(m_buy_s1, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+                f_add_label(lbl_x, m_sell_s1, "M (Sell/S1): " + str.tostring(m_sell_s1, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
             if num_support_lines >= 2
                 f_add_label(lbl_x, m_s1_s2, "M (S1/S2): " + str.tostring(m_s1_s2, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
             if num_support_lines >= 3
@@ -455,7 +455,7 @@ if barstate.islast
 
         if show_resist_lines
             if num_resist_lines >= 1
-                f_add_label(lbl_x, m_sell_r1, "M (Sell/R1): " + str.tostring(m_sell_r1, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
+                f_add_label(lbl_x, m_buy_r1, "M (Buy/R1): " + str.tostring(m_buy_r1, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
             if num_resist_lines >= 2
                 f_add_label(lbl_x, m_r1_r2, "M (R1/R2): " + str.tostring(m_r1_r2, "#.##"), c_med, color.white, label.style_label_left, size.tiny)
             if num_resist_lines >= 3
