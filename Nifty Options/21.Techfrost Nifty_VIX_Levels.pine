@@ -118,33 +118,33 @@ if sell_ref_mode == "Spot Low - Y"
 else if sell_ref_mode == "Spot High + Y"
     sell_level := spot_high_used + Y_val
 
-// Support Levels (S1 to S12)
-float s1_val  = buy_level  + Y_val
-float s2_val  = s1_val     + Y_val
-float s3_val  = s2_val     + Y_val
-float s4_val  = s3_val     + Y_val
-float s5_val  = s4_val     + Y_val
-float s6_val  = s5_val     + Y_val
-float s7_val  = s6_val     + Y_val
-float s8_val  = s7_val     + Y_val
-float s9_val  = s8_val     + Y_val
-float s10_val = s9_val     + Y_val
-float s11_val = s10_val    + Y_val
-float s12_val = s11_val    + Y_val
+// Support Levels (S1 to S12) - Decrementing downwards below Buy Level
+float s1_val  = buy_level  - Y_val
+float s2_val  = s1_val     - Y_val
+float s3_val  = s2_val     - Y_val
+float s4_val  = s3_val     - Y_val
+float s5_val  = s4_val     - Y_val
+float s6_val  = s5_val     - Y_val
+float s7_val  = s6_val     - Y_val
+float s8_val  = s7_val     - Y_val
+float s9_val  = s8_val     - Y_val
+float s10_val = s9_val     - Y_val
+float s11_val = s10_val    - Y_val
+float s12_val = s11_val    - Y_val
 
-// Resistance Levels (R1 to R12)
-float r1_val  = sell_level - Y_val
-float r2_val  = r1_val     - Y_val
-float r3_val  = r2_val     - Y_val
-float r4_val  = r3_val     - Y_val
-float r5_val  = r4_val     - Y_val
-float r6_val  = r5_val     - Y_val
-float r7_val  = r6_val     - Y_val
-float r8_val  = r7_val     - Y_val
-float r9_val  = r8_val     - Y_val
-float r10_val = r9_val    - Y_val
-float r11_val = r10_val   - Y_val
-float r12_val = r11_val   - Y_val
+// Resistance Levels (R1 to R12) - Incrementing upwards above Sell Level
+float r1_val  = sell_level + Y_val
+float r2_val  = r1_val     + Y_val
+float r3_val  = r2_val     + Y_val
+float r4_val  = r3_val     + Y_val
+float r5_val  = r4_val     + Y_val
+float r6_val  = r5_val     + Y_val
+float r7_val  = r6_val     + Y_val
+float r8_val  = r7_val     + Y_val
+float r9_val  = r8_val     + Y_val
+float r10_val = r9_val    + Y_val
+float r11_val = r10_val   + Y_val
+float r12_val = r11_val   + Y_val
 
 // Median (Midpoint) Levels between Adjacent Lines
 float m_sell_buy = (sell_level + buy_level) / 2.0
